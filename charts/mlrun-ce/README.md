@@ -1,4 +1,4 @@
-# MLRun CE: MLRun Open Source CE for MLOps
+# MLRun Community Edition: MLRun Open Source Stack for MLOps
 
 This Helm charts bundles open source software stack for advanced ML operations
 
@@ -33,9 +33,9 @@ Create a namespace for the deployed components:
 kubectl create namespace mlrun
 ```
 
-Add the v3io-stable helm chart repo
+Add the mlrun ce helm chart repo
 ```bash
-helm repo add v3io-stable https://v3io.github.io/helm-charts/stable
+helm repo add mlrun  https://mlrun.github.io/ce/charts
 ```
 
 To work with the open source MLRun stack, you must an accessible docker-registry. The registry's URL and credentials

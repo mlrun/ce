@@ -14,10 +14,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: azure/setup-helm@v1
+        with:
+          version: "v3.9.1"
+
       - name: Configure Git
         run: |
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Add Helm Repos
+        run: |
+          helm repo add stable https://charts.helm.sh/stable
+          helm repo add nuclio https://nuclio.github.io/nuclio/charts
+          helm repo add v3io-stable https://v3io.github.io/helm-charts/stable
+          helm repo add minio https://charts.min.io/
+          helm repo add spark-operator https://googlecloudplatform.github.io/spark-on-k8s-operator
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.1.0

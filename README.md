@@ -1,9 +1,6 @@
-# Helm Charts
-Helm Charts for V3IO Components
-
+# Helm Charts for MLRUN CE
 # Usage
 
 ```
-$ helm repo add mlrunce-stable https://mlrun.github.io/ce/helm-charts/stable
-
+$ helm repo add mlrun https://mlrun.github.io/ce/charts
 ```
