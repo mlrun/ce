@@ -33,7 +33,7 @@ Create a namespace for the deployed components:
 kubectl create namespace mlrun
 ```
 
-Add the mlrun ce  helm chart repo
+Add the mlrun ce helm chart repo
 ```bash
 helm repo add mlrun  https://mlrun.github.io/ce/charts
 ```
