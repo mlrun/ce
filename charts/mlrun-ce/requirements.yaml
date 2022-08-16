@@ -1,0 +1,23 @@
+dependencies:
+- name: nuclio
+  version: "0.14.0"
+  repository: "https://nuclio.github.io/nuclio/charts"
+- name: mlrun
+  version: "0.9.1"
+  repository: "https://v3io.github.io/helm-charts/stable"
+- name: mpi-operator
+  version: "0.6.0"
+  repository: "https://v3io.github.io/helm-charts/stable"
+- name: minio
+  repository: "https://charts.min.io/"
+  version: "4.0.2"
+  condition: minio.enabled
+- name: spark-operator
+  repository: "https://googlecloudplatform.github.io/spark-on-k8s-operator"
+  version: "1.1.25"
+  condition: spark-operator.enabled
+- name: kube-prometheus-stack
+  repository: "https://prometheus-community.github.io/helm-charts"
+  version: "39.6.0"
+  condition: kube-prometheus-stack.enabled
+

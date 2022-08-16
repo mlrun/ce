@@ -1,0 +1,251 @@
+
+# We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
+global:
+
+  # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
+  externalHostAddress: localhost
+  registry:
+    url: mustprovide
+    secretName:
+  nuclio:
+    dashboard:
+      nodePort: 30050
+
+nuclio:
+
+  # coupled with mlrun.nuclio.dashboardName template in mlrun chart
+  fullnameOverride: nuclio
+  controller:
+    enabled: true
+    image:
+      tag: 1.9.0-amd64
+  dashboard:
+    enabled: true
+
+    # nodePort - taken from global.nuclio.dashboard.nodePort for re-usability
+    image:
+      tag: 1.9.0-amd64
+
+    # k8s has deprecated docker support since v1.20
+    containerBuilderKind: kaniko
+  autoscaler:
+    enabled: false
+  dlx:
+    enabled: false
+  rbac:
+    create: true
+    crdAccessMode: cluster
+  crd:
+    create: true
+  platform:
+    logger:
+      sinks:
+        myStdoutLoggerSink:
+          kind: stdout
+          attributes:
+            encoding: console
+            timeFieldName: time
+            timeFieldEncoding: iso8601
+      system:
+      - level: debug
+        sink: myStdoutLoggerSink
+      functions:
+      - level: debug
+        sink: myStdoutLoggerSink
+
+mlrun:
+
+  # set the type of filesystem to use: filesystem, s3
+  storage: filesystem
+  secrets:
+    s3:
+      accessKey: ""
+      secretKey: ""
+  s3:
+    region: us-east-1
+    regionEndpoint: s3.us-east-1.amazonaws.com
+    bucket: mlrun
+    encrypt: false
+    secure: true
+  fullnameOverride: mlrun
+  nuclio:
+    mode: enabled
+  rbac:
+    create: true
+  v3io:
+    enabled: false
+  api:
+    fullnameOverride: mlrun-api
+    image:
+      tag: 1.1.0-rc16
+    service:
+      type: NodePort
+      nodePort: 30070
+    volumes:
+      storageOverride:
+        persistentVolumeClaim:
+          claimName: mlrun-api-pvc
+    persistence:
+      enabled: true
+      existingClaim:
+      storageClass:
+      accessMode: "ReadWriteOnce"
+      size: "8Gi"
+      annotations: ~
+    extraEnv:
+      - name: MLRUN_KFP_URL
+        value: http://ml-pipeline.mlrun.svc.cluster.local:8888
+      - name: MLRUN_STORAGE__AUTO_MOUNT_TYPE
+        value: s3
+      - name: MLRUN_STORAGE__AUTO_MOUNT_PARAMS
+        value: "aws_access_key=minio,aws_secret_key=minio123,endpoint_url=http://minio.mlrun.svc.cluster.local:9000"    
+      - name: MLRUN_HTTPDB__PROJECTS__FOLLOWERS
+        value: nuclio
+      - name: S3_ENDPOINT_URL
+        value: http://minio.mlrun.svc.cluster.local:9000
+      - name: AWS_SECRET_ACCESS_KEY
+        value: minio123
+      - name: AWS_ACCESS_KEY_ID
+        value: minio
+      - name: MLRUN_HTTPDB__REAL_PATH
+        value: s3://
+      - name: MLRUN_ARTIFACT_PATH
+        value: s3://mlrun/
+    extraPersistentVolumeMounts: ~
+  ui:
+    fullnameOverride: mlrun-ui
+    service:
+      type: NodePort
+      nodePort: 30060
+    image:
+      tag: 1.1.0-rc16
+  db:
+    name: db
+    fullnameOverride: mlrun-db
+    securityContext: 
+      runAsUser: 999
+    podSecurityContext:
+      runAsUser: 999
+      fsGroup: 999    
+    volumes:
+      storageOverride:
+        persistentVolumeClaim:
+          claimName: mlrun-db-pvc
+    persistence:
+      enabled: true
+      existingClaim:
+      storageClass:
+      accessMode: "ReadWriteOnce"
+      size: "8Gi"
+      annotations: ~
+
+  httpDB:
+    dbType: mysql
+    dirPath: "/mlrun/db"
+    dsn: mysql+pymysql://root@mlrun-db:3306/mlrun
+    oldDsn: sqlite:////mlrun/db/mlrun.db?check_same_thread=false
+
+jupyterNotebook:
+  awsInstall: false
+  fullnameOverride: mlrun-jupyter
+  name: jupyter-notebook
+  enabled: true
+  service:
+    type: NodePort
+    nodePort: 30040
+    port: 8888
+  ingress:
+    enabled: false
+    annotations: { }
+
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    hosts:
+      - host: chart-example.local
+        paths: [ ]
+    tls: [ ]
+
+    #  - secretName: chart-example-tls
+    #    hosts:
+    #      - chart-example.local
+  image:
+    repository: quay.io/mlrun/jupyter
+
+    # TODO: 1.0.4 is broken right now. Bump to 1.0.4 when fixed or 1.0.5 when released.
+    tag: 1.1.0-rc16
+    pullPolicy: IfNotPresent
+
+  # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
+  # mlrun UI's node port
+  mlrunUIURL:
+
+  extraEnv:
+    - name: MLRUN_ARTIFACT_PATH
+      value: s3://mlrun/
+    - name: S3_ENDPOINT_URL
+      value: http://minio.mlrun.svc.cluster.local:9000
+    - name: AWS_SECRET_ACCESS_KEY
+      value: minio123
+    - name: AWS_ACCESS_KEY_ID
+      value: minio
+    - name: MLRUN_CE
+      value: "true"
+
+  persistence:
+    enabled: true
+    existingClaim:
+    storageClass:
+    accessMode: "ReadWriteOnce"
+    size: "8Gi"
+    annotations: ~
+
+mpi-operator:
+  fullnameOverride: mpi-operator
+  crd:
+    create: true
+  rbac:
+    clusterResources:
+      create: true
+    namespaced:
+      create: true
+  deployment:
+    create: true
+
+minio:
+  enabled: true
+  rootUser: minio
+  rootPassword: minio123
+  mode: standalone
+  replicas: 1
+  resources:
+    requests:
+      memory: 0.5Gi
+  service:
+    type: NodePort
+    port: 9000
+    nodePort: 30080
+  consoleService:
+    type: NodePort
+    port: 9001
+    nodePort: 30090
+  persistence:
+    enabled: true
+    size: 1Gi
+  fullnameOverride: minio
+  buckets:
+    - name: mlrun
+      policy: none
+      purge: false
+
+spark-operator:
+  enabled: false
+
+pipelines:
+  enabled: false
+  persistence:
+    enabled: false
+    annotations: ~
+
+kube-prometheus-stack:
+  fullnameOverride: monitoring
+  enabled: false

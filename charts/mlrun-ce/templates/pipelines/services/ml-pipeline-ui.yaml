@@ -1,0 +1,22 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  labels:
+    app: ml-pipeline-ui
+    application-crd-id: kubeflow-pipelines
+  name: ml-pipeline-ui
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 3000
+    nodePort: 30100
+  selector:
+    app: ml-pipeline-ui
+    application-crd-id: kubeflow-pipelines
+  sessionAffinity: None
+  type: NodePort
+{{- end -}}

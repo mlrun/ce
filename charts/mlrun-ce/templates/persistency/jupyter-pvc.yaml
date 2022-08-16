@@ -1,0 +1,25 @@
+{{- if .Values.jupyterNotebook.persistence.enabled -}}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ template "mlrun-ce.jupyter.fullname" . }}
+  labels:
+    {{- include "mlrun-ce.jupyter.labels" . | nindent 4 }}  
+{{- with .Values.jupyterNotebook.persistence.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  accessModes:
+    - {{ .Values.jupyterNotebook.persistence.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.jupyterNotebook.persistence.size | quote }}
+{{- if .Values.jupyterNotebook.persistence.storageClass }}
+{{- if (eq "-" .Values.jupyterNotebook.persistence.storageClass) }}
+  storageClassName: ""
+{{- else }}
+  storageClassName: "{{ .Values.jupyterNotebook.persistency.storageClass }}"
+{{- end }}
+{{- end }}
+{{- end -}}
+

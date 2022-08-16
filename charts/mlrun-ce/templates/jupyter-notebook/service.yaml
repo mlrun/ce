@@ -1,0 +1,40 @@
+{{- if .Values.jupyterNotebook.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mlrun-ce.jupyter.fullname" . }}
+  labels:
+    {{- include "mlrun-ce.jupyter.labels" . | nindent 4 }}
+spec:
+{{- if (or (eq .Values.jupyterNotebook.service.type "ClusterIP") (empty .Values.jupyterNotebook.service.type)) }}
+  type: ClusterIP
+  {{- if .Values.jupyterNotebook.service.clusterIP }}
+  clusterIP: {{ .Values.jupyterNotebook.service.clusterIP }}
+  {{end}}
+{{- else if eq .Values.jupyterNotebook.service.type "LoadBalancer" }}
+  type: {{ .Values.jupyterNotebook.service.type }}
+  {{- if .Values.jupyterNotebook.service.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.jupyterNotebook.service.loadBalancerIP }}
+  {{- end }}
+  {{- if .Values.jupyterNotebook.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+{{ toYaml .Values.jupyterNotebook.service.loadBalancerSourceRanges | indent 4 }}
+  {{- end -}}
+{{- else }}
+  type: {{ .Values.jupyterNotebook.service.type }}
+{{- end }}
+{{- if .Values.jupyterNotebook.service.externalIPs }}
+  externalIPs:
+{{ toYaml .Values.jupyterNotebook.service.externalIPs | indent 4 }}
+{{- end }}
+  ports:
+    - name: http
+      port: {{ .Values.jupyterNotebook.service.port }}
+      protocol: TCP
+      targetPort: http
+{{ if (and (eq .Values.jupyterNotebook.service.type "NodePort") (not (empty .Values.jupyterNotebook.service.nodePort))) }}
+      nodePort: {{.Values.jupyterNotebook.service.nodePort}}
+{{ end }}
+  selector:
+    {{- include "mlrun-ce.jupyter.selectorLabels" . | nindent 4 }}
+{{- end -}}

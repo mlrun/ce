@@ -1,0 +1,83 @@
+{{- if .Values.jupyterNotebook.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mlrun-ce.jupyter.fullname" . }}
+  labels:
+    {{- include "mlrun-ce.jupyter.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mlrun-ce.jupyter.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.jupyter.selectorLabels" . | nindent 8 }}
+    spec:
+{{- if  .Values.jupyterNotebook.awsInstall }}
+      serviceAccount: {{ .Values.jupyterNotebook.serviceAccount }}
+{{- end }}      
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 100
+        fsGroup: 100
+      initContainers:
+      - name: init-chown-data
+        # jupyter default NB user: uid=1000(jovyan) gid=100(users) groups=100(users)
+        command: ["chown", "-R", "1000:100", "/home/jovyan/data"]
+        image: busybox:1.35
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - mountPath: /home/jovyan/data
+          name: notebooks
+      containers:
+      - name: jupyter-notebook
+        image: "{{ .Values.jupyterNotebook.image.repository }}:{{ .Values.jupyterNotebook.image.tag }}"
+        imagePullPolicy: {{ .Values.jupyterNotebook.image.pullPolicy }}
+        env:
+        - name: MLRUN_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: JUPYTER_ENABLE_LAB
+          value: "yes"
+        - name: MLRUN_DBPATH
+          value: {{ printf "http://%s:%s" (include "mlrun-ce.mlrun.api.fullname" .) (include "mlrun-ce.mlrun.api.port" .) }}
+        - name: MLRUN_UI_URL
+          value: {{ template "mlrun-ce.jupyter.mlrunUIURL" . }}
+        - name: MLRUN_MPIJOB_CRD_VERSION
+          value: {{ index .Values "mpi-operator" "crd" "version" }}
+{{- if  .Values.jupyterNotebook.persistence.enabled }}
+        - name: MLRUN_PVC_MOUNT
+          value: {{ printf "%s:/home/jovyan/data" (include "mlrun-ce.jupyter.fullname" .) }}
+{{- end }}          
+        - name: CHOWN_HOME
+          value: "yes"
+        - name: CHOWN_HOME_OPTS
+          value: "-R"
+        {{- if .Values.jupyterNotebook.extraEnv }}
+        {{ toYaml .Values.jupyterNotebook.extraEnv | nindent 8 }}
+        {{- end }}
+        volumeMounts:
+        - mountPath: /home/jovyan/data
+          name: notebooks
+        ports:
+        - containerPort: 8888
+          name: http
+        command: [ "start-notebook.sh" ]
+        args:
+        - --ip="0.0.0.0"
+        - --port=8888
+        - --NotebookApp.token=''
+        - --NotebookApp.password=''
+        - --NotebookApp.default_url="/lab"
+      volumes:
+      - name: notebooks
+        persistentVolumeClaim:
+{{- if .Values.jupyterNotebook.persistence.enabled }}
+          claimName: {{ template "mlrun-ce.jupyter.fullname" . }}
+{{- end }}
+{{- end -}}

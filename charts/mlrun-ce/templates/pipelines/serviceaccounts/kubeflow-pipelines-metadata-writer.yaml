@@ -1,0 +1,9 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+  labels:
+    application-crd-id: kubeflow-pipelines
+  name: kubeflow-pipelines-metadata-writer
+{{- end -}}
