@@ -1,0 +1,20 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  labels:
+    application-crd-id: kubeflow-pipelines
+  name: ml-pipeline-visualizationserver
+spec:
+  ports:
+  - name: http
+    port: 8888
+    protocol: TCP
+    targetPort: 8888
+  selector:
+    app: ml-pipeline-visualizationserver
+    application-crd-id: kubeflow-pipelines
+  sessionAffinity: None
+  type: ClusterIP
+{{- end -}}

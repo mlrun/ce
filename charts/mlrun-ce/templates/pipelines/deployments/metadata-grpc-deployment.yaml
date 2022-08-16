@@ -1,0 +1,102 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  generation: 1
+  labels:
+    application-crd-id: kubeflow-pipelines
+    component: metadata-grpc-server
+  name: metadata-grpc-deployment
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      application-crd-id: kubeflow-pipelines
+      component: metadata-grpc-server
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        application-crd-id: kubeflow-pipelines
+        component: metadata-grpc-server
+    spec:
+      containers:
+      - args:
+        - --grpc_port=8080
+        - --mysql_config_database=$(MYSQL_DATABASE)
+        - --mysql_config_host=$(MYSQL_HOST)
+        - --mysql_config_port=$(MYSQL_PORT)
+        - --mysql_config_user=$(DBCONFIG_USER)
+        - --mysql_config_password=$(DBCONFIG_PASSWORD)
+        - --enable_database_upgrade=true
+        command:
+        - /bin/metadata_store_server
+        env:
+        - name: DBCONFIG_USER
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: mysql-secret
+        - name: DBCONFIG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: mysql-secret
+        - name: MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              key: mlmdDb
+              name: pipeline-install-config
+        - name: MYSQL_HOST
+          valueFrom:
+            configMapKeyRef:
+              key: dbHost
+              name: pipeline-install-config
+        - name: MYSQL_PORT
+          valueFrom:
+            configMapKeyRef:
+              key: dbPort
+              name: pipeline-install-config
+        image: {{ .Values.pipelines.images.metadata.container.repository }}:{{ .Values.pipelines.images.metadata.container.tag }}
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: grpc-api
+          timeoutSeconds: 2
+        name: container
+        ports:
+        - containerPort: 8080
+          name: grpc-api
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          successThreshold: 1
+          tcpSocket:
+            port: grpc-api
+          timeoutSeconds: 2
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: metadata-grpc-server
+      serviceAccountName: metadata-grpc-server
+      terminationGracePeriodSeconds: 30
+{{- end -}}

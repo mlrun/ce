@@ -1,0 +1,46 @@
+You're up and running !
+
+1. Jupyter UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:{{ .Values.jupyterNotebook.service.nodePort }}
+
+2. Nuclio UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:{{ .Values.global.nuclio.dashboard.nodePort }}
+
+3. MLRun UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.ui.service.nodePort }}
+
+4. MLRun API is exposed externally at:
+  http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.api.service.nodePort }}
+
+{{- if .Values.minio.enabled }}
+
+5. Minio API is exposed externally at:
+  http://{{ .Values.global.externalHostAddress }}:{{ .Values.minio.service.nodePort }}
+
+6. Minio UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:{{ .Values.minio.consoleService.nodePort }}
+
+  Credentials:
+    username: {{ .Values.minio.rootUser }}
+    password: {{ .Values.minio.rootPassword }}
+
+{{- end }}
+
+{{- if .Values.pipelines.enabled }}
+
+7. Pipelines UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:30100
+{{- end }}
+
+{{- if index .Values "kube-prometheus-stack" "enabled" }}
+
+8. Grafana UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:30110
+
+  Credentials:
+    username: {{ (index .Values "kube-prometheus-stack" "grafana" "adminUser") }}
+    password: {{ (index .Values "kube-prometheus-stack" "grafana" "adminPassword") }}
+{{- end }}
+
+
+Happy MLOPSing !!! :]

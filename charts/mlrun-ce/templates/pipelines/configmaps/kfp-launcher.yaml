@@ -1,0 +1,11 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: v1
+data:
+  defaultPipelineRoot: ""
+kind: ConfigMap
+metadata:
+  annotations:
+  labels:
+    application-crd-id: kubeflow-pipelines
+  name: kfp-launcher
+{{- end -}}

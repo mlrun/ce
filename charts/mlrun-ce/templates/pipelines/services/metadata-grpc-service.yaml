@@ -1,0 +1,21 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+  labels:
+    app: metadata
+    application-crd-id: kubeflow-pipelines
+  name: metadata-grpc-service
+spec:
+  ports:
+  - name: grpc-api
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    application-crd-id: kubeflow-pipelines
+    component: metadata-grpc-server
+  sessionAffinity: None
+  type: ClusterIP
+{{- end -}}

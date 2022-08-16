@@ -1,0 +1,31 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: v1
+data:
+  artifactRepository: |
+    archiveLogs: true
+    s3:
+      endpoint: "{{ .Values.pipelines.minio.endpoint }}:{{ .Values.pipelines.minio.endpointPort }}"
+      bucket: "{{ .Values.pipelines.minio.bucket }}"
+      insecure: true
+      accessKeySecret:
+        name: mlpipeline-minio-artifact
+        key: accesskey
+      secretKeySecret:
+        name: mlpipeline-minio-artifact
+        key: secretkey
+  containerRuntimeExecutor: emissary
+  executor: |
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 0.01
+        memory: 32Mi
+      limits:
+        cpu: 0.5
+        memory: 512Mi
+kind: ConfigMap
+metadata:
+  labels:
+    application-crd-id: kubeflow-pipelines
+  name: workflow-controller-configmap
+{{- end -}}

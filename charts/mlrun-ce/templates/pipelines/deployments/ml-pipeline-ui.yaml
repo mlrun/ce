@@ -1,0 +1,115 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  generation: 1
+  labels:
+    app: ml-pipeline-ui
+    application-crd-id: kubeflow-pipelines
+  name: ml-pipeline-ui
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: ml-pipeline-ui
+      application-crd-id: kubeflow-pipelines
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+      creationTimestamp: null
+      labels:
+        app: ml-pipeline-ui
+        application-crd-id: kubeflow-pipelines
+    spec:
+      containers:
+      - env:
+        - name: VIEWER_TENSORBOARD_POD_TEMPLATE_SPEC_PATH
+          value: /etc/config/viewer-pod-template.json
+        - name: MINIO_HOST
+          value: "{{ .Values.pipelines.minio.endpoint }}"
+        - name: MINIO_PORT
+          value: "{{ .Values.pipelines.minio.endpointPort }}"
+        - name: MINIO_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              key: accesskey
+              name: mlpipeline-minio-artifact
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              key: secretkey
+              name: mlpipeline-minio-artifact
+        - name: ALLOW_CUSTOM_VISUALIZATIONS
+          value: "true"
+        image: {{ .Values.pipelines.images.ui.repository }}:{{ .Values.pipelines.images.ui.tag }}
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - wget
+            - -q
+            - -S
+            - -O
+            - '-'
+            - http://localhost:3000/apis/v1beta1/healthz
+          failureThreshold: 3
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 2
+        name: ml-pipeline-ui
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - wget
+            - -q
+            - -S
+            - -O
+            - '-'
+            - http://localhost:3000/apis/v1beta1/healthz
+          failureThreshold: 3
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 2
+        resources:
+          requests:
+            cpu: 10m
+            memory: 70Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/config
+          name: config-volume
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: ml-pipeline-ui
+      serviceAccountName: ml-pipeline-ui
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: ml-pipeline-ui-configmap
+        name: config-volume
+{{- end -}}

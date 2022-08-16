@@ -1,0 +1,59 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  generation: 1
+  labels:
+    app: ml-pipeline-scheduledworkflow
+    application-crd-id: kubeflow-pipelines
+  name: ml-pipeline-scheduledworkflow
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: ml-pipeline-scheduledworkflow
+      application-crd-id: kubeflow-pipelines
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+      creationTimestamp: null
+      labels:
+        app: ml-pipeline-scheduledworkflow
+        application-crd-id: kubeflow-pipelines
+    spec:
+      containers:
+      - env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: CRON_SCHEDULE_TIMEZONE
+          valueFrom:
+            configMapKeyRef:
+              key: cronScheduleTimezone
+              name: pipeline-install-config
+        image: {{ .Values.pipelines.images.scheduledworkflow.repository }}:{{ .Values.pipelines.images.scheduledworkflow.tag }}
+        imagePullPolicy: IfNotPresent
+        name: ml-pipeline-scheduledworkflow
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: ml-pipeline-scheduledworkflow
+      serviceAccountName: ml-pipeline-scheduledworkflow
+      terminationGracePeriodSeconds: 30
+{{- end -}}

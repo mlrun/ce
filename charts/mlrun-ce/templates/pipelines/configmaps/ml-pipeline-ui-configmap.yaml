@@ -1,0 +1,39 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: v1
+data:
+  viewer-pod-template.json: |-
+    {
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "AWS_ACCESS_KEY_ID",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "mlpipeline-minio-artifact",
+                    "key": "accesskey"
+                  }
+                }
+              },
+              {
+                "name": "AWS_SECRET_ACCESS_KEY",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "mlpipeline-minio-artifact",
+                    "key": "secretkey"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+kind: ConfigMap
+metadata:
+  annotations:
+  labels:
+    application-crd-id: kubeflow-pipelines
+  name: ml-pipeline-ui-configmap
+{{- end -}}

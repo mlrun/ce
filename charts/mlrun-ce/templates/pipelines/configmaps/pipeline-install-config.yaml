@@ -1,0 +1,33 @@
+{{- if .Values.pipelines.enabled -}}
+apiVersion: v1
+data:
+  minioServiceHost: "{{ .Values.pipelines.minio.endpoint }}"
+  minioServicePort: "{{ .Values.pipelines.minio.endpointPort }}"
+  ConMaxLifeTime: 120s
+  appName: pipeline
+  appVersion: 1.8.3
+  autoUpdatePipelineDefaultVersion: "false"
+  bucketName: "{{ .Values.pipelines.minio.bucket }}"
+  cacheDb: cachedb
+  cacheImage: {{ .Values.pipelines.images.cacheImage.repository }}:{{ .Values.pipelines.images.cacheImage.tag }}
+  cacheNodeRestrictions: "false"
+  cronScheduleTimezone: UTC
+  dbHost: mysql
+  dbPort: "3306"
+  defaultPipelineRoot: ""
+  mlmdDb: metadb
+  pipelineDb: mlpipeline
+  warning: |
+    1. Do not use kubectl to edit this configmap, because some values are used
+    during kustomize build. Instead, change the configmap and apply the entire
+    kustomize manifests again.
+    2. After updating the configmap, some deployments may need to be restarted
+    until the changes take effect. A quick way to restart all deployments in a
+    namespace: `kubectl rollout restart deployment -n <your-namespace>`.
+kind: ConfigMap
+metadata:
+  annotations:
+  labels:
+    application-crd-id: kubeflow-pipelines
+  name: pipeline-install-config
+{{- end -}}
