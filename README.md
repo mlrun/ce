@@ -2,5 +2,5 @@
 # Usage
 
 ```
-$ helm repo add mlrun https://mlrun.github.io/ce/charts
+$ helm repo add mlrun https://mlrun.github.io/ce
 ```

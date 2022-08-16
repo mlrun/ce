@@ -35,7 +35,7 @@ kubectl create namespace mlrun
 
 Add the mlrun ce helm chart repo
 ```bash
-helm repo add mlrun  https://mlrun.github.io/ce/charts
+helm repo add mlrun https://mlrun.github.io/ce
 ```
 
 To work with the open source MLRun stack, you must an accessible docker-registry. The registry's URL and credentials
@@ -61,7 +61,7 @@ helm --namespace mlrun \
     --wait \
     --set global.registry.url=<registry URL e.g. index.docker.io/iguazio > \
     --set global.registry.secretName=registry-credentials \
-    v3io-stable/mlrun-ce
+    mlrun/mlrun-ce
 ```
 
 ## Installing MLRun-ce on minikube
