@@ -139,8 +139,12 @@ kube-prometheus-stack:
   alertmanager:
     enabled: false
   grafana:
-    adminUser: "admin"
-    adminPassword: "admin-passw123"
+    grafana.ini:
+      auth.anonymous:
+        enabled: true
+        org_role: Editor
+      security:
+        disable_initial_admin_creation: true
     fullnameOverride: grafana
     enabled: true
     service:
