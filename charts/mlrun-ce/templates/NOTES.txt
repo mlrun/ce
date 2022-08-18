@@ -36,10 +36,6 @@ You're up and running !
 
 8. Grafana UI is available at:
   http://{{ .Values.global.externalHostAddress }}:30110
-
-  Credentials:
-    username: {{ (index .Values "kube-prometheus-stack" "grafana" "adminUser") }}
-    password: {{ (index .Values "kube-prometheus-stack" "grafana" "adminPassword") }}
 {{- end }}
 
 
