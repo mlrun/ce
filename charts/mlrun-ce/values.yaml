@@ -77,7 +77,7 @@ mlrun:
   api:
     fullnameOverride: mlrun-api
     image:
-      tag: 1.1.0-rc16
+      tag: 1.1.0-rc24
     service:
       type: NodePort
       nodePort: 30070
@@ -118,7 +118,7 @@ mlrun:
       type: NodePort
       nodePort: 30060
     image:
-      tag: 1.1.0-rc16
+      tag: 1.1.0-rc24
   db:
     name: db
     fullnameOverride: mlrun-db
@@ -172,7 +172,7 @@ jupyterNotebook:
     repository: quay.io/mlrun/jupyter
 
     # TODO: 1.0.4 is broken right now. Bump to 1.0.4 when fixed or 1.0.5 when released.
-    tag: 1.1.0-rc16
+    tag: 1.1.0-rc24
     pullPolicy: IfNotPresent
 
   # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
@@ -237,15 +237,98 @@ minio:
       policy: none
       purge: false
 
+
 spark-operator:
   enabled: false
+  fullnameOverride: spark-operator
+  webhook:
+     enable: true
+
+
+
 
 pipelines:
-  enabled: false
+  enabled: fasle
+  name: pipelines
   persistence:
-    enabled: false
+    enabled: true
+    existingClaim:
+    storageClass:
+    accessMode: "ReadWriteOnce"
+    size: "20Gi"
     annotations: ~
+  db:
+    username: root
+  minio:
+    enabled: true
+    accessKey: "minio"
+    secretKey: "minio123"
+    endpoint: "minio.mlrun.svc.cluster.local"
+    endpointPort: "9000"
+    bucket: "mlrun"
+  images:
+    argoexec:
+      repository: gcr.io/ml-pipeline/argoexec
+      tag: v3.3.8-license-compliance
+    workflowController:
+      repository: gcr.io/ml-pipeline/workflow-controller
+      tag: v3.3.8-license-compliance
+    apiServer:
+      repository: gcr.io/ml-pipeline/api-server
+      tag: 1.8.3
+    persistenceagent:
+      repository: gcr.io/ml-pipeline/persistenceagent
+      tag: 1.8.3
+    scheduledworkflow:
+      repository: gcr.io/ml-pipeline/scheduledworkflow
+      tag: 1.8.3
+    ui:
+      repository: gcr.io/ml-pipeline/frontend
+      tag: 1.8.3
+    viewerCrdController:
+      repository: gcr.io/ml-pipeline/viewer-crd-controller
+      tag: 1.8.3
+    visualizationServer:
+      repository: gcr.io/ml-pipeline/visualization-server
+      tag: 1.8.3
+    metadata:
+      container:
+        repository: gcr.io/tfx-oss-public/ml_metadata_store_server
+        tag: 1.5.0
+    metadataEnvoy:
+      repository: gcr.io/ml-pipeline/metadata-envoy
+      tag: 1.8.3
+    metadataWriter:
+      repository: gcr.io/ml-pipeline/metadata-writer
+      tag: 1.8.3
+    mysql:
+      repository: mysql
+      tag: 5.7-debian
+    cacheImage:
+      repository: gcr.io/google-containers/busybox
+      tag: latest
+
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
   enabled: false
+  alertmanager:
+    enabled: false
+  grafana:
+    grafana.ini:
+      auth.anonymous:
+        enabled: true
+        org_role: Editor
+      security:
+        disable_initial_admin_creation: true
+    fullnameOverride: grafana
+    enabled: true
+    service:
+      type: NodePort
+      nodePort: 30110
+  prometheus:
+    enabled: true
+  kube-state-metrics:
+    fullnameOverride: state-metrics
+  prometheus-node-exporter:
+    fullnameOverride: node-exporter
