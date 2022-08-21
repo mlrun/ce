@@ -67,92 +67,14 @@ minio:
 
 spark-operator:
   enabled: true
-  fullnameOverride: spark-operator
-  webhook:
-     enable: true
 
 pipelines:
   enabled: true
-  name: pipelines
   persistence:
     enabled: true
-    existingClaim:
-    storageClass:
-    accessMode: "ReadWriteOnce"
-    size: "20Gi"
     annotations:
       helm.sh/resource-policy: "keep"
-  db:
-    username: root
-  minio:
-    enabled: true
-    accessKey: "minio"
-    secretKey: "minio123"
-    endpoint: "minio.mlrun.svc.cluster.local"
-    endpointPort: "9000"
-    bucket: "mlrun"
-  images:
-    argoexec:
-      repository: gcr.io/ml-pipeline/argoexec
-      tag: v3.3.8-license-compliance
-    workflowController:
-      repository: gcr.io/ml-pipeline/workflow-controller
-      tag: v3.3.8-license-compliance
-    apiServer:
-      repository: gcr.io/ml-pipeline/api-server
-      tag: 1.8.3
-    persistenceagent:
-      repository: gcr.io/ml-pipeline/persistenceagent
-      tag: 1.8.3
-    scheduledworkflow:
-      repository: gcr.io/ml-pipeline/scheduledworkflow
-      tag: 1.8.3
-    ui:
-      repository: gcr.io/ml-pipeline/frontend
-      tag: 1.8.3
-    viewerCrdController:
-      repository: gcr.io/ml-pipeline/viewer-crd-controller
-      tag: 1.8.3
-    visualizationServer:
-      repository: gcr.io/ml-pipeline/visualization-server
-      tag: 1.8.3
-    metadata:
-      container:
-        repository: gcr.io/tfx-oss-public/ml_metadata_store_server
-        tag: 1.5.0
-    metadataEnvoy:
-      repository: gcr.io/ml-pipeline/metadata-envoy
-      tag: 1.8.3
-    metadataWriter:
-      repository: gcr.io/ml-pipeline/metadata-writer
-      tag: 1.8.3
-    mysql:
-      repository: mysql
-      tag: 5.7-debian
-    cacheImage:
-      repository: gcr.io/google-containers/busybox
-      tag: latest
+
 
 kube-prometheus-stack:
-  fullnameOverride: monitoring
   enabled: true
-  alertmanager:
-    enabled: false
-  grafana:
-    grafana.ini:
-      auth.anonymous:
-        enabled: true
-        org_role: Editor
-      security:
-        disable_initial_admin_creation: true
-    fullnameOverride: grafana
-    enabled: true
-    service:
-      type: NodePort
-      nodePort: 30110
-  prometheus:
-    enabled: true
-  kube-state-metrics:
-    fullnameOverride: state-metrics
-  prometheus-node-exporter:
-    fullnameOverride: node-exporter
