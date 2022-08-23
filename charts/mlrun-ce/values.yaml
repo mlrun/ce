@@ -248,7 +248,7 @@ spark-operator:
 
 
 pipelines:
-  enabled: fasle
+  enabled: false
   name: pipelines
   persistence:
     enabled: true
