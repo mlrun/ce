@@ -18,13 +18,13 @@ nuclio:
   controller:
     enabled: true
     image:
-      tag: 1.10.0-amd64
+      tag: 1.10.1-amd64
   dashboard:
     enabled: true
 
     # nodePort - taken from global.nuclio.dashboard.nodePort for re-usability
     image:
-      tag: 1.10.0-amd64
+      tag: 1.10.1-amd64
 
     # k8s has deprecated docker support since v1.20
     containerBuilderKind: kaniko
