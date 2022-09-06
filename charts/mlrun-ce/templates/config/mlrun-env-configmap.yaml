@@ -1,9 +1,13 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mlrun-override-full-env
+  name: mlrun-common-env
 data:
-  MLRUN_SPARK_OPERATOR_VERSION: spark-3
-  MLRUN_SPARK_APP_IMAGE: gcr.io/iguazio/spark-app
-  MLRUN_SPARK_APP_IMAGE_TAG: v3.2.1-mlk
-  MLRUN_KFP_URL: http://ml-pipeline.mlrun.svc.cluster.local:8888
+  MLRUN_STORAGE__AUTO_MOUNT_TYPE: s3
+  MLRUN_STORAGE__AUTO_MOUNT_PARAMS: "aws_access_key=minio,aws_secret_key=minio123,endpoint_url={{ include "mlrun-ce.minio.service.url" . }}"
+  MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
+  S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
+  AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
+  AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
+  MLRUN_HTTPDB__REAL_PATH: s3://
+  MLRUN_ARTIFACT_PATH: s3://mlrun/

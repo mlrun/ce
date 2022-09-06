@@ -92,23 +92,12 @@ mlrun:
       accessMode: "ReadWriteOnce"
       size: "8Gi"
       annotations: ~
-    extraEnv:
-      - name: MLRUN_STORAGE__AUTO_MOUNT_TYPE
-        value: s3
-      - name: MLRUN_STORAGE__AUTO_MOUNT_PARAMS
-        value: "aws_access_key=minio,aws_secret_key=minio123,endpoint_url=http://minio.mlrun.svc.cluster.local:9000"    
-      - name: MLRUN_HTTPDB__PROJECTS__FOLLOWERS
-        value: nuclio
-      - name: S3_ENDPOINT_URL
-        value: http://minio.mlrun.svc.cluster.local:9000
-      - name: AWS_SECRET_ACCESS_KEY
-        value: minio123
-      - name: AWS_ACCESS_KEY_ID
-        value: minio
-      - name: MLRUN_HTTPDB__REAL_PATH
-        value: s3://
-      - name: MLRUN_ARTIFACT_PATH
-        value: s3://mlrun/
+    envFrom:
+      - configMapRef:
+          name: mlrun-common-env
+      - configMapRef:
+          name: mlrun-override-env
+          optional: true
     extraPersistentVolumeMounts: ~
   ui:
     fullnameOverride: mlrun-ui
