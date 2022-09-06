@@ -15,9 +15,15 @@ mlrun:
       enabled: true
       annotations:
         helm.sh/resource-policy: "keep"
-    envFrom:
-      - configMapRef:
-          name: mlrun-override-full-env
+    extraEnv:
+      - name: MLRUN_SPARK_OPERATOR_VERSION
+        value: spark-3
+      - name: MLRUN_SPARK_APP_IMAGE
+        value: gcr.io/iguazio/spark-app
+      - name: MLRUN_SPARK_APP_IMAGE_TAG
+        value: v3.2.1-mlk
+      - name: MLRUN_KFP_URL
+        value: http://ml-pipeline.mlrun.svc.cluster.local:8888
   db:
     persistence:
       enabled: true
