@@ -36,6 +36,10 @@ You're up and running !
 
 8. Grafana UI is available at:
   http://{{ .Values.global.externalHostAddress }}:30110
+
+9. Prometheus UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:30120
+  
 {{- end }}
 
 
