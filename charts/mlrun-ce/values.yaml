@@ -300,6 +300,10 @@ kube-prometheus-stack:
   alertmanager:
     enabled: false
   grafana:
+    persistence:
+      type: pvc
+      enabled: true
+      size: 10Gi  
     grafana.ini:
       auth.anonymous:
         enabled: true
@@ -313,6 +317,9 @@ kube-prometheus-stack:
       nodePort: 30110
   prometheus:
     enabled: true
+    service:
+      type: NodePort
+      nodePort: 30120    
   kube-state-metrics:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
