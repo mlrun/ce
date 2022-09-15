@@ -11,3 +11,4 @@ data:
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
   MLRUN_HTTPDB__REAL_PATH: s3://
   MLRUN_ARTIFACT_PATH: s3://mlrun/
+  MLRUN_CE__MODE: {{ .Values.mlrun.ce.mode }}
