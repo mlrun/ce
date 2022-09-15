@@ -24,6 +24,8 @@ mlrun:
         value: v3.2.1-mlk
       - name: MLRUN_KFP_URL
         value: http://ml-pipeline.mlrun.svc.cluster.local:8888
+      - name: MLRUN_CE__MODE
+        value: full
   db:
     persistence:
       enabled: true
