@@ -18,7 +18,7 @@ spec:
 {{- if (eq "-" .Values.mlrun.db.persistence.storageClass) }}
   storageClassName: ""
 {{- else }}
-  storageClassName: "{{ .Values.mlrun.db.persistency.storageClass }}"
+  storageClassName: "{{ .Values.mlrun.db.persistence.storageClass }}"
 {{- end }}
 {{- end }}
 {{- end -}}

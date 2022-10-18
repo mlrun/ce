@@ -18,7 +18,7 @@ spec:
 {{- if (eq "-" .Values.jupyterNotebook.persistence.storageClass) }}
   storageClassName: ""
 {{- else }}
-  storageClassName: "{{ .Values.jupyterNotebook.persistency.storageClass }}"
+  storageClassName: "{{ .Values.jupyterNotebook.persistence.storageClass }}"
 {{- end }}
 {{- end }}
 {{- end -}}
