@@ -19,7 +19,7 @@ spec:
 {{- if (eq "-" .Values.pipelines.persistence.storageClass) }}
   storageClassName: ""
 {{- else }}
-  storageClassName: "{{ .Values.pipelines.persistency.storageClass }}"
+  storageClassName: "{{ .Values.pipelines.persistence.storageClass }}"
 {{- end }}
 {{- end }}
 {{- end -}}
