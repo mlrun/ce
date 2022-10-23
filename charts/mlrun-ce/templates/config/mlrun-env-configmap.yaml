@@ -12,4 +12,4 @@ data:
   MLRUN_HTTPDB__REAL_PATH: s3://
   MLRUN_ARTIFACT_PATH: s3://mlrun/
   MLRUN_CE__MODE: {{ .Values.mlrun.ce.mode }}
-  MLRUN_DEFAULT_TENSORBOARD_LOGS_PATH: /home/jovyan/data/tensorboard/{{project}}
+  MLRUN_DEFAULT_TENSORBOARD_LOGS_PATH: /home/jovyan/data/tensorboard/{{ `{{project}} `}}
