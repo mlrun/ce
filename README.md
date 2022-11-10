@@ -2,7 +2,7 @@
 
 This repo contains the Helm charts for the MLRun Community Edition (CE) - a full open source MLOps stack.
 
- The Open source MLRun ce chart includes the following stack:
+The Open source MLRun ce chart includes the following stack:
 
  * Nuclio - https://github.com/nuclio/nuclio
  * MLRun - https://github.com/mlrun/mlrun
