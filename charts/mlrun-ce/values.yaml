@@ -234,7 +234,7 @@ minio:
       policy: none
       purge: false
 
-spark-operator:
+sparkOperator:
   enabled: true
   fullnameOverride: spark-operator
   webhook:
