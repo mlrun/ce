@@ -1,0 +1,10 @@
+{{- if .Values.spark-operator.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mlrun-spark-config
+data:
+  MLRUN_SPARK_OPERATOR_VERSION: spark-3
+  MLRUN_SPARK_APP_IMAGE: gcr.io/iguazio/spark-app
+  MLRUN_SPARK_APP_IMAGE_TAG: v3.2.1-mlk
+{{- end }}

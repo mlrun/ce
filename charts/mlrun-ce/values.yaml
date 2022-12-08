@@ -91,10 +91,17 @@ mlrun:
       storageClass:
       accessMode: "ReadWriteOnce"
       size: "8Gi"
-      annotations: ~
+      annotations:
+        helm.sh/resource-policy: "keep"
     envFrom:
       - configMapRef:
           name: mlrun-common-env
+      - configMapRef:
+          name: mlrun-pipelines-config
+          optional: true
+      - configMapRef:
+          name: mlrun-spark-config
+          optional: true
       - configMapRef:
           name: mlrun-override-env
           optional: true
@@ -124,7 +131,8 @@ mlrun:
       storageClass:
       accessMode: "ReadWriteOnce"
       size: "8Gi"
-      annotations: ~
+      annotations:
+        helm.sh/resource-policy: "keep"
 
   httpDB:
     dbType: mysql
@@ -133,7 +141,7 @@ mlrun:
     oldDsn: sqlite:////mlrun/db/mlrun.db?check_same_thread=false
 
   ce:
-    mode: lite
+    mode: full
 
 jupyterNotebook:
   awsInstall: false
@@ -185,7 +193,8 @@ jupyterNotebook:
     storageClass:
     accessMode: "ReadWriteOnce"
     size: "8Gi"
-    annotations: ~
+    annotations:
+      helm.sh/resource-policy: "keep"
 
 mpi-operator:
   fullnameOverride: mpi-operator
@@ -203,8 +212,8 @@ minio:
   enabled: true
   rootUser: minio
   rootPassword: minio123
-  mode: standalone
-  replicas: 1
+  mode: distributed
+  replicas: 4
   resources:
     requests:
       memory: 0.5Gi
@@ -225,18 +234,14 @@ minio:
       policy: none
       purge: false
 
-
 spark-operator:
-  enabled: false
+  enabled: true
   fullnameOverride: spark-operator
   webhook:
      enable: true
 
-
-
-
 pipelines:
-  enabled: false
+  enabled: true
   name: pipelines
   persistence:
     enabled: true
@@ -244,7 +249,8 @@ pipelines:
     storageClass:
     accessMode: "ReadWriteOnce"
     size: "20Gi"
-    annotations: ~
+    annotations:
+      helm.sh/resource-policy: "keep"
   db:
     username: root
   minio:
@@ -296,10 +302,9 @@ pipelines:
       repository: gcr.io/google-containers/busybox
       tag: latest
 
-
 kube-prometheus-stack:
   fullnameOverride: monitoring
-  enabled: false
+  enabled: true
   alertmanager:
     enabled: false
   grafana:
