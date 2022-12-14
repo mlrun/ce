@@ -48,7 +48,7 @@ Copied over from mlrun chart to duplicate the logic without constraining the val
 {{- if .Values.jupyterNotebook.mlrunUIURL -}}
 {{- .Values.jupyterNotebook.mlrunUIURL -}}
 {{- else -}}
-{{- printf "http://%s:%s" .Values.global.externalHostAddress (.Values.mlrun.ui.service.nodePort | toString) -}}
+{{- printf "http://%s:%s/mlrun" .Values.global.externalHostAddress (.Values.mlrun.ui.service.nodePort | toString) -}}
 {{- end -}}
 {{- end -}}
 
