@@ -169,7 +169,11 @@ jupyterNotebook:
 
   extraEnv:
     - name: MLRUN_ARTIFACT_PATH
-      value: s3://mlrun/
+      value: s3://mlrun/projects/{{run.project}}/artifacts
+    - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT:
+      value: s3://mlrun/projects/{project}/FeatureStore/{name}/{kind}
+    - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL:
+      value: ""
     - name: S3_ENDPOINT_URL
       value: http://minio.mlrun.svc.cluster.local:9000
     - name: AWS_SECRET_ACCESS_KEY
