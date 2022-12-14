@@ -77,9 +77,6 @@ the ce inside a minikube cluster, add `--set global.externalHostAddress=$(miniku
 Configurable values are documented in the `values.yaml`, and the `values.yaml` of all sub charts. 
 Override those [in the normal methods](https://helm.sh/docs/chart_template_guide/values_files/).
 
-To use the full version, override the helm install command using `-f override-full.yaml`
-
-
 ### Usage
 
 Your applications are now available in your local browser:
