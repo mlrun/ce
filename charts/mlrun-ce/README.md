@@ -83,6 +83,31 @@ To work with ECR, you must create a secret with your AWS credentials and a secre
 This is relevant for instances running without attached IAM roles.
 To work with instances running with attached IAM roles, you can skip the AWS credentials and ECR Token secrets creation.
 
+Before you begin, make sure you have the following IAM roles attached to your user:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ecr:CreateRepository",
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:BatchGetImage",
+                "ecr:CompleteLayerUpload",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:InitiateLayerUpload",
+                "ecr:PutImage",
+                "ecr:UploadLayerPart"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
 Common environment variables:
 
 ```bash
