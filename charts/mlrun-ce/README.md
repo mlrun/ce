@@ -77,6 +77,59 @@ the ce inside a minikube cluster, add `--set global.externalHostAddress=$(miniku
 Configurable values are documented in the `values.yaml`, and the `values.yaml` of all sub charts. 
 Override those [in the normal methods](https://helm.sh/docs/chart_template_guide/values_files/).
 
+### Working with ECR
+
+To work with ECR, you must create a secret with your AWS credentials and a secret with ECR Token while providing both secret names to the helm install command.
+
+Common environment variables:
+
+```bash
+export AWS_REGION=<Your AWS region>
+export AWS_ACCOUNT=<Your AWS account ID>
+export ECR_PASSWORD=$(aws ecr get-login-password --region ${AWS_REGION})
+```
+
+To create the AWS credentials secret, use the following command:
+
+```bash
+cat << EOF | kubectl --namespace mlrun create secret generic aws-credentials --save-config \
+--dry-run=client --from-file=credentials=/dev/stdin -o yaml | kubectl apply -f -
+[default]
+aws_access_key_id = <YOUR AWS ACCESS KEY ID>
+aws_secret_access_key = <YOUR AWS SECRET ACCESS KEY>
+EOF
+```
+
+> **Note:** This is needed to allow Nuclio creating the image repository prior to pushing the function image.
+> Otherwise, Nuclio will fail to push the image to ECR because the image name is determined during the build process.
+>
+
+Creating the ECR Token secret:
+
+```bash
+kubectl -n mlrun create secret docker-registry ecr-registry-credentials \
+  --docker-server=${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+  --docker-username=AWS \
+  --docker-password=${ECR_PASSWORD} 
+```
+
+> **Note:** This is needed for docker push/pull commands (and imagePullSecret, for k8s pod image pulling).
+
+Finally, install the chart with the following command:
+
+```bash
+helm --namespace mlrun \
+    install my-mlrun \
+    --wait \
+    ... other overrides ... \
+    --set global.registry.url=${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+    --set nuclio.dashboard.kaniko.registryProviderSecretName=aws-credentials \
+    --set global.registry.secretName=ecr-registry-credentials \
+    mlrun/mlrun-ce
+```
+
+> **Note:** To add a custom image prefix, use `--set nuclio.dashboard.imageNamePrefixTemplate="some-unique-prefix/{{ .ProjectName }}-{{ .FunctionName }}"` which will result in a unique prefix for each function image name.
+
 ### Usage
 
 Your applications are now available in your local browser:
