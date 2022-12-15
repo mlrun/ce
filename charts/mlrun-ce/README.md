@@ -80,6 +80,7 @@ Override those [in the normal methods](https://helm.sh/docs/chart_template_guide
 ### Working with ECR
 
 To work with ECR, you must create a secret with your AWS credentials and a secret with ECR Token while providing both secret names to the helm install command.
+This is relevant for instances running without attached IAM roles.
 
 Common environment variables:
 
