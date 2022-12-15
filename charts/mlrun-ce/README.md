@@ -81,6 +81,7 @@ Override those [in the normal methods](https://helm.sh/docs/chart_template_guide
 
 To work with ECR, you must create a secret with your AWS credentials and a secret with ECR Token while providing both secret names to the helm install command.
 This is relevant for instances running without attached IAM roles.
+To work with instances running with attached IAM roles, you can skip the AWS credentials and ECR Token secrets creation.
 
 Common environment variables:
 
@@ -96,13 +97,13 @@ To create the AWS credentials secret, use the following command:
 cat << EOF | kubectl --namespace mlrun create secret generic aws-credentials --save-config \
 --dry-run=client --from-file=credentials=/dev/stdin -o yaml | kubectl apply -f -
 [default]
-aws_access_key_id = <YOUR AWS ACCESS KEY ID>
-aws_secret_access_key = <YOUR AWS SECRET ACCESS KEY>
+aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
 EOF
 ```
 
-> **Note:** This is needed to allow Nuclio creating the image repository prior to pushing the function image.
-> Otherwise, Nuclio will fail to push the image to ECR because the image name is determined during the build process.
+> **Note:** This is needed to allow [Kaniko](https://github.com/GoogleContainerTools/kaniko), which is used by both Nuclio and MLRun, creating the image repository prior to pushing the function image.
+> Otherwise, [Kaniko](https://github.com/GoogleContainerTools/kaniko) will fail to push the image to ECR because the image name is determined during the build process.
 >
 
 Creating the ECR Token secret:
@@ -125,6 +126,7 @@ helm --namespace mlrun \
     ... other overrides ... \
     --set global.registry.url=${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
     --set nuclio.dashboard.kaniko.registryProviderSecretName=aws-credentials \
+    --set mlrun.defaultDockerRegistrySecretName=aws-credentials \
     --set global.registry.secretName=ecr-registry-credentials \
     mlrun/mlrun-ce
 ```
@@ -159,6 +161,7 @@ Your applications are now available in your local browser:
 
 
 ## Uninstalling the Chart
+
 ```bash
 helm --namespace mlrun uninstall my-mlrun
 ```
