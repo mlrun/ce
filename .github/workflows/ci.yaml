@@ -12,7 +12,7 @@ jobs:
       image: artifacthub/ah
     steps:
       - name: Checkout code
-        uses: actions/checkout@master
+        uses: actions/checkout@v3
       - name: Run ah lint
         working-directory: ./charts/mlrun-ce
         run: ah lint
