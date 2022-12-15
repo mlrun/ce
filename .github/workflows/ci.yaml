@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - development
+
+jobs:
+  lint:
+    runs-on: ubuntu-20.04
+    container:
+      image: artifacthub/ah
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Run ah lint
+        working-directory: ./charts/mlrun-ce
+        run: ah lint
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Kubernetes cluster
+        uses: helm/kind-action@v1.4.0
+        with:
+          config: ./.github/assets/kind.yaml
+          wait: 180s
+          kubectl_version: v1.23.13
+          node_image: kindest/node:v1.23.13
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run tests
+        run : make tests
