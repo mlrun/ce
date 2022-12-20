@@ -315,6 +315,19 @@ kube-prometheus-stack:
   alertmanager:
     enabled: false
   grafana:
+  additionalDataSources:
+    - name: model-monitoring
+      access: proxy
+      basicAuth: false
+      editable: true
+      orgId: 1
+      type: grafana-simple-json-datasource
+      url: http://mlrun-api:8080/api/grafana-proxy/model-endpoints
+      version: 1
+    plugins:
+      - grafana-simple-json-datasource
+    adminUser: admin
+    adminPassword: admin
     persistence:
       type: pvc
       enabled: true
@@ -323,8 +336,6 @@ kube-prometheus-stack:
       auth.anonymous:
         enabled: true
         org_role: Editor
-      security:
-        disable_initial_admin_creation: true
     fullnameOverride: grafana
     enabled: true
     service:
