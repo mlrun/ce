@@ -1,300 +1,987 @@
 apiVersion: v1
 data:
-  model-monitoring-overview.json: "{\n  \"annotations\": {\n    \"list\": [\n      {\n
-    \       \"builtIn\": 1,\n        \"datasource\": \"-- Grafana --\",\n        \"enable\":
-    true,\n        \"hide\": true,\n        \"iconColor\": \"rgba(0, 211, 255, 1)\",\n
-    \       \"name\": \"Annotations & Alerts\",\n        \"type\": \"dashboard\"\n
-    \     }\n    ]\n  },\n  \"editable\": true,\n  \"gnetId\": null,\n  \"graphTooltip\":
-    0,\n  \"id\": 18,\n  \"iteration\": 1670854388615,\n  \"links\": [\n    {\n      \"icon\":
-    \"external link\",\n      \"includeVars\": true,\n      \"keepTime\": true,\n
-    \     \"tags\": [],\n      \"title\": \"Model Monitoring - Performance\",\n      \"type\":
-    \"link\",\n      \"url\": \"/d/9CazA-UGz/model-monitoring-performance\"\n    },\n
-    \   {\n      \"icon\": \"external link\",\n      \"includeVars\": true,\n      \"keepTime\":
-    true,\n      \"tags\": [],\n      \"targetBlank\": false,\n      \"title\": \"Model
-    Monitoring - Details\",\n      \"type\": \"link\",\n      \"url\": \"d/AohIXhAMk/model-monitoring-details\"\n
-    \   }\n  ],\n  \"panels\": [\n    {\n      \"datasource\": \"model-monitoring\",\n
-    \     \"fieldConfig\": {\n        \"defaults\": {\n          \"custom\": {},\n
-    \         \"mappings\": [],\n          \"thresholds\": {\n            \"mode\":
-    \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
-    \"green\",\n                \"value\": null\n              },\n              {\n
-    \               \"color\": \"red\",\n                \"value\": 80\n              }\n
-    \           ]\n          }\n        },\n        \"overrides\": []\n      },\n
-    \     \"gridPos\": {\n        \"h\": 3,\n        \"w\": 5,\n        \"x\": 0,\n
-    \       \"y\": 0\n      },\n      \"id\": 6,\n      \"options\": {\n        \"colorMode\":
-    \"value\",\n        \"graphMode\": \"none\",\n        \"justifyMode\": \"center\",\n
-    \       \"orientation\": \"auto\",\n        \"reduceOptions\": {\n          \"calcs\":
-    [\n            \"mean\"\n          ],\n          \"fields\": \"\",\n          \"values\":
-    false\n        },\n        \"textMode\": \"value\"\n      },\n      \"pluginVersion\":
-    \"7.2.0\",\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"target\":
-    \"project=$PROJECT;target_endpoint=list_endpoints\",\n          \"type\": \"table\"\n
-    \       }\n      ],\n      \"timeFrom\": null,\n      \"timeShift\": null,\n      \"title\":
-    \"Endpoints\",\n      \"transformations\": [\n        {\n          \"id\": \"reduce\",\n
-    \         \"options\": {\n            \"reducers\": [\n              \"count\"\n
-    \           ]\n          }\n        }\n      ],\n      \"transparent\": true,\n
-    \     \"type\": \"stat\"\n    },\n    {\n      \"datasource\": \"model-monitoring\",\n
-    \     \"fieldConfig\": {\n        \"defaults\": {\n          \"custom\": {},\n
-    \         \"mappings\": [],\n          \"thresholds\": {\n            \"mode\":
-    \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
-    \"green\",\n                \"value\": null\n              },\n              {\n
-    \               \"color\": \"red\",\n                \"value\": 80\n              }\n
-    \           ]\n          }\n        },\n        \"overrides\": []\n      },\n
-    \     \"gridPos\": {\n        \"h\": 3,\n        \"w\": 5,\n        \"x\": 5,\n
-    \       \"y\": 0\n      },\n      \"id\": 23,\n      \"options\": {\n        \"colorMode\":
-    \"value\",\n        \"graphMode\": \"none\",\n        \"justifyMode\": \"auto\",\n
-    \       \"orientation\": \"auto\",\n        \"reduceOptions\": {\n          \"calcs\":
-    [\n            \"mean\"\n          ],\n          \"fields\": \"\",\n          \"values\":
-    false\n        },\n        \"textMode\": \"auto\"\n      },\n      \"pluginVersion\":
-    \"7.2.0\",\n      \"targets\": [\n        {\n          \"hide\": false,\n          \"rawQuery\":
-    true,\n          \"refId\": \"A\",\n          \"target\": \"project=$PROJECT;target_endpoint=list_endpoints\",\n
-    \         \"type\": \"table\"\n        }\n      ],\n      \"timeFrom\": null,\n
-    \     \"timeShift\": null,\n      \"title\": \"Predictions/s (5 Minute Average)\",\n
-    \     \"transformations\": [\n        {\n          \"id\": \"filterFieldsByName\",\n
-    \         \"options\": {\n            \"include\": {\n              \"names\":
-    [\n                \"predictions_per_second\"\n              ]\n            }\n
-    \         }\n        },\n        {\n          \"id\": \"labelsToFields\",\n          \"options\":
-    {}\n        }\n      ],\n      \"transparent\": true,\n      \"type\": \"stat\"\n
-    \   },\n    {\n      \"datasource\": \"model-monitoring\",\n      \"fieldConfig\":
-    {\n        \"defaults\": {\n          \"custom\": {},\n          \"mappings\":
-    [],\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n            \"steps\":
-    [\n              {\n                \"color\": \"green\",\n                \"value\":
-    null\n              }\n            ]\n          },\n          \"unit\": \"µs\"\n
-    \       },\n        \"overrides\": []\n      },\n      \"gridPos\": {\n        \"h\":
-    3,\n        \"w\": 5,\n        \"x\": 11,\n        \"y\": 0\n      },\n      \"id\":
-    10,\n      \"options\": {\n        \"colorMode\": \"value\",\n        \"graphMode\":
-    \"none\",\n        \"justifyMode\": \"auto\",\n        \"orientation\": \"auto\",\n
-    \       \"reduceOptions\": {\n          \"calcs\": [\n            \"mean\"\n          ],\n
-    \         \"fields\": \"\",\n          \"values\": false\n        },\n        \"textMode\":
-    \"auto\"\n      },\n      \"pluginVersion\": \"7.2.0\",\n      \"targets\": [\n
-    \       {\n          \"rawQuery\": true,\n          \"refId\": \"A\",\n          \"target\":
-    \"project=$PROJECT;target_endpoint=list_endpoints\",\n          \"type\": \"table\"\n
-    \       }\n      ],\n      \"timeFrom\": null,\n      \"timeShift\": null,\n      \"title\":
-    \"Average Latency (Last Hour)\",\n      \"transformations\": [\n        {\n          \"id\":
-    \"filterFieldsByName\",\n          \"options\": {\n            \"include\": {\n
-    \             \"names\": [\n                \"latency_avg_1h\"\n              ]\n
-    \           }\n          }\n        },\n        {\n          \"id\": \"labelsToFields\",\n
-    \         \"options\": {}\n        }\n      ],\n      \"transparent\": true,\n
-    \     \"type\": \"stat\"\n    },\n    {\n      \"datasource\": \"model-monitoring\",\n
-    \     \"fieldConfig\": {\n        \"defaults\": {\n          \"custom\": {},\n
-    \         \"mappings\": [],\n          \"noValue\": \"0\",\n          \"thresholds\":
-    {\n            \"mode\": \"absolute\",\n            \"steps\": [\n              {\n
-    \               \"color\": \"green\",\n                \"value\": null\n              },\n
-    \             {\n                \"color\": \"red\",\n                \"value\":
-    80\n              }\n            ]\n          }\n        },\n        \"overrides\":
-    []\n      },\n      \"gridPos\": {\n        \"h\": 3,\n        \"w\": 6,\n        \"x\":
-    16,\n        \"y\": 0\n      },\n      \"id\": 12,\n      \"options\": {\n        \"colorMode\":
-    \"value\",\n        \"graphMode\": \"none\",\n        \"justifyMode\": \"auto\",\n
-    \       \"orientation\": \"auto\",\n        \"reduceOptions\": {\n          \"calcs\":
-    [\n            \"mean\"\n          ],\n          \"fields\": \"\",\n          \"values\":
-    false\n        },\n        \"textMode\": \"auto\"\n      },\n      \"pluginVersion\":
-    \"7.2.0\",\n      \"targets\": [\n        {\n          \"rawQuery\": true,\n          \"refId\":
-    \"A\",\n          \"target\": \"project=$PROJECT;target_endpoint=list_endpoints\",\n
-    \         \"type\": \"table\"\n        }\n      ],\n      \"timeFrom\": null,\n
-    \     \"timeShift\": null,\n      \"title\": \"Errors\",\n      \"transformations\":
-    [\n        {\n          \"id\": \"filterFieldsByName\",\n          \"options\":
-    {\n            \"include\": {\n              \"names\": [\n                \"error_count\"\n
-    \             ]\n            }\n          }\n        },\n        {\n          \"id\":
-    \"reduce\",\n          \"options\": {\n            \"reducers\": [\n              \"max\",\n
-    \             \"sum\"\n            ]\n          }\n        }\n      ],\n      \"transparent\":
-    true,\n      \"type\": \"stat\"\n    },\n    {\n      \"datasource\": \"model-monitoring\",\n
-    \     \"description\": \"\",\n      \"fieldConfig\": {\n        \"defaults\":
-    {\n          \"custom\": {\n            \"align\": \"center\",\n            \"displayMode\":
-    \"auto\",\n            \"filterable\": true\n          },\n          \"mappings\":
-    [\n            {\n              \"from\": \"\",\n              \"id\": 0,\n              \"text\":
-    \"\",\n              \"to\": \"\",\n              \"type\": 1\n            }\n
-    \         ],\n          \"thresholds\": {\n            \"mode\": \"absolute\",\n
-    \           \"steps\": [\n              {\n                \"color\": \"green\",\n
-    \               \"value\": null\n              },\n              {\n                \"color\":
-    \"red\",\n                \"value\": 80\n              }\n            ]\n          }\n
-    \       },\n        \"overrides\": [\n          {\n            \"matcher\": {\n
-    \             \"id\": \"byName\",\n              \"options\": \"Function\"\n            },\n
-    \           \"properties\": [\n              {\n                \"id\": \"custom.align\",\n
-    \               \"value\": \"center\"\n              }\n            ]\n          },\n
-    \         {\n            \"matcher\": {\n              \"id\": \"byName\",\n              \"options\":
-    \"Model\"\n            },\n            \"properties\": [\n              {\n                \"id\":
-    \"custom.align\",\n                \"value\": \"center\"\n              }\n            ]\n
-    \         },\n          {\n            \"matcher\": {\n              \"id\": \"byName\",\n
-    \             \"options\": \"Model Class\"\n            },\n            \"properties\":
-    [\n              {\n                \"id\": \"custom.align\",\n                \"value\":
-    \"center\"\n              },\n              {\n                \"id\": \"noValue\",\n
-    \               \"value\": \"N/A\"\n              }\n            ]\n          },\n
-    \         {\n            \"matcher\": {\n              \"id\": \"byName\",\n              \"options\":
-    \"First Request\"\n            },\n            \"properties\": [\n              {\n
-    \               \"id\": \"unit\",\n                \"value\": \"dateTimeFromNow\"\n
-    \             },\n              {\n                \"id\": \"custom.align\",\n
-    \               \"value\": \"center\"\n              },\n              {\n                \"id\":
-    \"noValue\",\n                \"value\": \"N/A\"\n              }\n            ]\n
-    \         },\n          {\n            \"matcher\": {\n              \"id\": \"byName\",\n
-    \             \"options\": \"Last Request\"\n            },\n            \"properties\":
-    [\n              {\n                \"id\": \"custom.align\",\n                \"value\":
-    \"center\"\n              },\n              {\n                \"id\": \"unit\",\n
-    \               \"value\": \"dateTimeFromNow\"\n              },\n              {\n
-    \               \"id\": \"noValue\",\n                \"value\": \"N/A\"\n              }\n
-    \           ]\n          },\n          {\n            \"matcher\": {\n              \"id\":
-    \"byName\",\n              \"options\": \"Accuracy\"\n            },\n            \"properties\":
-    [\n              {\n                \"id\": \"custom.align\",\n                \"value\":
-    \"center\"\n              },\n              {\n                \"id\": \"noValue\",\n
-    \               \"value\": \"N/A\"\n              }\n            ]\n          },\n
-    \         {\n            \"matcher\": {\n              \"id\": \"byName\",\n              \"options\":
-    \"Error Count\"\n            },\n            \"properties\": [\n              {\n
-    \               \"id\": \"custom.align\",\n                \"value\": \"center\"\n
-    \             },\n              {\n                \"id\": \"noValue\",\n                \"value\":
-    \"N/A\"\n              }\n            ]\n          },\n          {\n            \"matcher\":
-    {\n              \"id\": \"byName\",\n              \"options\": \"Drift Status\"\n
-    \           },\n            \"properties\": [\n              {\n                \"id\":
-    \"custom.align\",\n                \"value\": \"center\"\n              },\n              {\n
-    \               \"id\": \"noValue\",\n                \"value\": \"N/A\"\n              },\n
-    \             {\n                \"id\": \"mappings\",\n                \"value\":
-    [\n                  {\n                    \"from\": \"\",\n                    \"id\":
-    0,\n                    \"text\": \"0\",\n                    \"to\": \"\",\n
-    \                   \"type\": 1,\n                    \"value\": \"NO_DRIFT\"\n
-    \                 },\n                  {\n                    \"from\": \"\",\n
-    \                   \"id\": 1,\n                    \"text\": \"1\",\n                    \"to\":
-    \"\",\n                    \"type\": 1,\n                    \"value\": \"POSSIBLE_DRIFT\"\n
-    \                 },\n                  {\n                    \"from\": \"\",\n
-    \                   \"id\": 2,\n                    \"text\": \"2\",\n                    \"to\":
-    \"\",\n                    \"type\": 1,\n                    \"value\": \"DRIFT_DETECTED\"\n
-    \                 },\n                  {\n                    \"from\": \"\",\n
-    \                   \"id\": 3,\n                    \"text\": \"-1\",\n                    \"to\":
-    \"\",\n                    \"type\": 1,\n                    \"value\": \"N\\\\A\"\n
-    \                 }\n                ]\n              },\n              {\n                \"id\":
-    \"custom.displayMode\",\n                \"value\": \"color-background\"\n              },\n
-    \             {\n                \"id\": \"thresholds\",\n                \"value\":
-    {\n                  \"mode\": \"absolute\",\n                  \"steps\": [\n
-    \                   {\n                      \"color\": \"rgba(255, 255, 255,
-    0)\",\n                      \"value\": null\n                    },\n                    {\n
-    \                     \"color\": \"green\",\n                      \"value\":
-    0\n                    },\n                    {\n                      \"color\":
-    \"yellow\",\n                      \"value\": 1\n                    },\n                    {\n
-    \                     \"color\": \"red\",\n                      \"value\": 2\n
-    \                   }\n                  ]\n                }\n              }\n
-    \           ]\n          },\n          {\n            \"matcher\": {\n              \"id\":
-    \"byName\",\n              \"options\": \"Endpoint ID\"\n            },\n            \"properties\":
-    [\n              {\n                \"id\": \"links\",\n                \"value\":
-    [\n                  {\n                    \"targetBlank\": true,\n                    \"title\":
-    \"\",\n                    \"url\": \"/d/AohIXhAMk/model-monitoring-details?orgId=1&refresh=1m&var-PROJECT=$PROJECT&var-MODEL=\uFEFF${__value.text}\"\n
-    \                 }\n                ]\n              }\n            ]\n          },\n
-    \         {\n            \"matcher\": {\n              \"id\": \"byName\",\n              \"options\":
-    \"Average Latency (Last Hour)\"\n            },\n            \"properties\": [\n
-    \             {\n                \"id\": \"unit\",\n                \"value\":
-    \"µs\"\n              }\n            ]\n          }\n        ]\n      },\n      \"gridPos\":
-    {\n        \"h\": 13,\n        \"w\": 24,\n        \"x\": 0,\n        \"y\": 3\n
-    \     },\n      \"id\": 22,\n      \"options\": {\n        \"showHeader\": true,\n
-    \       \"sortBy\": [\n          {\n            \"desc\": false,\n            \"displayName\":
-    \"Name\"\n          }\n        ]\n      },\n      \"pluginVersion\": \"7.2.0\",\n
-    \     \"targets\": [\n        {\n          \"hide\": false,\n          \"rawQuery\":
-    true,\n          \"refId\": \"A\",\n          \"target\": \"project=$PROJECT;target_endpoint=list_endpoints\",\n
-    \         \"type\": \"table\"\n        }\n      ],\n      \"timeFrom\": null,\n
-    \     \"timeShift\": null,\n      \"title\": \"Models\",\n      \"transformations\":
-    [\n        {\n          \"id\": \"organize\",\n          \"options\": {\n            \"excludeByName\":
-    {\n              \"model_hash\": false\n            },\n            \"indexByName\":
-    {\n              \"accuracy\": 8,\n              \"drift_status\": 9,\n              \"endpoint_function\":
-    1,\n              \"endpoint_id\": 0,\n              \"endpoint_model\": 2,\n
-    \             \"endpoint_model_class\": 3,\n              \"endpoint_tag\": 4,\n
-    \             \"error_count\": 7,\n              \"first_request\": 5,\n              \"last_request\":
-    6\n            },\n            \"renameByName\": {\n              \"accuracy\":
-    \"Accuracy\",\n              \"drift_status\": \"Drift Status\",\n              \"endpoint_function\":
-    \"Function\",\n              \"endpoint_id\": \"Endpoint ID\",\n              \"endpoint_model\":
-    \"Model\",\n              \"endpoint_model_class\": \"Model Class\",\n              \"endpoint_tag\":
-    \"Tag\",\n              \"error_count\": \"Error Count\",\n              \"first_request\":
-    \"First Request\",\n              \"function\": \"Function\",\n              \"last_request\":
-    \"Last Request\",\n              \"latency_avg_1h\": \"Average Latency (Last Hour)\",\n
-    \             \"latency_avg_1s\": \"Average Latency\",\n              \"model\":
-    \"Model\",\n              \"model_class\": \"Class\",\n              \"predictions_per_second\":
-    \"Predictions/s (5 Minute Average)\",\n              \"predictions_per_second_count_1s\":
-    \"Predictions/1s\",\n              \"tag\": \"Tag\"\n            }\n          }\n
-    \       }\n      ],\n      \"type\": \"table\"\n    },\n    {\n      \"cards\":
-    {\n        \"cardPadding\": null,\n        \"cardRound\": null\n      },\n      \"color\":
-    {\n        \"cardColor\": \"#b4ff00\",\n        \"colorScale\": \"sqrt\",\n        \"colorScheme\":
-    \"interpolatePlasma\",\n        \"exponent\": 0.5,\n        \"mode\": \"spectrum\"\n
-    \     },\n      \"dataFormat\": \"timeseries\",\n      \"datasource\": \"iguazio\",\n
-    \     \"fieldConfig\": {\n        \"defaults\": {\n          \"custom\": {},\n
-    \         \"mappings\": [],\n          \"thresholds\": {\n            \"mode\":
-    \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
-    \"green\",\n                \"value\": null\n              },\n              {\n
-    \               \"color\": \"red\",\n                \"value\": 80\n              }\n
-    \           ]\n          }\n        },\n        \"overrides\": []\n      },\n
-    \     \"gridPos\": {\n        \"h\": 6,\n        \"w\": 8,\n        \"x\": 0,\n
-    \       \"y\": 16\n      },\n      \"heatmap\": {},\n      \"hideZeroBuckets\":
-    false,\n      \"highlightCards\": true,\n      \"id\": 18,\n      \"legend\":
-    {\n        \"show\": false\n      },\n      \"pluginVersion\": \"7.2.0\",\n      \"reverseYBuckets\":
-    false,\n      \"targets\": [\n        {\n          \"rawQuery\": true,\n          \"refId\":
-    \"A\",\n          \"target\": \"backend=tsdb;\\ncontainer=users;\\ntable=pipelines/$PROJECT/model-endpoints/events;\\nfields=predictions_per_second;\",\n
-    \         \"type\": \"timeserie\"\n        }\n      ],\n      \"timeFrom\": null,\n
-    \     \"timeShift\": null,\n      \"title\": \"Predictions/s (5 Minute Average)\",\n
-    \     \"tooltip\": {\n        \"show\": true,\n        \"showHistogram\": false\n
-    \     },\n      \"transparent\": true,\n      \"type\": \"heatmap\",\n      \"xAxis\":
-    {\n        \"show\": true\n      },\n      \"xBucketNumber\": null,\n      \"xBucketSize\":
-    null,\n      \"yAxis\": {\n        \"decimals\": null,\n        \"format\": \"short\",\n
-    \       \"logBase\": 1,\n        \"max\": null,\n        \"min\": null,\n        \"show\":
-    true,\n        \"splitFactor\": null\n      },\n      \"yBucketBound\": \"auto\",\n
-    \     \"yBucketNumber\": null,\n      \"yBucketSize\": null\n    },\n    {\n      \"cards\":
-    {\n        \"cardPadding\": null,\n        \"cardRound\": null\n      },\n      \"color\":
-    {\n        \"cardColor\": \"#b4ff00\",\n        \"colorScale\": \"sqrt\",\n        \"colorScheme\":
-    \"interpolatePlasma\",\n        \"exponent\": 0.5,\n        \"mode\": \"spectrum\"\n
-    \     },\n      \"dataFormat\": \"timeseries\",\n      \"datasource\": \"iguazio\",\n
-    \     \"fieldConfig\": {\n        \"defaults\": {\n          \"custom\": {},\n
-    \         \"mappings\": [],\n          \"thresholds\": {\n            \"mode\":
-    \"absolute\",\n            \"steps\": [\n              {\n                \"color\":
-    \"green\",\n                \"value\": null\n              },\n              {\n
-    \               \"color\": \"red\",\n                \"value\": 80\n              }\n
-    \           ]\n          }\n        },\n        \"overrides\": [\n          {\n
-    \           \"matcher\": {\n              \"id\": \"byType\",\n              \"options\":
-    \"number\"\n            },\n            \"properties\": [\n              {\n                \"id\":
-    \"unit\",\n                \"value\": \"µs\"\n              }\n            ]\n
-    \         }\n        ]\n      },\n      \"gridPos\": {\n        \"h\": 6,\n        \"w\":
-    8,\n        \"x\": 8,\n        \"y\": 16\n      },\n      \"heatmap\": {},\n      \"hideZeroBuckets\":
-    false,\n      \"highlightCards\": true,\n      \"id\": 19,\n      \"legend\":
-    {\n        \"show\": false\n      },\n      \"pluginVersion\": \"7.2.0\",\n      \"reverseYBuckets\":
-    false,\n      \"targets\": [\n        {\n          \"rawQuery\": true,\n          \"refId\":
-    \"A\",\n          \"target\": \"backend=tsdb;\\ncontainer=users;\\ntable=pipelines/$PROJECT/model-endpoints/events;\\nfields=latency_avg_1h;\",\n
-    \         \"type\": \"timeserie\"\n        }\n      ],\n      \"timeFrom\": null,\n
-    \     \"timeShift\": null,\n      \"title\": \"Average Latency (1 Hour)\",\n      \"tooltip\":
-    {\n        \"show\": true,\n        \"showHistogram\": false\n      },\n      \"transparent\":
-    true,\n      \"type\": \"heatmap\",\n      \"xAxis\": {\n        \"show\": true\n
-    \     },\n      \"xBucketNumber\": null,\n      \"xBucketSize\": null,\n      \"yAxis\":
-    {\n        \"decimals\": null,\n        \"format\": \"short\",\n        \"logBase\":
-    1,\n        \"max\": null,\n        \"min\": null,\n        \"show\": true,\n
-    \       \"splitFactor\": null\n      },\n      \"yBucketBound\": \"auto\",\n      \"yBucketNumber\":
-    null,\n      \"yBucketSize\": null\n    },\n    {\n      \"aliasColors\": {},\n
-    \     \"bars\": false,\n      \"dashLength\": 10,\n      \"dashes\": false,\n
-    \     \"datasource\": \"iguazio\",\n      \"fieldConfig\": {\n        \"defaults\":
-    {\n          \"custom\": {}\n        },\n        \"overrides\": []\n      },\n
-    \     \"fill\": 1,\n      \"fillGradient\": 0,\n      \"gridPos\": {\n        \"h\":
-    6,\n        \"w\": 8,\n        \"x\": 16,\n        \"y\": 16\n      },\n      \"hiddenSeries\":
-    false,\n      \"id\": 20,\n      \"legend\": {\n        \"avg\": false,\n        \"current\":
-    false,\n        \"max\": false,\n        \"min\": false,\n        \"show\": true,\n
-    \       \"total\": false,\n        \"values\": false\n      },\n      \"lines\":
-    true,\n      \"linewidth\": 1,\n      \"nullPointMode\": \"null\",\n      \"options\":
-    {\n        \"alertThreshold\": true\n      },\n      \"percentage\": false,\n
-    \     \"pluginVersion\": \"7.2.0\",\n      \"pointradius\": 2,\n      \"points\":
-    false,\n      \"renderer\": \"flot\",\n      \"seriesOverrides\": [],\n      \"spaceLength\":
-    10,\n      \"stack\": false,\n      \"steppedLine\": false,\n      \"targets\":
-    [\n        {\n          \"refId\": \"A\",\n          \"target\": \"select metric\",\n
-    \         \"type\": \"timeserie\"\n        }\n      ],\n      \"thresholds\":
-    [],\n      \"timeFrom\": null,\n      \"timeRegions\": [],\n      \"timeShift\":
-    null,\n      \"title\": \"Errors\",\n      \"tooltip\": {\n        \"shared\":
-    true,\n        \"sort\": 0,\n        \"value_type\": \"individual\"\n      },\n
-    \     \"transparent\": true,\n      \"type\": \"graph\",\n      \"xaxis\": {\n
-    \       \"buckets\": null,\n        \"mode\": \"time\",\n        \"name\": null,\n
-    \       \"show\": true,\n        \"values\": []\n      },\n      \"yaxes\": [\n
-    \       {\n          \"format\": \"short\",\n          \"label\": null,\n          \"logBase\":
-    1,\n          \"max\": null,\n          \"min\": null,\n          \"show\": true\n
-    \       },\n        {\n          \"format\": \"short\",\n          \"label\":
-    null,\n          \"logBase\": 1,\n          \"max\": null,\n          \"min\":
-    null,\n          \"show\": true\n        }\n      ],\n      \"yaxis\": {\n        \"align\":
-    false,\n        \"alignLevel\": null\n      }\n    }\n  ],\n  \"refresh\": \"1m\",\n
-    \ \"schemaVersion\": 26,\n  \"style\": \"dark\",\n  \"tags\": [],\n  \"templating\":
-    {\n    \"list\": [\n      {\n        \"allValue\": null,\n        \"datasource\":
-    \"model-monitoring\",\n        \"definition\": \"target_endpoint=list_projects\",\n
-    \       \"hide\": 0,\n        \"includeAll\": false,\n        \"label\": \"Project\",\n
-    \       \"multi\": false,\n        \"name\": \"PROJECT\",\n        \"options\":
-    [],\n        \"query\": \"target_endpoint=list_projects\",\n        \"refresh\":
-    1,\n        \"regex\": \"\",\n        \"skipUrlSync\": false,\n        \"sort\":
-    0,\n        \"tagValuesQuery\": \"\",\n        \"tags\": [],\n        \"tagsQuery\":
-    \"\",\n        \"type\": \"query\",\n        \"useTags\": false\n      }\n    ]\n
-    \ },\n  \"time\": {\n    \"from\": \"now-12h\",\n    \"to\": \"now\"\n  },\n  \"timepicker\":
-    {},\n  \"timezone\": \"\",\n  \"title\": \"Model Monitoring - Overview\",\n  \"uid\":
-    \"g0M4uh0Mz\",\n  \"version\": 1\n}\n"
+  model-monitoring-overview.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": "-- Grafana --",
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "gnetId": null,
+      "graphTooltip": 0,
+      "id": 18,
+      "iteration": 1670854388615,
+      "links": [
+        {
+          "icon": "external link",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": [],
+          "title": "Model Monitoring - Performance",
+          "type": "link",
+          "url": "/d/9CazA-UGz/model-monitoring-performance"
+        },
+        {
+          "icon": "external link",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": [],
+          "targetBlank": false,
+          "title": "Model Monitoring - Details",
+          "type": "link",
+          "url": "d/AohIXhAMk/model-monitoring-details"
+        }
+      ],
+      "panels": [
+        {
+          "datasource": "model-monitoring",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 5,
+            "x": 0,
+            "y": 0
+          },
+          "id": 6,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value"
+          },
+          "pluginVersion": "7.2.0",
+          "targets": [
+            {
+              "refId": "A",
+              "target": "project=$PROJECT;target_endpoint=list_endpoints",
+              "type": "table"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Endpoints",
+          "transformations": [
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "count"
+                ]
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": "model-monitoring",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 5,
+            "x": 5,
+            "y": 0
+          },
+          "id": 23,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "7.2.0",
+          "targets": [
+            {
+              "hide": false,
+              "rawQuery": true,
+              "refId": "A",
+              "target": "project=$PROJECT;target_endpoint=list_endpoints",
+              "type": "table"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Predictions/s (5 Minute Average)",
+          "transformations": [
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "predictions_per_second"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "labelsToFields",
+              "options": {}
+            }
+          ],
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": "model-monitoring",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "µs"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 5,
+            "x": 11,
+            "y": 0
+          },
+          "id": 10,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "7.2.0",
+          "targets": [
+            {
+              "rawQuery": true,
+              "refId": "A",
+              "target": "project=$PROJECT;target_endpoint=list_endpoints",
+              "type": "table"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Average Latency (Last Hour)",
+          "transformations": [
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "latency_avg_1h"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "labelsToFields",
+              "options": {}
+            }
+          ],
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": "model-monitoring",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "mappings": [],
+              "noValue": "0",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 6,
+            "x": 16,
+            "y": 0
+          },
+          "id": 12,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "7.2.0",
+          "targets": [
+            {
+              "rawQuery": true,
+              "refId": "A",
+              "target": "project=$PROJECT;target_endpoint=list_endpoints",
+              "type": "table"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Errors",
+          "transformations": [
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "error_count"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "sum"
+                ]
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": "model-monitoring",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "center",
+                "displayMode": "auto",
+                "filterable": true
+              },
+              "mappings": [
+                {
+                  "from": "",
+                  "id": 0,
+                  "text": "",
+                  "to": "",
+                  "type": 1
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Function"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model Class"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "First Request"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last Request"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Accuracy"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Error Count"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Drift Status"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "from": "",
+                        "id": 0,
+                        "text": "0",
+                        "to": "",
+                        "type": 1,
+                        "value": "NO_DRIFT"
+                      },
+                      {
+                        "from": "",
+                        "id": 1,
+                        "text": "1",
+                        "to": "",
+                        "type": 1,
+                        "value": "POSSIBLE_DRIFT"
+                      },
+                      {
+                        "from": "",
+                        "id": 2,
+                        "text": "2",
+                        "to": "",
+                        "type": 1,
+                        "value": "DRIFT_DETECTED"
+                      },
+                      {
+                        "from": "",
+                        "id": 3,
+                        "text": "-1",
+                        "to": "",
+                        "type": 1,
+                        "value": "N\\A"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.displayMode",
+                    "value": "color-background"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "rgba(255, 255, 255, 0)",
+                          "value": null
+                        },
+                        {
+                          "color": "green",
+                          "value": 0
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 1
+                        },
+                        {
+                          "color": "red",
+                          "value": 2
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Endpoint ID"
+                },
+                "properties": [
+                  {
+                    "id": "links",
+                    "value": [
+                      {
+                        "targetBlank": true,
+                        "title": "",
+                        "url": "/d/AohIXhAMk/model-monitoring-details?orgId=1&refresh=1m&var-PROJECT=$PROJECT&var-MODEL=﻿${__value.text}"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Average Latency (Last Hour)"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "µs"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 13,
+            "w": 24,
+            "x": 0,
+            "y": 3
+          },
+          "id": 22,
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "Name"
+              }
+            ]
+          },
+          "pluginVersion": "7.2.0",
+          "targets": [
+            {
+              "hide": false,
+              "rawQuery": true,
+              "refId": "A",
+              "target": "project=$PROJECT;target_endpoint=list_endpoints",
+              "type": "table"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Models",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "model_hash": false
+                },
+                "indexByName": {
+                  "accuracy": 8,
+                  "drift_status": 9,
+                  "endpoint_function": 1,
+                  "endpoint_id": 0,
+                  "endpoint_model": 2,
+                  "endpoint_model_class": 3,
+                  "endpoint_tag": 4,
+                  "error_count": 7,
+                  "first_request": 5,
+                  "last_request": 6
+                },
+                "renameByName": {
+                  "accuracy": "Accuracy",
+                  "drift_status": "Drift Status",
+                  "endpoint_function": "Function",
+                  "endpoint_id": "Endpoint ID",
+                  "endpoint_model": "Model",
+                  "endpoint_model_class": "Model Class",
+                  "endpoint_tag": "Tag",
+                  "error_count": "Error Count",
+                  "first_request": "First Request",
+                  "function": "Function",
+                  "last_request": "Last Request",
+                  "latency_avg_1h": "Average Latency (Last Hour)",
+                  "latency_avg_1s": "Average Latency",
+                  "model": "Model",
+                  "model_class": "Class",
+                  "predictions_per_second": "Predictions/s (5 Minute Average)",
+                  "predictions_per_second_count_1s": "Predictions/1s",
+                  "tag": "Tag"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        },
+        {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolatePlasma",
+            "exponent": 0.5,
+            "mode": "spectrum"
+          },
+          "dataFormat": "timeseries",
+          "datasource": "iguazio",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 0,
+            "y": 16
+          },
+          "heatmap": {},
+          "hideZeroBuckets": false,
+          "highlightCards": true,
+          "id": 18,
+          "legend": {
+            "show": false
+          },
+          "pluginVersion": "7.2.0",
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "rawQuery": true,
+              "refId": "A",
+              "target": "backend=tsdb;\ncontainer=users;\ntable=pipelines/$PROJECT/model-endpoints/events;\nfields=predictions_per_second;",
+              "type": "timeserie"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Predictions/s (5 Minute Average)",
+          "tooltip": {
+            "show": true,
+            "showHistogram": false
+          },
+          "transparent": true,
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": null,
+            "format": "short",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "auto",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolatePlasma",
+            "exponent": 0.5,
+            "mode": "spectrum"
+          },
+          "dataFormat": "timeseries",
+          "datasource": "iguazio",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "number"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "µs"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 8,
+            "y": 16
+          },
+          "heatmap": {},
+          "hideZeroBuckets": false,
+          "highlightCards": true,
+          "id": 19,
+          "legend": {
+            "show": false
+          },
+          "pluginVersion": "7.2.0",
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "rawQuery": true,
+              "refId": "A",
+              "target": "backend=tsdb;\ncontainer=users;\ntable=pipelines/$PROJECT/model-endpoints/events;\nfields=latency_avg_1h;",
+              "type": "timeserie"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Average Latency (1 Hour)",
+          "tooltip": {
+            "show": true,
+            "showHistogram": false
+          },
+          "transparent": true,
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": null,
+            "format": "short",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "auto",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "iguazio",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {}
+            },
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 6,
+            "w": 8,
+            "x": 16,
+            "y": 16
+          },
+          "hiddenSeries": false,
+          "id": 20,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.2.0",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "refId": "A",
+              "target": "select metric",
+              "type": "timeserie"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Errors",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        }
+      ],
+      "refresh": "1m",
+      "schemaVersion": 26,
+      "style": "dark",
+      "tags": [],
+      "templating": {
+        "list": [
+          {
+            "allValue": null,
+            "datasource": "model-monitoring",
+            "definition": "target_endpoint=list_projects",
+            "hide": 0,
+            "includeAll": false,
+            "label": "Project",
+            "multi": false,
+            "name": "PROJECT",
+            "options": [],
+            "query": "target_endpoint=list_projects",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tags": [],
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+          }
+        ]
+      },
+      "time": {
+        "from": "now-12h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "Model Monitoring - Overview",
+      "uid": "g0M4uh0Mz",
+      "version": 1
+    }
 kind: ConfigMap
 metadata:
   labels:
