@@ -238,11 +238,14 @@ minio:
       policy: none
       purge: false
 
-sparkOperator:
+spark-operator:
   enabled: true
   fullnameOverride: spark-operator
   webhook:
      enable: true
+  serviceAccounts:
+    spark:
+      name: "sparkapp"
 
 pipelines:
   enabled: true
