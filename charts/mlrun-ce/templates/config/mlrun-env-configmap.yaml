@@ -10,7 +10,10 @@ data:
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
   MLRUN_HTTPDB__REAL_PATH: s3://
-  MLRUN_ARTIFACT_PATH: s3://mlrun/
+  MLRUN_ARTIFACT_PATH: s3://mlrun/projects/{{run.project}}/artifacts
+  MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT: s3://mlrun/projects/{project}/FeatureStore/{name}/{kind}
+  MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL: ""
   MLRUN_CE__MODE: {{ .Values.mlrun.ce.mode }}
+  MLRUN_CE__VERSION: {{ .Chart.Version }}
   MLRUN_DEFAULT_TENSORBOARD_LOGS_PATH: /home/jovyan/data/tensorboard/{{ `{{project}} `}}
   MLRUN_FEATURE_STORE__DEFAULT_TARGETS: parquet
