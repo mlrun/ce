@@ -99,4 +99,10 @@ spec:
       serviceAccount: metadata-grpc-server
       serviceAccountName: metadata-grpc-server
       terminationGracePeriodSeconds: 30
+      {{- with .Values.pipelines.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pipelines.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
 {{- end -}}

@@ -112,4 +112,10 @@ spec:
           defaultMode: 420
           name: ml-pipeline-ui-configmap
         name: config-volume
+      {{- with .Values.pipelines.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pipelines.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
 {{- end -}}
