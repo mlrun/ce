@@ -74,6 +74,12 @@ spec:
         - --NotebookApp.token=''
         - --NotebookApp.password=''
         - --NotebookApp.default_url="/lab"
+      {{- with .Values.jupyterNotebook.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.jupyterNotebook.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
       - name: notebooks
         persistentVolumeClaim:
