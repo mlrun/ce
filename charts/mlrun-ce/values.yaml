@@ -182,6 +182,8 @@ jupyterNotebook:
       value: s3://mlrun/projects/{project}/FeatureStore/{name}/{kind}
     - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL
       value: ""
+    - name: MLRUN_FEATURE_STORE__DEFAULT_TARGETS
+      value: "parquet"
     - name: S3_ENDPOINT_URL
       value: http://minio.mlrun.svc.cluster.local:9000
     - name: AWS_SECRET_ACCESS_KEY
