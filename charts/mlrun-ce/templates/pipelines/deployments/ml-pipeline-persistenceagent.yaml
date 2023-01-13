@@ -58,4 +58,10 @@ spec:
       serviceAccount: ml-pipeline-persistenceagent
       serviceAccountName: ml-pipeline-persistenceagent
       terminationGracePeriodSeconds: 30
+      {{- with .Values.pipelines.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pipelines.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
 {{- end -}}

@@ -52,4 +52,10 @@ spec:
       serviceAccount: ml-pipeline-viewer-crd-service-account
       serviceAccountName: ml-pipeline-viewer-crd-service-account
       terminationGracePeriodSeconds: 30
+      {{- with .Values.pipelines.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pipelines.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
 {{- end -}}

@@ -201,6 +201,13 @@ jupyterNotebook:
     annotations:
       helm.sh/resource-policy: "keep"
 
+  nodeSelector: {}
+    # node-role.kubernetes.io/node: "true"
+    # tier: cs
+  tolerations: []
+    #  - key: "node-role.kubernetes.io/master"
+    #    effect: NoSchedule
+
 mpi-operator:
   fullnameOverride: mpi-operator
   crd:
@@ -259,6 +266,12 @@ pipelines:
     size: "20Gi"
     annotations:
       helm.sh/resource-policy: "keep"
+  nodeSelector: {}
+    # node-role.kubernetes.io/node: "true"
+    # tier: cs
+  tolerations: []
+    #  - key: "node-role.kubernetes.io/master"
+    #    effect: NoSchedule
   db:
     username: root
   minio:
