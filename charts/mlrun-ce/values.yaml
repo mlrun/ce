@@ -33,7 +33,9 @@ nuclio:
     enabled: false
   rbac:
     create: true
-    crdAccessMode: cluster
+
+    # do not allow nuclio to listen on all namespaces
+    crdAccessMode: namespaced
   crd:
     create: true
   platform:
