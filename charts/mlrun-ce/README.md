@@ -191,7 +191,8 @@ Your applications are now available in your local browser:
 helm --namespace mlrun uninstall my-mlrun
 ```
 
-#### Note on terminating pods and hanging resources
+### Terminating pods and hanging resources
+
 It is important to note that this chart generates several persistent volume claims and also provisions an NFS
 provisioning server, to provide the user with persistency (via pvc) out of the box.
 Because of the persistency of PV/PVC resources, after installing this chart, PVs and PVCs will be created,
