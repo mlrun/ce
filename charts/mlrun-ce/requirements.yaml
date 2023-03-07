@@ -1,9 +1,9 @@
 dependencies:
 - name: nuclio
-  version: "0.16.9"
+  version: "0.17.4"
   repository: "https://nuclio.github.io/nuclio/charts"
 - name: mlrun
-  version: "0.9.4"
+  version: "0.9.10"
   repository: "https://v3io.github.io/helm-charts/stable"
 - name: mpi-operator
   version: "0.6.0"
