@@ -84,7 +84,7 @@ following values:
 --set jupyterNotebook.image.tag=<MLRUN_VERSION> \
 ```
 
-**Note:** If upgrading a current deployment to a new version, see [triggering db migrations](#triggering-db-migrations)
+> **Note:** If upgrading a current deployment to a new version, see [triggering db migrations](#triggering-db-migrations)
 
 Additional configurable values are documented in the `values.yaml`, and the `values.yaml` of all sub charts. 
 Override those [in the normal methods](https://helm.sh/docs/chart_template_guide/values_files/).
@@ -198,21 +198,26 @@ Your applications are now available in your local browser:
 
 
 ## Upgrading the Chart
+
 When new versions of MLRun CE are released you can upgrade your chart to the new version.
-To upgrade the chart, use the following command:
+To upgrade the chart, use the following commands:
 
 ```bash
+helm repo update
 helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce
 ```
 
 ### Triggering DB Migrations
+
 When upgrading, the chart will use the same configuration as the previous release. However,
-once newer versions of MLRun replace older versions, you might need to trigger database migrations post upgrade before being able to use MLRun.
+once newer versions of MLRun replace older versions, you will need to trigger database migrations post upgrade before being able to use MLRun.
 To do so, you can from within the deployed jupyter run the following:
 ```python
 import mlrun
 mlrun.get_run_db().trigger_migrations()
 ```
+
+> **Note:** Once the database schema is upgraded there is no way to downgrade it
 
 ## Uninstalling the Chart
 
