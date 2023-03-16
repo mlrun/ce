@@ -64,7 +64,7 @@ helm --namespace mlrun \
     mlrun/mlrun-ce
 ```
 
-## Installing MLRun-ce on minikube
+### Installing MLRun-ce on minikube
 
 The Open source MLRun ce uses node ports for simplicity. If your kubernetes cluster is running inside a VM, 
 as is the case when using minikube, the kubernetes services exposed over node ports would not be available on 
@@ -74,7 +74,19 @@ the ce inside a minikube cluster, add `--set global.externalHostAddress=$(miniku
 
 ## Advanced Chart Configuration
 
-Configurable values are documented in the `values.yaml`, and the `values.yaml` of all sub charts. 
+### Installing a different MLRun Version (for testing)
+Although not guarantied to work with every Chart version, you can install a different version of MLRun by setting the 
+following values: 
+
+```bash
+--set mlrun.api.image.tag=<MLRUN_VERSION> \
+--set mlrun.ui.image.tag=<MLRUN_VERSION> \
+--set jupyterNotebook.image.tag=<MLRUN_VERSION> \
+```
+
+**Note:** If upgrading a current deployment to a new version, see [triggering db migrations](#triggering-db-migrations)
+
+Additional configurable values are documented in the `values.yaml`, and the `values.yaml` of all sub charts. 
 Override those [in the normal methods](https://helm.sh/docs/chart_template_guide/values_files/).
 
 ### Working with ECR
@@ -158,7 +170,7 @@ helm --namespace mlrun \
 
 > **Note:** To add a custom image prefix, use `--set nuclio.dashboard.imageNamePrefixTemplate="some-unique-prefix/{{ .ProjectName }}-{{ .FunctionName }}"` which will result in a unique prefix for each function image name.
 
-### Usage
+## Usage
 
 Your applications are now available in your local browser:
 - jupyter-notebook - http://nodeipaddress:30040
@@ -175,7 +187,7 @@ Your applications are now available in your local browser:
 > The above links assume your Kubernetes cluster is exposed on localhost.
 > If that's not the case, the different components will be available on `externalHostAddress`
 
-### Start Working
+## Start Working
 
 - Open Jupyter Notebook on [**jupyter-notebook UI**](http://localhost:30040) and run the code in 
 [**examples/mlrun_basics.ipynb**](https://github.com/mlrun/mlrun/blob/master/examples/mlrun_basics.ipynb) notebook.
@@ -184,6 +196,23 @@ Your applications are now available in your local browser:
 > - You can change the ports by providing values to the helm install command.
 > - You can add and configure a k8s ingress-controller for better security and control over external access.
 
+
+## Upgrading the Chart
+When new versions of MLRun CE are released you can upgrade your chart to the new version.
+To upgrade the chart, use the following command:
+
+```bash
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce
+```
+
+### Triggering DB Migrations
+When upgrading, the chart will use the same configuration as the previous release. However,
+once newer versions of MLRun replace older versions, you might need to trigger database migrations post upgrade before being able to use MLRun.
+To do so, you can from within the deployed jupyter run the following:
+```python
+import mlrun
+mlrun.get_run_db().trigger_migrations()
+```
 
 ## Uninstalling the Chart
 
