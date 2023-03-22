@@ -1,6 +1,6 @@
 dependencies:
 - name: nuclio
-  version: "0.17.4"
+  version: "0.17.5"
   repository: "https://nuclio.github.io/nuclio/charts"
 - name: mlrun
   version: "0.9.10"
