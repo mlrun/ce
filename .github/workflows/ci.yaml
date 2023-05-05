@@ -17,6 +17,117 @@ jobs:
       - name: Run ah lint
         working-directory: ./charts/mlrun-ce
         run: ah lint
+        
+  ci-runner:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Extract private key
+      run: echo "${{ secrets.MLRUN_PEM }}" > mlrun.pem
+    - name: Set permissions on key
+      run: chmod 400 mlrun.pem
+    - name: Install sshpass
+      run: sudo apt-get install -y sshpass
+    - name: Copy folder to remote machine
+      run: sudo scp -r -o StrictHostKeyChecking=no -i mlrun.pem  /home/runner/work/ce ${{ secrets.USERNAME }}@${{ secrets.IP }}:/home/ubuntu/ce
+    - name: Cleaning instance
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
+        # CLEANUP
+        echo "helm uninstall mlrun-ce"
+        helm uninstall -n mlrun mlrun-ce || echo true
+        echo "helm uninstall monitoring"
+        helm uninstall -n mlrun monitoring || echo true
+        echo "delete pv, pvc from mlrun"
+        kubectl delete all --all -n mlrun
+        echo "deleting mlrun namepsace";
+        kubectl delete namespace mlrun || echo true
+        EOF
+    - name: CE installation
+      run: |    
+        # CE INSTALLATION
+        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
+        cd ce/ce/charts/mlrun-ce
+        echo "helm dependency update"
+        helm dependency update
+        echo "create mlrun namepsace"
+        kubectl create namespace mlrun        
+        echo "k8s namespaces - $(kubectl get namespace)"
+        echo "installing community edition"
+        helm install mlrun-ce --namespace mlrun \
+        --set minio.resources.requests.memory="128Mi" \
+        --set  jupyterNotebook.persistence.size="1Gi" \
+        --set  mlrun.db.persistence.size="1Gi" \
+        --set  mlrun.api.persistence.size="1Gi" \
+        --set  mpi-operator.deployment.create="false" \
+        --set  mlrun.httpDB.dbType="sqlite" \
+        --set  mlrun.httpDB.dirPath="/mlrun/db" \
+        --set  mlrun.httpDB.dsn="sqlite:////mlrun/db/mlrun.db?check_same_thread=false"  \
+        --set  mlrun.httpDB.oldDsn=""  \
+        --set global.registry.url=${{ secrets.INTERNAL_IP }}:5000  --set global.registry.secretName=""   \
+        --set global.externalHostAddress=${{ secrets.INTERNAL_IP }}  \
+        --set nuclio.dashboard.externalIPAddresses[0]=${{ secrets.INTERNAL_IP }}  \
+        --wait --debug --timeout=1h .
+        EOF
+    - name: Run demos from Jupyter pod notebook news_article_nlp
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
+        # Get the name of the Jupyter pod
+        jupyter_service=\$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+        echo "Jupyter pod name: \$jupyter_service"
+        
+        # Run the notebook and output the results
+        echo "Running notebook..."
+        kubectl exec -n mlrun \$jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/news-article-nlp/news_article_nlp.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/news-article-nlp/news_article_nlp-out.ipynb 2>/dev/null
+        echo "done first stage" 
+        # Clean up after the notebook run
+        # End of SSH commands
+        EOF
+    
+    - name: Run demos from Jupyter pod notebook 1-training-and-evaluation.ipynb
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
+        # Get the name of the Jupyter pod
+        jupyter_service=\$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+        echo "Jupyter pod name: \$jupyter_service"
+        
+        # Run the notebook and output the results
+        echo "Running notebook..."
+        kubectl exec -n mlrun \$jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb
+          
+          # End of SSH commands
+        EOF
+    - name: Run demos from Jupyter pod notebook 2-serving.ipynb
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
+        # Get the name of the Jupyter pod
+        jupyter_service=\$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+        echo "Jupyter pod name: \$jupyter_service"
+        
+        # Run the notebook and output the results
+        echo "Running notebook..."
+        kubectl exec -n mlrun \$jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/2-serving.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/2-serving.ipynb
+          
+        EOF
+    - name: Run demos from Jupyter pod notebook 3-automatic-pipeline.ipynb
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
+        # Get the name of the Jupyter pod
+        jupyter_service=\$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+        echo "Jupyter pod name: \$jupyter_service"
+        
+        # Run the notebook and output the results
+        echo "Running notebook..."
+        kubectl exec -n mlrun \$jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb
+        echo "CE demos ci finished"
+        cd
+        rm -rf ce 2>/dev/null
+        # End of SSH commands
+        EOF
+        rm -rf mlrun.pem
+      
+  
   # commented out for now, takes too long to pull images
   # perhaps we can invoke it via workflow dispatch or as a nightly job
   # test:
