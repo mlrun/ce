@@ -1,0 +1,780 @@
+apiVersion: v1
+data:
+  model-monitoring-overview.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "datasource",
+              "uid": "grafana"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "target": {
+              "limit": 100,
+              "matchAny": false,
+              "tags": [],
+              "type": "dashboard"
+            },
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "links": [
+        {
+          "icon": "external link",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": [],
+          "targetBlank": false,
+          "title": "Model Monitoring - Details",
+          "type": "link",
+          "url": "d/AohIXhAMk/model-monitoring-details"
+        }
+      ],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": "iguazio",
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 5,
+            "x": 0,
+            "y": 0
+          },
+          "id": 24,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value"
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "dataset": "mlrun",
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT COUNT(uid) FROM mlrun.model_endpoints where project='$PROJECT'",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "name": "COUNT",
+                    "parameters": [
+                      {
+                        "name": "uid",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              },
+              "table": "model_endpoints"
+            }
+          ],
+          "title": "Endpoints",
+          "transformations": [],
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": "iguazio",
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 5,
+            "x": 5,
+            "y": 0
+          },
+          "id": 25,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "/^metrics\\-\\>\"\\$\\.generic\\.predictions_per_second\"$/",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "dataset": "mlrun",
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "hide": false,
+              "rawQuery": true,
+              "rawSql": "SELECT metrics->\"$.generic.predictions_per_second\" FROM mlrun.model_endpoints where project='$PROJECT'",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [
+                      {
+                        "name": "metrics",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              },
+              "table": "model_endpoints"
+            }
+          ],
+          "title": "Predictions/s (5 Minute Average)",
+          "transformations": [],
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": "iguazio",
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "µs"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 5,
+            "x": 11,
+            "y": 0
+          },
+          "id": 10,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "/^metrics\\-\\>\"\\$\\.generic\\.latency_avg_1h\"$/",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT metrics->\"$.generic.latency_avg_1h\" FROM mlrun.model_endpoints where project='$PROJECT'",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            }
+          ],
+          "title": "Average Latency (Last Hour)",
+          "transformations": [],
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": "iguazio",
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [],
+              "noValue": "0",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 6,
+            "x": 16,
+            "y": 0
+          },
+          "id": 12,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "dataset": "mlrun",
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT sum(error_count) FROM mlrun.model_endpoints where project='$PROJECT' ",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [
+                      {
+                        "name": "error_count",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              },
+              "table": "model_endpoints"
+            }
+          ],
+          "title": "Errors",
+          "transformations": [
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "error_count"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "sum"
+                ]
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": "iguazio",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "center",
+                "displayMode": "auto",
+                "filterable": true,
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Function"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model Class"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "First Request"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last Request"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Accuracy"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Error Count"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Drift Status"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "options": {
+                          "DRIFT_DETECTED": {
+                            "color": "red",
+                            "index": 1,
+                            "text": "2"
+                          },
+                          "NO_DRIFT": {
+                            "color": "green",
+                            "index": 3,
+                            "text": "0"
+                          },
+                          "N\\A": {
+                            "index": 0,
+                            "text": "-1"
+                          },
+                          "POSSIBLE_DRIFT": {
+                            "color": "yellow",
+                            "index": 2,
+                            "text": "1"
+                          }
+                        },
+                        "type": "value"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "custom.displayMode",
+                    "value": "color-background"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "rgba(255, 255, 255, 0)",
+                          "value": null
+                        },
+                        {
+                          "color": "green",
+                          "value": 0
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 1
+                        },
+                        {
+                          "color": "red",
+                          "value": 2
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Endpoint ID"
+                },
+                "properties": [
+                  {
+                    "id": "links",
+                    "value": [
+                      {
+                        "targetBlank": true,
+                        "title": "",
+                        "url": "/d/AohIXhAMk/model-monitoring-details?orgId=1&refresh=1m&var-PROJECT=$PROJECT&var-MODEL=﻿${__value.text}"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Average Latency (Last Hour)"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "µs"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 13,
+            "w": 24,
+            "x": 0,
+            "y": 3
+          },
+          "id": 22,
+          "options": {
+            "footer": {
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": true,
+                "displayName": "current_stats"
+              }
+            ]
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "dataset": "mlrun",
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT uid, function_uri, model, model_class, first_request, last_request, error_count, drift_status FROM mlrun.model_endpoints where project='$PROJECT'",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [
+                      {
+                        "name": "current_stats",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              },
+              "table": "model_endpoints"
+            }
+          ],
+          "title": "Models",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "model_hash": false
+                },
+                "indexByName": {
+                  "drift_status": 7,
+                  "error_count": 6,
+                  "first_request": 4,
+                  "function_uri": 1,
+                  "last_request": 5,
+                  "model": 2,
+                  "model_class": 3,
+                  "uid": 0
+                },
+                "renameByName": {
+                  "accuracy": "Accuracy",
+                  "drift_status": "Drift Status",
+                  "endpoint_function": "Function",
+                  "endpoint_id": "Endpoint ID",
+                  "endpoint_model": "Model",
+                  "endpoint_model_class": "Model Class",
+                  "endpoint_tag": "Tag",
+                  "error_count": "Error Count",
+                  "first_request": "First Request",
+                  "function": "Function",
+                  "function_uri": "Function",
+                  "last_request": "Last Request",
+                  "latency_avg_1h": "Average Latency (Last Hour)",
+                  "latency_avg_1s": "Average Latency",
+                  "model": "Model",
+                  "model_class": "Class",
+                  "predictions_per_second": "Predictions/s (5 Minute Average)",
+                  "predictions_per_second_count_1s": "Predictions/1s",
+                  "tag": "Tag",
+                  "uid": "Endpoint ID"
+                }
+              }
+            }
+          ],
+          "type": "table"
+        }
+      ],
+      "refresh": false,
+      "schemaVersion": 37,
+      "style": "dark",
+      "tags": [],
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": false,
+              "text": "default",
+              "value": "default"
+            },
+            "datasource": "iguazio",
+            "definition": "SELECT DISTINCT project FROM mlrun.model_endpoints",
+            "hide": 0,
+            "includeAll": false,
+            "label": "Project",
+            "multi": false,
+            "name": "PROJECT",
+            "options": [],
+            "query": "SELECT DISTINCT project FROM mlrun.model_endpoints",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+          }
+        ]
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "Model Monitoring - Overview",
+      "uid": "g0M4uh0Mz",
+      "version": 1,
+      "weekStart": ""
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    grafana_dashboard: "1"
+  name: model-monitoring-overview

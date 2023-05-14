@@ -1,0 +1,1004 @@
+apiVersion: v1
+data:
+  model-monitoring-details.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "datasource",
+              "uid": "grafana"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "target": {
+              "limit": 100,
+              "matchAny": false,
+              "tags": [],
+              "type": "dashboard"
+            },
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": 113,
+      "links": [
+        {
+          "asDropdown": true,
+          "icon": "external link",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": [],
+          "title": "Model Monitoring - Overview",
+          "type": "link",
+          "url": "d/g0M4uh0Mz/model-monitoring-overview"
+        }
+      ],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": "iguazio",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "displayMode": "auto",
+                "filterable": false,
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "First Request"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last Request"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "dateTimeFromNow"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Endpoint ID"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Function URI"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Model Class"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "custom.width"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Predictions/s (5 minute avg)"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Average Latency (1 hour)"
+                },
+                "properties": [
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "µs"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 23,
+          "options": {
+            "footer": {
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": []
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT uid,model,function_uri,model_class,metrics->\"$.generic.predictions_per_second\",metrics->\"$.generic.latency_avg_1h\",first_request,last_request FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "accuracy": true,
+                  "drift_status": true,
+                  "endpoint_function": false,
+                  "endpoint_id": false,
+                  "error_count": true
+                },
+                "indexByName": {
+                  "accuracy": 9,
+                  "drift_status": 8,
+                  "endpoint_function": 2,
+                  "endpoint_id": 0,
+                  "endpoint_model": 1,
+                  "endpoint_model_class": 3,
+                  "error_count": 10,
+                  "first_request": 6,
+                  "last_request": 7,
+                  "latency_avg_1h": 5,
+                  "predictions_per_second": 4
+                },
+                "renameByName": {
+                  "drift_status": "",
+                  "endpoint_function": "Function URI",
+                  "endpoint_id": "Endpoint ID",
+                  "endpoint_model": "Model",
+                  "endpoint_model_class": "Model Class",
+                  "first_request": "First Request",
+                  "function": "Function",
+                  "function_uri": "Function URI",
+                  "last_request": "Last Request",
+                  "latency_avg_1h": "Average Latency (1 hour)",
+                  "latency_avg_1s": "Average Latency",
+                  "latency_avg_5m": "Average Latency (1 hour)",
+                  "model": "Model",
+                  "model_class": "Model Class",
+                  "predictions_per_second": "Predictions/s (5 minute avg)",
+                  "predictions_per_second_count_1s": "Predictions/sec",
+                  "tag": "Tag"
+                }
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "table"
+        },
+        {
+          "datasource": "iguazio",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "center",
+                "displayMode": "auto",
+                "filterable": false,
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "tvd_sum"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "TVD (sum)"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "tvd_mean"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "TVD (mean)"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "hellinger_sum"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Hellinger (sum)"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "hellinger_mean"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Hellinger (mean)"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "kld_sum"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "KLD (sum)"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "kld_mean"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "KLD (mean)"
+                  },
+                  {
+                    "id": "custom.align",
+                    "value": "center"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 3
+          },
+          "id": 24,
+          "options": {
+            "footer": {
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "name"
+              }
+            ]
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT drift_measures->\"$.tvd_sum\" as \"TVD (sum)\", drift_measures->\"$.tvd_mean\" as \"TVD (mean)\", drift_measures->\"$.hellinger_sum\" as \"Hellinger (sum)\", drift_measures->\"$.hellinger_mean\" as \"Hellinger (mean)\", drift_measures->\"$.kld_sum\" as \"KLD (sum)\", drift_measures->\"$.kld_mean\" as \"KLD (mean)\"  FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            }
+          ],
+          "title": "Overall Drift Analysis",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "indexByName": {},
+                "renameByName": {
+                  "endpoint_id": "Endpoint ID",
+                  "first_request": "First Request",
+                  "function": "Function",
+                  "last_request": "Last Request",
+                  "latency_avg_1s": "Average Latency",
+                  "model": "Model",
+                  "model_class": "Model Class",
+                  "predictions_per_second_count_1s": "Predictions/sec",
+                  "tag": "Tag"
+                }
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "table"
+        },
+        {
+          "datasource": "iguazio",
+          "description": "Feature analysis of the latest batch",
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "center",
+                "displayMode": "auto",
+                "filterable": false,
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Expected Min"
+                },
+                "properties": [
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Expected Mean"
+                },
+                "properties": [
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Expected Max"
+                },
+                "properties": [
+                  {
+                    "id": "noValue",
+                    "value": "N/A"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "tvd"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "TVD"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "hellinger"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Hellinger"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "kld"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "KLD"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 6
+          },
+          "id": 14,
+          "options": {
+            "footer": {
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": [
+              {
+                "desc": false,
+                "displayName": "Feature"
+              }
+            ]
+          },
+          "pluginVersion": "9.3.6",
+          "targets": [
+            {
+              "dataset": "mlrun",
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "rawQuery": true,
+              "rawSql": "SELECT feature_stats FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "refId": "A",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [
+                      {
+                        "name": "feature_stats",
+                        "type": "functionParameter"
+                      }
+                    ],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              },
+              "table": "model_endpoints"
+            },
+            {
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "hide": false,
+              "rawQuery": true,
+              "rawSql": "SELECT current_stats FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "refId": "B",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            },
+            {
+              "datasource": "iguazio",
+              "editorMode": "code",
+              "format": "table",
+              "hide": false,
+              "rawQuery": true,
+              "rawSql": "SELECT drift_measures FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "refId": "C",
+              "sql": {
+                "columns": [
+                  {
+                    "parameters": [],
+                    "type": "function"
+                  }
+                ],
+                "groupBy": [
+                  {
+                    "property": {
+                      "type": "string"
+                    },
+                    "type": "groupBy"
+                  }
+                ],
+                "limit": 50
+              }
+            }
+          ],
+          "title": "Features Analysis",
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "format": "json",
+                "source": "feature_stats"
+              }
+            },
+            {
+              "id": "extractFields",
+              "options": {
+                "format": "json",
+                "source": "current_stats"
+              }
+            },
+            {
+              "id": "extractFields",
+              "options": {
+                "format": "json",
+                "source": "drift_measures"
+              }
+            },
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "reduce",
+              "options": {
+                "reducers": [
+                  "allValues"
+                ]
+              }
+            },
+            {
+              "id": "filterByValue",
+              "options": {
+                "filters": [
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "timestamp"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "feature_stats"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "current_stats"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "tvd_sum"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "tvd_mean"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "hellinger_sum"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "hellinger_mean"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "kld_sum"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "kld_mean"
+                      }
+                    },
+                    "fieldName": "Field"
+                  },
+                  {
+                    "config": {
+                      "id": "equal",
+                      "options": {
+                        "value": "drift_measures"
+                      }
+                    },
+                    "fieldName": "Field"
+                  }
+                ],
+                "match": "any",
+                "type": "exclude"
+              }
+            },
+            {
+              "id": "extractFields",
+              "options": {
+                "format": "json",
+                "source": "All values"
+              }
+            },
+            {
+              "id": "filterByValue",
+              "options": {
+                "filters": [
+                  {
+                    "config": {
+                      "id": "isNull",
+                      "options": {}
+                    },
+                    "fieldName": "0"
+                  }
+                ],
+                "match": "any",
+                "type": "exclude"
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Field",
+                    "0",
+                    "1",
+                    "2"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "extractFields",
+              "options": {
+                "replace": false,
+                "source": "0"
+              }
+            },
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "1"
+              }
+            },
+            {
+              "id": "extractFields",
+              "options": {
+                "source": "2"
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Field",
+                    "mean 1",
+                    "min 1",
+                    "max 1",
+                    "mean 2",
+                    "min 2",
+                    "max 2",
+                    "tvd",
+                    "hellinger",
+                    "kld"
+                  ]
+                }
+              }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "indexByName": {
+                  "Field": 0,
+                  "hellinger": 8,
+                  "kld": 9,
+                  "max 1": 5,
+                  "max 2": 6,
+                  "mean 1": 1,
+                  "mean 2": 2,
+                  "min 1": 3,
+                  "min 2": 4,
+                  "tvd": 7
+                },
+                "renameByName": {
+                  "Field": "Feature",
+                  "max 1": "Expected Max",
+                  "max 2": "Actual Max",
+                  "mean 1": "Expected Mean",
+                  "mean 2": "Actual Mean",
+                  "min 1": "Expected Min",
+                  "min 2": "Actual Min"
+                }
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "table"
+        }
+      ],
+      "refresh": false,
+      "schemaVersion": 37,
+      "style": "dark",
+      "tags": [],
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": false,
+              "text": "default",
+              "value": "default"
+            },
+            "datasource": "iguazio",
+            "definition": "SELECT DISTINCT project FROM mlrun.model_endpoints",
+            "hide": 0,
+            "includeAll": false,
+            "label": "Project",
+            "multi": false,
+            "name": "PROJECT",
+            "options": [],
+            "query": "SELECT DISTINCT project FROM mlrun.model_endpoints",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+          },
+          {
+            "current": {
+              "isNone": true,
+              "selected": false,
+              "text": "None",
+              "value": ""
+            },
+            "datasource": "iguazio",
+            "definition": "SELECT uid FROM mlrun.model_endpoints where project='$PROJECT';",
+            "hide": 0,
+            "includeAll": false,
+            "label": "Model Endpoint",
+            "multi": false,
+            "name": "MODELENDPOINT",
+            "options": [],
+            "query": "SELECT uid FROM mlrun.model_endpoints where project='$PROJECT';",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+          }
+        ]
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "Model Monitoring - Details",
+      "uid": "AohIXhAMk",
+      "version": 6,
+      "weekStart": ""
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    grafana_dashboard: "1"
+  name: model-monitoring-details
