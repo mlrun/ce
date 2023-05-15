@@ -232,44 +232,25 @@ data:
             {
               "id": "organize",
               "options": {
-                "excludeByName": {
-                  "accuracy": true,
-                  "drift_status": true,
-                  "endpoint_function": false,
-                  "endpoint_id": false,
-                  "error_count": true
-                },
                 "indexByName": {
-                  "accuracy": 9,
-                  "drift_status": 8,
-                  "endpoint_function": 2,
-                  "endpoint_id": 0,
-                  "endpoint_model": 1,
-                  "endpoint_model_class": 3,
-                  "error_count": 10,
-                  "first_request": 6,
-                  "last_request": 7,
-                  "latency_avg_1h": 5,
-                  "predictions_per_second": 4
+                  "first_request": 5,
+                  "last_request": 6,
+                  "function_uri": 2,
+                  "metrics->\"$.generic.latency_avg_1h\"": 7,
+                  "metrics->\"$.generic.predictions_per_second\"": 8,
+                  "model": 3,
+                  "model_class": 4,
+                  "uid": 1
                 },
                 "renameByName": {
-                  "drift_status": "",
-                  "endpoint_function": "Function URI",
-                  "endpoint_id": "Endpoint ID",
-                  "endpoint_model": "Model",
-                  "endpoint_model_class": "Model Class",
                   "first_request": "First Request",
-                  "function": "Function",
-                  "function_uri": "Function URI",
                   "last_request": "Last Request",
-                  "latency_avg_1h": "Average Latency (1 hour)",
-                  "latency_avg_1s": "Average Latency",
-                  "latency_avg_5m": "Average Latency (1 hour)",
+                  "function_uri": "Function URI",
+                  "metrics->\"$.generic.latency_avg_1h\"": "Average Latency (1 hour)",
+                  "metrics->\"$.generic.predictions_per_second\"": "Predictions/s (5 minute avg)",
                   "model": "Model",
                   "model_class": "Model Class",
-                  "predictions_per_second": "Predictions/s (5 minute avg)",
-                  "predictions_per_second_count_1s": "Predictions/sec",
-                  "tag": "Tag"
+                  "uid": "Endpoint ID"
                 }
               }
             }
