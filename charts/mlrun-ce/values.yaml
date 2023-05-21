@@ -331,16 +331,27 @@ kube-prometheus-stack:
   alertmanager:
     enabled: false
   grafana:
+    adminUser: admin
+    adminPassword: admin
+    additionalDataSources:
+    - name: iguazio
+      type: mysql
+      url:
+      user:
+      password:
+      database:
+      editable: true
+      maxOpenConns: 100
+      maxIdleConns: 100
+      maxIdleConnsAuto: true
     persistence:
       type: pvc
       enabled: true
-      size: 10Gi  
+      size: 10Gi
     grafana.ini:
       auth.anonymous:
         enabled: true
         org_role: Editor
-      security:
-        disable_initial_admin_creation: true
     fullnameOverride: grafana
     enabled: true
     service:
@@ -350,7 +361,7 @@ kube-prometheus-stack:
     enabled: true
     service:
       type: NodePort
-      nodePort: 30120    
+      nodePort: 30120
   kube-state-metrics:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
