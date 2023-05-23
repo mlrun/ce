@@ -191,8 +191,6 @@ jupyterNotebook:
       value: minio123
     - name: AWS_ACCESS_KEY_ID
       value: minio
-    - name: MLRUN_CE
-      value: "true"
 
   persistence:
     enabled: true
