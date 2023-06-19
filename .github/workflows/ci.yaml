@@ -66,9 +66,8 @@ jobs:
         sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
         kubectl --namespace mlrun create secret docker-registry registry-credentials \
         --docker-username ${{ secrets.DOCKER_USERNAME }} \
-        --docker-password ${{ secrets.DOCKER_PASSWORD }} \
-        #--docker-server ${{ secrets.DOCKER_SERVER }} \
-        #--docker-email ${{ secrets.DOCKER_EMAIL }}
+        --docker-password ${{ secrets.DOCKER_PASSWORD }} --docker-server ${{ secrets.DOCKER_SERVER }} \
+        --docker-email ${{ secrets.DOCKER_EMAIL }}
         EOF
 
     - name: CE installation
