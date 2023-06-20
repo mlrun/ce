@@ -69,7 +69,7 @@ jobs:
         --docker-username ${{ secrets.DOCKER_USERNAME }} \
         --docker-password=${{ secrets.DOCKER_PASSWORD }}
         --docker-email=${{ secrets.DOCKER_EMAIL }} \
-        
+        echo "one"
         docker pull hello-world
         docker tag hello-world:latest ${{ secrets.DOCKER_URL }}/${{ secrets.DOCKER_USERNAME }}/hello-world:latest
         EOF
