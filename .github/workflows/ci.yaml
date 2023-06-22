@@ -73,7 +73,9 @@ jobs:
       run: |    
         # CE INSTALLATION
         sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
+        echo $(pwd)
         cd ce/ce/charts/mlrun-ce
+        echo $(ls)
         echo "helm dependency update"
         helm dependency update
         echo "installing community edition"
