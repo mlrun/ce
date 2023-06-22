@@ -35,14 +35,12 @@ jobs:
       run: sudo apt-get install -y sshpass
     - name: Copy pem to remote machine
       run: |
-        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
-        rm -rf /home/ubuntu/ce
-        EOF
         sudo scp -r -o StrictHostKeyChecking=no -i mlrun.pem  /home/runner/work/ce ${{ secrets.USERNAME }}@${{ secrets.IP }}:/home/ubuntu/ce
     - name: Cleaning instance
       run: |
         sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
         # CLEANUP
+        rm -rf /home/ubuntu/ce
         echo "helm uninstall mlrun-ce"
         helm uninstall -n mlrun mlrun-ce || echo true
         echo "helm uninstall monitoring"
@@ -69,10 +67,6 @@ jobs:
         --docker-username ${{ secrets.DOCKER_USERNAME }} \
         --docker-email=${{ secrets.DOCKER_EMAIL }} \
         --docker-password=${{ secrets.DOCKER_PASSWORD }}
-      
-        echo "one"
-        docker pull hello-world
-        docker tag hello-world:latest ${{ secrets.DOCKER_URL }}/${{ secrets.DOCKER_USERNAME }}/hello-world:latest
         EOF
 
     - name: CE installation
@@ -109,37 +103,37 @@ jobs:
           jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
           kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/news-article-nlp/news_article_nlp.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/1-news-article-nlp.ipynb
 
-#     - name: Run demos from Jupyter pod notebook - 1-training-and-evaluation.ipynb
-#       uses: appleboy/ssh-action@v0.1.10
-#       with:
-#         host: ${{ secrets.IP }}
-#         username: ${{ secrets.USERNAME }}
-#         key: ${{ secrets.MLRUN_PEM }}
-#         script: |
-#           jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
-#           kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb
+    - name: Run demos from Jupyter pod notebook - 1-training-and-evaluation.ipynb
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.IP }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.MLRUN_PEM }}
+        script: |
+          jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+          kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb
 
 
-#     - name: Run demos from Jupyter pod notebook - 2-serving.ipynb
-#       uses: appleboy/ssh-action@v0.1.10
-#       with:
-#         host: ${{ secrets.IP }}
-#         username: ${{ secrets.USERNAME }}
-#         key: ${{ secrets.MLRUN_PEM }}
-#         script: |
-#           jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
-#           kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection//home/jovyan/demos/mask-detection/2-serving.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/2-serving.ipynb
+    - name: Run demos from Jupyter pod notebook - 2-serving.ipynb
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.IP }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.MLRUN_PEM }}
+        script: |
+          jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+          kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection//home/jovyan/demos/mask-detection/2-serving.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/2-serving.ipynb
 
 
-#     - name: Run demos from Jupyter pod notebook - 3-automatic-pipeline.ipynb
-#       uses: appleboy/ssh-action@v0.1.10
-#       with:
-#         host: ${{ secrets.IP }}
-#         username: ${{ secrets.USERNAME }}
-#         key: ${{ secrets.MLRUN_PEM }}
-#         script: |
-#           jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
-#           kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb
+    - name: Run demos from Jupyter pod notebook - 3-automatic-pipeline.ipynb
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.IP }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.MLRUN_PEM }}
+        script: |
+          jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+          kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb
 
     - name: Deleting pem
       run: |
