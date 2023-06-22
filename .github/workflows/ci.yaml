@@ -124,7 +124,6 @@ jobs:
           jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
           kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection//home/jovyan/demos/mask-detection/2-serving.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/2-serving.ipynb
 
-
     - name: Run demos from Jupyter pod notebook - 3-automatic-pipeline.ipynb
       uses: appleboy/ssh-action@v0.1.10
       with:
