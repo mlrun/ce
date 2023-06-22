@@ -8,7 +8,7 @@ on:
   
 env:
   NAMESPACE: mlrun
-
+  
 jobs:
   lint:
     runs-on: ubuntu-20.04
