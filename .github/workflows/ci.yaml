@@ -40,7 +40,6 @@ jobs:
       run: |
         sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
         # CLEANUP
-        rm -rf /home/ubuntu/ce
         echo "helm uninstall mlrun-ce"
         helm uninstall -n mlrun mlrun-ce || echo true
         echo "helm uninstall monitoring"
@@ -136,9 +135,13 @@ jobs:
           jupyter_service=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
           kubectl exec -n mlrun $jupyter_service -- jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb
 
-    - name: Deleting pem
+    - name: Deleting junk
       run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.USERNAME }}@${{ secrets.IP }} <<EOF
+        rm -rf /home/ubuntu/ce
+        EOF
         rm -rf mlrun.pem
+        
         
   # commented out for now, takes too long to pull images
   # perhaps we can invoke it via workflow dispatch or as a nightly job
