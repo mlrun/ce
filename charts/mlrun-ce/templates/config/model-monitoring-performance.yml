@@ -594,3 +594,4 @@ metadata:
   labels:
     grafana_dashboard: "1"
   name: model-monitoring-performance
+{{- end -}}

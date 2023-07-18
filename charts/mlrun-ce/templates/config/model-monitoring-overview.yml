@@ -190,7 +190,7 @@ data:
               "format": "table",
               "hide": false,
               "rawQuery": true,
-              "rawSql": "SELECT avg(metrics->\"$.generic.predictions_per_second\") FROM mlrun.model_endpoints where project ='$PROJECT' and endpoint_type != \"1\" and active=True",
+              "rawSql": "SELECT avg(metrics->\"$.generic.predictions_per_second\") FROM mlrun.model_endpoints where project ='$PROJECT' and endpoint_type != \"2\" and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -1059,3 +1059,4 @@ metadata:
   labels:
     grafana_dashboard: "1"
   name: model-monitoring-overview
+{{- end -}}
