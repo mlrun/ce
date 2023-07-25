@@ -1,3 +1,4 @@
+{{- if index .Values "kube-prometheus-stack" "enabled" -}}
 apiVersion: v1
 data:
   model-monitoring-overview.json: |
@@ -27,9 +28,10 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 0,
+      "id": 30,
       "links": [
         {
-          "icon": "external link",
+          "icon": "dashboard",
           "includeVars": true,
           "keepTime": true,
           "tags": [],
@@ -37,12 +39,25 @@ data:
           "title": "Model Monitoring - Details",
           "type": "link",
           "url": "d/AohIXhAMk/model-monitoring-details"
+        },
+        {
+          "asDropdown": false,
+          "icon": "dashboard",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": [],
+          "targetBlank": false,
+          "title": "Model Monitoring - Performance",
+          "tooltip": "",
+          "type": "link",
+          "url": "d/9CazA-UGz/model-monitoring-performance"
         }
       ],
       "liveNow": false,
       "panels": [
         {
           "datasource": "iguazio",
+          "description": "List of active model endpoints in the selected project.",
           "fieldConfig": {
             "defaults": {
               "mappings": [],
@@ -83,7 +98,7 @@ data:
             },
             "textMode": "value"
           },
-          "pluginVersion": "9.3.6",
+          "pluginVersion": "9.2.2",
           "targets": [
             {
               "dataset": "mlrun",
@@ -91,7 +106,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT COUNT(uid) FROM mlrun.model_endpoints where project='$PROJECT'",
+              "rawSql": "SELECT COUNT(uid) FROM mlrun.model_endpoints where project='$PROJECT' and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -119,13 +134,14 @@ data:
               "table": "model_endpoints"
             }
           ],
-          "title": "Endpoints",
+          "title": "Model Endpoints",
           "transformations": [],
           "transparent": true,
           "type": "stat"
         },
         {
           "datasource": "iguazio",
+          "description": "Average amount of predictions per second in the selected project in the last 5 minutes. Models that are considered child of routers are not considered. \n\n\nThe presented value is based on the latest calculated value of each model endpoint (static value).",
           "fieldConfig": {
             "defaults": {
               "mappings": [],
@@ -152,22 +168,20 @@ data:
             "x": 5,
             "y": 0
           },
-          "id": 25,
+          "id": 29,
           "options": {
             "colorMode": "value",
             "graphMode": "none",
             "justifyMode": "auto",
             "orientation": "auto",
             "reduceOptions": {
-              "calcs": [
-                "mean"
-              ],
-              "fields": "/^metrics\\-\\>\"\\$\\.generic\\.predictions_per_second\"$/",
+              "calcs": [],
+              "fields": "/.*/",
               "values": false
             },
             "textMode": "auto"
           },
-          "pluginVersion": "9.3.6",
+          "pluginVersion": "9.2.2",
           "targets": [
             {
               "dataset": "mlrun",
@@ -176,7 +190,7 @@ data:
               "format": "table",
               "hide": false,
               "rawQuery": true,
-              "rawSql": "SELECT metrics->\"$.generic.predictions_per_second\" FROM mlrun.model_endpoints where project='$PROJECT'",
+              "rawSql": "SELECT avg(metrics->\"$.generic.predictions_per_second\") FROM mlrun.model_endpoints where project ='$PROJECT' and endpoint_type != \"2\" and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -210,6 +224,7 @@ data:
         },
         {
           "datasource": "iguazio",
+          "description": "Average time that it takes to process an event in a non-router models in the selected project in the last 1 hour. \n\nThe presented value is the last calculated value (static value). ",
           "fieldConfig": {
             "defaults": {
               "mappings": [],
@@ -239,22 +254,20 @@ data:
             "justifyMode": "auto",
             "orientation": "auto",
             "reduceOptions": {
-              "calcs": [
-                "mean"
-              ],
-              "fields": "/^metrics\\-\\>\"\\$\\.generic\\.latency_avg_1h\"$/",
+              "calcs": [],
+              "fields": "/.*/",
               "values": false
             },
             "textMode": "auto"
           },
-          "pluginVersion": "9.3.6",
+          "pluginVersion": "9.2.2",
           "targets": [
             {
               "datasource": "iguazio",
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT metrics->\"$.generic.latency_avg_1h\" FROM mlrun.model_endpoints where project='$PROJECT'",
+              "rawSql": "SELECT avg(metrics->\"$.generic.latency_avg_1h\") FROM mlrun.model_endpoints where project ='$PROJECT' and endpoint_type != \"2\" and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -282,6 +295,7 @@ data:
         },
         {
           "datasource": "iguazio",
+          "description": "Total amount of prediction process errors in the selected project.",
           "fieldConfig": {
             "defaults": {
               "mappings": [],
@@ -315,15 +329,13 @@ data:
             "justifyMode": "auto",
             "orientation": "auto",
             "reduceOptions": {
-              "calcs": [
-                "mean"
-              ],
-              "fields": "",
-              "values": false
+              "calcs": [],
+              "fields": "/.*/",
+              "values": true
             },
             "textMode": "auto"
           },
-          "pluginVersion": "9.3.6",
+          "pluginVersion": "9.2.2",
           "targets": [
             {
               "dataset": "mlrun",
@@ -331,7 +343,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT sum(error_count) FROM mlrun.model_endpoints where project='$PROJECT' ",
+              "rawSql": "SELECT sum(error_count) FROM mlrun.model_endpoints where project='$PROJECT' and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -359,32 +371,13 @@ data:
             }
           ],
           "title": "Errors",
-          "transformations": [
-            {
-              "id": "filterFieldsByName",
-              "options": {
-                "include": {
-                  "names": [
-                    "error_count"
-                  ]
-                }
-              }
-            },
-            {
-              "id": "reduce",
-              "options": {
-                "reducers": [
-                  "sum"
-                ]
-              }
-            }
-          ],
+          "transformations": [],
           "transparent": true,
           "type": "stat"
         },
         {
           "datasource": "iguazio",
-          "description": "",
+          "description": "A summery table of all the model endpoints in the selected project:\n\n• Endpoint ID — the ID of the deployed model. Click on the endpoint ID will lead to the model details pane.\n\n• Function — Function to access the model, usually a Nuclio serving function\n\n• Model — user defined name for the model\n\n• Class — the implementation class that is used by the endpoint\n\n• First Request — first request for production data\n\n• Last Request — most recent request for production data\n\n• Error Count — Prediction process errors, usually data processing errors (invalid timestamps, request ids, type mismatches etc.)\n\nDrift Status — no drift (green), possible drift (yellow), drift detected (red)",
           "fieldConfig": {
             "defaults": {
               "custom": {
@@ -635,6 +628,7 @@ data:
           "id": 22,
           "options": {
             "footer": {
+              "enablePagination": true,
               "fields": "",
               "reducer": [
                 "sum"
@@ -649,7 +643,7 @@ data:
               }
             ]
           },
-          "pluginVersion": "9.3.6",
+          "pluginVersion": "9.2.2",
           "targets": [
             {
               "dataset": "mlrun",
@@ -728,6 +722,297 @@ data:
             }
           ],
           "type": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Average amount of predictions per second in the selected project (5-minute rolling average) by time. ",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 7,
+            "x": 0,
+            "y": 16
+          },
+          "id": 33,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "builder",
+              "expr": "rate(predictions_total{project=\"$PROJECT\", endpoint_type!=\"2\"}[5m])",
+              "interval": "",
+              "legendFormat": "{{` {{ model }} `}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Predictions / s (5 Minute Average)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Average latency time of processing an event in the selected project (1-hour rolling average) by time. ",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 6,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "µs"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 7,
+            "y": 16
+          },
+          "hideTimeOverride": false,
+          "id": 28,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "builder",
+              "exemplar": false,
+              "expr": "avg_over_time(model_latency_seconds_sum{project=\"$PROJECT\", endpoint_type!=\"2\"}[1h]) / avg_over_time(predictions_total{project=\"$PROJECT\"}[1h])",
+              "instant": false,
+              "legendFormat": "{{` {{ model }} `}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Average Latency (1 hour)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Total amount of prediction process errors in the selected project by time. ",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 9,
+            "x": 15,
+            "y": 16
+          },
+          "id": 31,
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "builder",
+              "expr": "errors_total{project=\"$PROJECT\"}",
+              "interval": "",
+              "legendFormat": "{{` {{ model }} `}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Error count",
+          "type": "timeseries"
         }
       ],
       "refresh": false,
@@ -737,11 +1022,7 @@ data:
       "templating": {
         "list": [
           {
-            "current": {
-              "selected": false,
-              "text": "default",
-              "value": "default"
-            },
+            "current": {},
             "datasource": "iguazio",
             "definition": "SELECT DISTINCT project FROM mlrun.model_endpoints",
             "hide": 0,
@@ -770,7 +1051,7 @@ data:
       "timezone": "",
       "title": "Model Monitoring - Overview",
       "uid": "g0M4uh0Mz",
-      "version": 1,
+      "version": 9,
       "weekStart": ""
     }
 kind: ConfigMap
@@ -778,3 +1059,4 @@ metadata:
   labels:
     grafana_dashboard: "1"
   name: model-monitoring-overview
+{{- end -}}
