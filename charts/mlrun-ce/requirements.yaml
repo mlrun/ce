@@ -3,7 +3,7 @@ dependencies:
   version: "0.17.13"
   repository: "https://nuclio.github.io/nuclio/charts"
 - name: mlrun
-  version: "0.9.11"
+  version: "0.9.12"
   repository: "https://v3io.github.io/helm-charts/stable"
 - name: mpi-operator
   version: "0.6.0"
