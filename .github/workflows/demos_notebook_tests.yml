@@ -1,0 +1,123 @@
+name: demos_notebook_tests
+
+on:
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    # Run every 8 hours (cron hours should divide 24 equally, otherwise there will be an overlap at the end of the day)
+    - cron:  '0 */4 * * *'
+
+jobs:
+  demos-notebook-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Extract private key
+      run: echo "${{ secrets.TEST_SYSTEM_MLRUN_PEM }}" > mlrun.pem
+    - name: Set permissions on key
+      run: chmod 400 mlrun.pem
+    - name: Install sshpass
+      run: sudo apt-get install -y sshpass
+    - name: Copy pem to remote machine
+      run: |
+        sudo scp -r -o StrictHostKeyChecking=no -i mlrun.pem  /home/runner/work/ce ${{ secrets.TEST_SYSTEM_USERNAME }}@${{ secrets.TEST_SYSTEM_IP }}:/home/${{ secrets.TEST_SYSTEM_USERNAME }}/ce
+    - name: Cleaning instance
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.TEST_SYSTEM_USERNAME }}@${{ secrets.TEST_SYSTEM_IP }} <<EOF
+        # CLEANUP
+        echo "helm uninstall mlrun-ce"
+        helm uninstall -n mlrun mlrun-ce || echo true
+        echo "helm uninstall monitoring"
+        helm uninstall -n mlrun monitoring || echo true
+        echo "delete pv, pvc from mlrun"
+        kubectl delete all --all -n mlrun
+        echo "deleting mlrun namepsace";
+        kubectl delete namespace mlrun || echo true
+        EOF
+        
+    - name: Creating mlrun namespace
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.TEST_SYSTEM_USERNAME }}@${{ secrets.TEST_SYSTEM_IP }} <<EOF
+        echo "create mlrun namepsace"
+        kubectl create namespace mlrun        
+        echo "k8s namespaces - $(kubectl get namespace)"
+        EOF
+        
+    - name: Creating docker registry secret
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.TEST_SYSTEM_USERNAME }}@${{ secrets.TEST_SYSTEM_IP }} <<EOF
+        kubectl --namespace mlrun create secret docker-registry registry-credentials \
+        --docker-server ${{ secrets.TEST_SYSTEM_DOCKER_SERVER }} \
+        --docker-username ${{ secrets.TEST_SYSTEM_DOCKER_USERNAME }} \
+        --docker-email=${{ secrets.TEST_SYSTEM_DOCKER_EMAIL }} \
+        --docker-password=${{ secrets.TEST_SYSTEM_DOCKER_PASSWORD }}
+        EOF
+
+    - name: CE installation
+      run: |    
+        # CE INSTALLATION
+        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.TEST_SYSTEM_USERNAME }}@${{ secrets.TEST_SYSTEM_IP }} <<EOF
+        echo $(pwd)
+        cd ce/ce/charts/mlrun-ce
+        echo $(ls)
+        echo "helm dependency update"
+        helm dependency update
+        echo "installing community edition"
+        helm install mlrun-ce --namespace mlrun \
+        --set minio.resources.requests.memory="128Mi" \
+        --set  jupyterNotebook.persistence.size="1Gi" \
+        --set  mlrun.db.persistence.size="1Gi" \
+        --set  mlrun.api.persistence.size="1Gi" \
+        --set  mpi-operator.deployment.create="true" \
+        --set global.registry.url=${{ secrets.TEST_SYSTEM_DOCKER_URL }}  --set global.registry.secretName=registry-credentials   \
+        --set global.externalHostAddress=${{ secrets.TEST_SYSTEM_IP }}  \
+        --set nuclio.dashboard.externalIPAddresses[0]=${{ secrets.TEST_SYSTEM_IP }}  \
+        --wait --debug --timeout=1h .
+        EOF
+
+    - name: Run demos from Jupyter pod notebook - news_article_nlp
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.TEST_SYSTEM_IP }}
+        username: ${{ secrets.TEST_SYSTEM_USERNAME }}
+        key: ${{ secrets.TEST_SYSTEM_MLRUN_PEM }}
+        script: |
+          jupyter_pod=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+          kubectl exec -n mlrun $jupyter_pod -- /bin/sh -c "jupyter nbconvert --to notebook --execute /home/jovyan/demos/news-article-nlp/news_article_nlp.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/1-news-article-nlp.ipynb"
+
+    - name: Run demos from Jupyter pod notebook - 1-training-and-evaluation.ipynb
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.TEST_SYSTEM_IP }}
+        username: ${{ secrets.TEST_SYSTEM_USERNAME }}
+        key: ${{ secrets.TEST_SYSTEM_MLRUN_PEM }}
+        script: |
+          jupyter_pod=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+          kubectl exec -n mlrun $jupyter_pod -- /bin/sh -c "jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb"
+
+    - name: Run demos from Jupyter pod notebook - 2-serving.ipynb
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.TEST_SYSTEM_IP }}
+        username: ${{ secrets.TEST_SYSTEM_USERNAME }}
+        key: ${{ secrets.TEST_SYSTEM_MLRUN_PEM }}
+        script: |
+          jupyter_pod=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+          kubectl exec -n mlrun $jupyter_pod -- /bin/sh -c "jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/2-serving.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/2-serving.ipynb"
+
+    - name: Run demos from Jupyter pod notebook - 3-automatic-pipeline.ipynb
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.TEST_SYSTEM_IP }}
+        username: ${{ secrets.TEST_SYSTEM_USERNAME }}
+        key: ${{ secrets.TEST_SYSTEM_MLRUN_PEM }}
+        script: |
+          jupyter_pod=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
+          kubectl exec -n mlrun $jupyter_pod -- /bin/sh -c "jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb"
+
+    - name: Deleting junk
+      run: |
+        sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.TEST_SYSTEM_USERNAME }}@${{ secrets.TEST_SYSTEM_IP }} <<EOF
+        rm -rf /home/ubuntu/ce
+        EOF
+        rm -rf mlrun.pem
