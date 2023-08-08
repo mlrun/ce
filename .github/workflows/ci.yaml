@@ -19,7 +19,7 @@ jobs:
         working-directory: ./charts/mlrun-ce
         run: ah lint
 
-  ci-runner:
+  demos-notebook-tests:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
