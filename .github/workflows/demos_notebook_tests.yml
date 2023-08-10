@@ -1,6 +1,7 @@
 name: demos_notebook_tests
 
 on:
+  workflow_dispatch:
   schedule:
     # * is a special character in YAML so you have to quote this string
     # Run every 8 hours (cron hours should divide 24 equally, otherwise there will be an overlap at the end of the day)
@@ -81,6 +82,7 @@ jobs:
         host: ${{ secrets.TEST_SYSTEM_IP }}
         username: ${{ secrets.TEST_SYSTEM_USERNAME }}
         key: ${{ secrets.TEST_SYSTEM_MLRUN_PEM }}
+        command_timeout: 20m
         script: |
           jupyter_pod=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
           kubectl exec -n mlrun $jupyter_pod -- /bin/sh -c "jupyter nbconvert --to notebook --execute /home/jovyan/demos/news-article-nlp/news_article_nlp.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/1-news-article-nlp.ipynb"
@@ -91,6 +93,7 @@ jobs:
         host: ${{ secrets.TEST_SYSTEM_IP }}
         username: ${{ secrets.TEST_SYSTEM_USERNAME }}
         key: ${{ secrets.TEST_SYSTEM_MLRUN_PEM }}
+        command_timeout: 20m
         script: |
           jupyter_pod=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
           kubectl exec -n mlrun $jupyter_pod -- /bin/sh -c "jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/1-training-and-evaluation.ipynb"
@@ -101,6 +104,7 @@ jobs:
         host: ${{ secrets.TEST_SYSTEM_IP }}
         username: ${{ secrets.TEST_SYSTEM_USERNAME }}
         key: ${{ secrets.TEST_SYSTEM_MLRUN_PEM }}
+        command_timeout: 20m
         script: |
           jupyter_pod=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
           kubectl exec -n mlrun $jupyter_pod -- /bin/sh -c "jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/2-serving.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/2-serving.ipynb"
@@ -111,11 +115,13 @@ jobs:
         host: ${{ secrets.TEST_SYSTEM_IP }}
         username: ${{ secrets.TEST_SYSTEM_USERNAME }}
         key: ${{ secrets.TEST_SYSTEM_MLRUN_PEM }}
+        command_timeout: 20m
         script: |
           jupyter_pod=$(kubectl -n mlrun get pods -o name | grep jupyter | head -n 1 | cut -d / -f 2)
           kubectl exec -n mlrun $jupyter_pod -- /bin/sh -c "jupyter nbconvert --to notebook --execute /home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb --ExecutePreprocessor.kernel_name=python3 --output=/home/jovyan/demos/mask-detection/3-automatic-pipeline.ipynb"
 
     - name: Deleting junk
+      if: ${{ always() }}
       run: |
         sshpass ssh -o StrictHostKeyChecking=no -i  mlrun.pem ${{ secrets.TEST_SYSTEM_USERNAME }}@${{ secrets.TEST_SYSTEM_IP }} <<EOF
         rm -rf /home/ubuntu/ce
