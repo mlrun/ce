@@ -220,7 +220,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT uid,model,function_uri,model_class,metrics->\"$.generic.predictions_per_second\",metrics->\"$.generic.latency_avg_1h\",first_request,last_request FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "rawSql": "SELECT uid,model,function_uri,model_class,metrics->\"$.generic.predictions_per_second\",metrics->\"$.generic.latency_avg_1h\",first_request,last_request FROM model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -428,7 +428,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT drift_measures->\"$.tvd_sum\" as \"TVD (sum)\", drift_measures->\"$.tvd_mean\" as \"TVD (mean)\", drift_measures->\"$.hellinger_sum\" as \"Hellinger (sum)\", drift_measures->\"$.hellinger_mean\" as \"Hellinger (mean)\", drift_measures->\"$.kld_sum\" as \"KLD (sum)\", drift_measures->\"$.kld_mean\" as \"KLD (mean)\"  FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "rawSql": "SELECT drift_measures->\"$.tvd_sum\" as \"TVD (sum)\", drift_measures->\"$.tvd_mean\" as \"TVD (mean)\", drift_measures->\"$.hellinger_sum\" as \"Hellinger (sum)\", drift_measures->\"$.hellinger_mean\" as \"Hellinger (mean)\", drift_measures->\"$.kld_sum\" as \"KLD (sum)\", drift_measures->\"$.kld_mean\" as \"KLD (mean)\"  FROM model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -605,7 +605,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT feature_stats FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "rawSql": "SELECT feature_stats FROM model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -637,7 +637,7 @@ data:
               "format": "table",
               "hide": false,
               "rawQuery": true,
-              "rawSql": "SELECT current_stats FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "rawSql": "SELECT current_stats FROM model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
               "refId": "B",
               "sql": {
                 "columns": [
@@ -663,7 +663,7 @@ data:
               "format": "table",
               "hide": false,
               "rawQuery": true,
-              "rawSql": "SELECT drift_measures FROM mlrun.model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
+              "rawSql": "SELECT drift_measures FROM model_endpoints where project='$PROJECT' and uid='$MODELENDPOINT'",
               "refId": "C",
               "sql": {
                 "columns": [
@@ -1027,14 +1027,14 @@ data:
           {
             "current": {},
             "datasource": "iguazio",
-            "definition": "SELECT DISTINCT project FROM mlrun.model_endpoints",
+            "definition": "SELECT DISTINCT project FROM = model_endpoints",
             "hide": 0,
             "includeAll": false,
             "label": "Project",
             "multi": false,
             "name": "PROJECT",
             "options": [],
-            "query": "SELECT DISTINCT project FROM mlrun.model_endpoints",
+            "query": "SELECT DISTINCT project FROM model_endpoints",
             "refresh": 1,
             "regex": "",
             "skipUrlSync": false,
@@ -1047,14 +1047,14 @@ data:
           {
             "current": {},
             "datasource": "iguazio",
-            "definition": "SELECT uid FROM mlrun.model_endpoints where project='$PROJECT';",
+            "definition": "SELECT uid FROM model_endpoints where project='$PROJECT';",
             "hide": 0,
             "includeAll": false,
             "label": "Model Endpoint",
             "multi": false,
             "name": "MODELENDPOINT",
             "options": [],
-            "query": "SELECT uid FROM mlrun.model_endpoints where project='$PROJECT';",
+            "query": "SELECT uid FROM model_endpoints where project='$PROJECT';",
             "refresh": 1,
             "regex": "",
             "skipUrlSync": false,

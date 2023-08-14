@@ -106,6 +106,9 @@ mlrun:
       - configMapRef:
           name: mlrun-override-env
           optional: true
+      - configMapRef:
+          name: mlrun-model-monitoring-db-config
+          optional: true
     extraPersistentVolumeMounts: ~
   ui:
     fullnameOverride: mlrun-ui
@@ -140,7 +143,9 @@ mlrun:
     dirPath: "/mlrun/db"
     dsn: mysql+pymysql://root@mlrun-db:3306/mlrun
     oldDsn: sqlite:////mlrun/db/mlrun.db?check_same_thread=false
-
+  modelMonitoring:
+    enabled: True
+    dsn:
   ce:
     mode: full
 
@@ -334,10 +339,10 @@ kube-prometheus-stack:
     additionalDataSources:
     - name: iguazio
       type: mysql
-      url:
-      user:
+      url: mlrun-db:3306
+      user: root
       password:
-      database:
+      database: monitoring
       editable: true
       maxOpenConns: 100
       maxIdleConns: 100

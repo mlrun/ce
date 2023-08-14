@@ -106,7 +106,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT COUNT(uid) FROM mlrun.model_endpoints where project='$PROJECT' and active=True",
+              "rawSql": "SELECT COUNT(uid) FROM model_endpoints where project='$PROJECT' and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -190,7 +190,7 @@ data:
               "format": "table",
               "hide": false,
               "rawQuery": true,
-              "rawSql": "SELECT avg(metrics->\"$.generic.predictions_per_second\") FROM mlrun.model_endpoints where project ='$PROJECT' and endpoint_type != \"2\" and active=True",
+              "rawSql": "SELECT avg(metrics->\"$.generic.predictions_per_second\") FROM model_endpoints where project ='$PROJECT' and endpoint_type != \"2\" and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -267,7 +267,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT avg(metrics->\"$.generic.latency_avg_1h\") FROM mlrun.model_endpoints where project ='$PROJECT' and endpoint_type != \"2\" and active=True",
+              "rawSql": "SELECT avg(metrics->\"$.generic.latency_avg_1h\") FROM model_endpoints where project ='$PROJECT' and endpoint_type != \"2\" and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -343,7 +343,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT sum(error_count) FROM mlrun.model_endpoints where project='$PROJECT' and active=True",
+              "rawSql": "SELECT sum(error_count) FROM model_endpoints where project='$PROJECT' and active=True",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -651,7 +651,7 @@ data:
               "editorMode": "code",
               "format": "table",
               "rawQuery": true,
-              "rawSql": "SELECT uid, function_uri, model, model_class, first_request, last_request, error_count, drift_status FROM mlrun.model_endpoints where project='$PROJECT'",
+              "rawSql": "SELECT uid, function_uri, model, model_class, first_request, last_request, error_count, drift_status FROM model_endpoints where project='$PROJECT'",
               "refId": "A",
               "sql": {
                 "columns": [
@@ -1024,14 +1024,14 @@ data:
           {
             "current": {},
             "datasource": "iguazio",
-            "definition": "SELECT DISTINCT project FROM mlrun.model_endpoints",
+            "definition": "SELECT DISTINCT project FROM model_endpoints",
             "hide": 0,
             "includeAll": false,
             "label": "Project",
             "multi": false,
             "name": "PROJECT",
             "options": [],
-            "query": "SELECT DISTINCT project FROM mlrun.model_endpoints",
+            "query": "SELECT DISTINCT project FROM model_endpoints",
             "refresh": 1,
             "regex": "",
             "skipUrlSync": false,
