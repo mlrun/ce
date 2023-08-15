@@ -210,3 +210,13 @@ Pipelines labels
 {{ include "mlrun-ce.pipelines.selectorLabels" . }}
 {{- end -}}
 
+{{/*
+Model monitoring DSN
+*/}}
+{{- define "mlrun-ce.mlrun.modelMonitoring.DSN" -}}
+{{- if .Values.mlrun.modelMonitoring.dsn -}}
+{{ .Values.mlrun.modelMonitoring.dsn }}
+{{- else -}}
+mysql+pymysql://root@mlrun-db:3306/monitoring
+{{- end -}}
+{{- end -}}

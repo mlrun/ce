@@ -4,9 +4,5 @@ kind: ConfigMap
 metadata:
   name: mlrun-model-monitoring-db-config
 data:
-{{- if .Values.mlrun.modelMonitoring.dsn}}
-  MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: {{ .Values.mlrun.modelMonitoring.dsn }}
-{{- else }}
-  MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: mysql+pymysql://root@mlrun-db:3306/monitoring
-{{- end }}
+  MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: {{ template "mlrun-ce.mlrun.modelMonitoring.DSN" }}
 {{- end -}}
