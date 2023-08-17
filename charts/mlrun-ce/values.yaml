@@ -144,7 +144,7 @@ mlrun:
     dsn: mysql+pymysql://root@mlrun-db:3306/mlrun
     oldDsn: sqlite:////mlrun/db/mlrun.db?check_same_thread=false
   modelMonitoring:
-    enabled: true
+    provisionDB: true
     dsn:
   ce:
     mode: full
@@ -342,7 +342,7 @@ kube-prometheus-stack:
       url: mlrun-db:3306
       user: root
       password:
-      database: monitoring
+      database: mlrun_monitoring
       editable: true
       maxOpenConns: 100
       maxIdleConns: 100

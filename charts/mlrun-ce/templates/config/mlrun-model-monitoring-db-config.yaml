@@ -1,8 +1,8 @@
-{{- if index .Values.mlrun.modelMonitoring.enabled -}}
+{{- if index .Values.mlrun.modelMonitoring.provisionDB -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: mlrun-model-monitoring-db-config
 data:
-  MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: {{ template "mlrun-ce.mlrun.modelMonitoring.DSN" }}
-{{- end -}}
+  MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: {{ template "mlrun-ce.mlrun.modelMonitoring.DSN" .}}
+{{- end }}
