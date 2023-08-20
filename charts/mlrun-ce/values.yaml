@@ -341,7 +341,7 @@ kube-prometheus-stack:
       url: mlrun-db:3306
       user: root
       password:
-      database: mlrun_monitoring
+      database: mlrun_model_monitoring
       editable: true
       maxOpenConns: 100
       maxIdleConns: 100
