@@ -141,6 +141,8 @@ mlrun:
     dsn: mysql+pymysql://root@mlrun-db:3306/mlrun
     oldDsn: sqlite:////mlrun/db/mlrun.db?check_same_thread=false
   modelMonitoring:
+    # If no dsn has been provided, will initiate monitoring database under mlrun-db service:
+    # mysql+pymysql://root@mlrun-db:3306/mlrun_model_monitoring
     dsn:
   ce:
     mode: full
