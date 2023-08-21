@@ -140,7 +140,10 @@ mlrun:
     dirPath: "/mlrun/db"
     dsn: mysql+pymysql://root@mlrun-db:3306/mlrun
     oldDsn: sqlite:////mlrun/db/mlrun.db?check_same_thread=false
-
+  modelMonitoring:
+    # If no dsn has been provided, will initiate monitoring database under mlrun-db service:
+    # mysql+pymysql://root@mlrun-db:3306/mlrun_model_monitoring
+    dsn:
   ce:
     mode: full
 
@@ -334,10 +337,10 @@ kube-prometheus-stack:
     additionalDataSources:
     - name: iguazio
       type: mysql
-      url:
-      user:
+      url: mlrun-db:3306
+      user: root
       password:
-      database:
+      database: mlrun_model_monitoring
       editable: true
       maxOpenConns: 100
       maxIdleConns: 100
