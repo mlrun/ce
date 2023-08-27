@@ -10,6 +10,10 @@ on:
 jobs:
   demos-notebook-tests:
     runs-on: ubuntu-latest
+
+    # let's not run this on every fork, change to your fork when developing
+    if: github.repository == 'mlrun/ce' || github.event_name == 'workflow_dispatch'
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
