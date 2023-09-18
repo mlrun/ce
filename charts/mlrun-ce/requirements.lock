@@ -4,7 +4,7 @@ dependencies:
   version: 0.17.13
 - name: mlrun
   repository: https://v3io.github.io/helm-charts/stable
-  version: 0.9.14
+  version: 0.9.16
 - name: mpi-operator
   repository: https://v3io.github.io/helm-charts/stable
   version: 0.6.0
@@ -17,5 +17,5 @@ dependencies:
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 41.7.2
-digest: sha256:1fa1eac5e7b04febcdf910e51481bcffd343209beb52154ca042da4992c113cc
-generated: "2023-07-25T16:40:53.872854786+03:00"
+digest: sha256:ef115a3d4eab8b4d568208ab979efd1cfbe8f854e232e0300c04a1c9b53ed79f
+generated: "2023-08-21T16:01:38.348435+03:00"
