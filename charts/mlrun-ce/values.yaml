@@ -1,6 +1,7 @@
 # We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
 global:
-
+  admin_install:
+    enabled: false
   # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
   externalHostAddress: localhost
   registry:
@@ -11,7 +12,6 @@ global:
       nodePort: 30050
 
 nuclio:
-
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
   fullnameOverride: nuclio
   controller:
@@ -57,6 +57,7 @@ nuclio:
 mlrun:
 
   # set the type of filesystem to use: filesystem, s3
+  enabled: true
   storage: filesystem
   secrets:
     s3:
@@ -117,11 +118,11 @@ mlrun:
   db:
     name: db
     fullnameOverride: mlrun-db
-    securityContext: 
+    securityContext:
       runAsUser: 999
     podSecurityContext:
       runAsUser: 999
-      fsGroup: 999    
+      fsGroup: 999
     volumes:
       storageOverride:
         persistentVolumeClaim:

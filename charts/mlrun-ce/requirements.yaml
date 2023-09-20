@@ -1,13 +1,15 @@
 dependencies:
   - name: nuclio
-    version: "0.17.13"
+    version: "0.18.3"
     repository: "https://nuclio.github.io/nuclio/charts"
   - name: mlrun
-    version: "0.9.16"
+    version: "0.9.14"
     repository: "https://v3io.github.io/helm-charts/stable"
+    condition: mlrun.enabled
   - name: mpi-operator
     version: "0.6.0"
     repository: "https://v3io.github.io/helm-charts/stable"
+    condition: mlrun.enabled
   - name: minio
     repository: "https://charts.min.io/"
     version: "4.0.2"
@@ -20,4 +22,3 @@ dependencies:
     repository: "https://prometheus-community.github.io/helm-charts"
     version: "41.7.2"
     condition: kube-prometheus-stack.enabled
-

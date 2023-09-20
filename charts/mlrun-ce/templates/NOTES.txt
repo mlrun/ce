@@ -1,8 +1,13 @@
+{{- if .Values.global.admin_install.enabled }}
+Admin Installation Completed!
+{{- end}}
+{{- if eq .Values.global.admin_install.enabled false}}
 You're up and running !
-
+{{- if .Values.jupyterNotebook.enabled }}
 1. Jupyter UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.jupyterNotebook.service.nodePort }}
-
+{{- end}}
+{{- if .Values.mlrun.enabled }}
 2. Nuclio UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.global.nuclio.dashboard.nodePort }}
 
@@ -11,7 +16,7 @@ You're up and running !
 
 4. MLRun API is exposed externally at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.api.service.nodePort }}
-
+{{- end}}
 {{- if .Values.minio.enabled }}
 
 5. Minio API is exposed externally at:
@@ -44,3 +49,4 @@ You're up and running !
 
 
 Happy MLOPSing !!! :]
+{{- end}}
