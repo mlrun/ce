@@ -118,7 +118,7 @@ Create chart name and version as used by the chart label.
 Minio Service URL
 */}}
 {{- define "mlrun-ce.minio.service.url" -}}
-http://minio.mlrun.svc.cluster.local:{{ .Values.minio.service.port }}
+http://minio.{{.Release.Namespace}}.svc.cluster.local:{{ .Values.minio.service.port }}
 {{- end -}}
 
 
