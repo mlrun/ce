@@ -1,7 +1,7 @@
-{{- if .Values.global.admin_install.enabled }}
+{{- if and (eq .Values.jupyterNotebook.enabled false) (eq .Values.mlrun.enabled false) (eq .Values.minio.enabled false) (eq .Values.pipelines.enabled false) (eq .Values "kube-prometheus-stack" "enabled")}}
 Admin Installation Completed!
 {{- end}}
-{{- if eq .Values.global.admin_install.enabled false}}
+{{- if or .Values.jupyterNotebook.enabled .Values.mlrun.enabled .Values.minio.enabled .Values.pipelines.enabled (eq .Values "kube-prometheus-stack" "enabled")}}
 You're up and running !
 {{- if .Values.jupyterNotebook.enabled }}
 1. Jupyter UI is available at:

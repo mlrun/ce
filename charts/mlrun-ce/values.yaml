@@ -1,7 +1,5 @@
 # We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
 global:
-  admin_install:
-    enabled: false
   # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
   externalHostAddress: localhost
   registry:
