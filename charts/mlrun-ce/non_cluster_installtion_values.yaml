@@ -35,7 +35,7 @@ nuclio:
     # do not allow nuclio to listen on all namespaces
     crdAccessMode: namespaced
   crd:
-    create: true
+    create: false
   platform:
     logger:
       sinks:
@@ -246,7 +246,7 @@ minio:
       purge: false
 
 spark-operator:
-  enabled: true
+  enabled: false
   fullnameOverride: spark-operator
   webhook:
      enable: true
@@ -259,9 +259,9 @@ pipelines:
   name: pipelines
   scope: "namespaced"
   crd:
-    enabled: true
+    enabled: false
   priority_class:
-    enabled: true
+    enabled: false
   persistence:
     enabled: true
     existingClaim:
@@ -329,7 +329,7 @@ pipelines:
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
-  enabled: true
+  enabled: false
   alertmanager:
     enabled: false
   grafana:

@@ -3,7 +3,7 @@ global:
   # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
   externalHostAddress: localhost
   registry:
-    url: mustprovide
+    url: false
     secretName:
   nuclio:
     dashboard:
@@ -30,7 +30,7 @@ nuclio:
   dlx:
     enabled: false
   rbac:
-    create: true
+    create: false
 
     # do not allow nuclio to listen on all namespaces
     crdAccessMode: namespaced
@@ -55,7 +55,7 @@ nuclio:
 mlrun:
 
   # set the type of filesystem to use: filesystem, s3
-  enabled: true
+  enabled: false
   storage: filesystem
   secrets:
     s3:
@@ -150,7 +150,7 @@ jupyterNotebook:
   awsInstall: false
   fullnameOverride: mlrun-jupyter
   name: jupyter-notebook
-  enabled: true
+  enabled: false
   service:
     type: NodePort
     nodePort: 30040
@@ -192,7 +192,7 @@ jupyterNotebook:
     - configMapRef:
         name: jupyter-common-env
   persistence:
-    enabled: true
+    enabled: false
     existingClaim:
     storageClass:
     accessMode: "ReadWriteOnce"
@@ -210,17 +210,17 @@ jupyterNotebook:
 mpi-operator:
   fullnameOverride: mpi-operator
   crd:
-    create: true
+    create: false
   rbac:
     clusterResources:
-      create: true
+      create: false
     namespaced:
-      create: true
+      create: false
   deployment:
-    create: true
+    create: false
 
 minio:
-  enabled: true
+  enabled: false
   rootUser: minio
   rootPassword: minio123
   mode: distributed
@@ -246,7 +246,7 @@ minio:
       purge: false
 
 spark-operator:
-  enabled: true
+  enabled: false
   fullnameOverride: spark-operator
   webhook:
      enable: true
@@ -255,9 +255,9 @@ spark-operator:
       name: "sparkapp"
 
 pipelines:
-  enabled: true
+  enabled: false
   name: pipelines
-  scope: "namespaced"
+  scope: "cluster"
   crd:
     enabled: true
   priority_class:
@@ -279,7 +279,7 @@ pipelines:
   db:
     username: root
   minio:
-    enabled: true
+    enabled: false
     accessKey: "minio"
     secretKey: "minio123"
     endpoint: "minio.mlrun.svc.cluster.local"
@@ -329,7 +329,7 @@ pipelines:
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
-  enabled: true
+  enabled: false
   alertmanager:
     enabled: false
   grafana:
@@ -358,12 +358,12 @@ kube-prometheus-stack:
     enabled: true
     service:
       type: NodePort
-      nodePort: 30010
+      nodePort: 30110
   prometheus:
     enabled: true
     service:
       type: NodePort
-      nodePort: 30020
+      nodePort: 30120
     prometheusSpec:
       storageSpec:
         volumeClaimTemplate:
