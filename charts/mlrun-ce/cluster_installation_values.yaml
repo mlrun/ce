@@ -13,11 +13,11 @@ nuclio:
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
   fullnameOverride: nuclio
   controller:
-    enabled: true
+    enabled: false
     image:
       tag: 1.11.23-amd64
   dashboard:
-    enabled: true
+    enabled: false
 
     # nodePort - taken from global.nuclio.dashboard.nodePort for re-usability
     image:
@@ -210,10 +210,10 @@ jupyterNotebook:
 mpi-operator:
   fullnameOverride: mpi-operator
   crd:
-    create: false
+    create: true
   rbac:
     clusterResources:
-      create: false
+      create: true
     namespaced:
       create: false
   deployment:
