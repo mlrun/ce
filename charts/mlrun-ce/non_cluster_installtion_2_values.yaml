@@ -257,7 +257,6 @@ spark-operator:
 pipelines:
   enabled: true
   name: pipelines
-  scope: "namespaced"
   service:
     nodePort: 30200
   crd:

@@ -243,7 +243,6 @@ spark-operator:
 pipelines:
   enabled: false
   name: pipelines
-  scope: "cluster"
   service:
     nodePort: 30100
   crd:
