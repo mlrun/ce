@@ -1,7 +1,7 @@
 {{- if .Values.pipelines.enabled -}}
 apiVersion: v1
 data:
-  minioServiceHost: {{ include "mlrun-ce.minio.service.url" . }}
+  minioServiceHost: {{ include "mlrun-ce.minio-pipeline.service.url" . }}
   minioServicePort: "{{ .Values.pipelines.minio.endpointPort }}"
   ConMaxLifeTime: 120s
   appName: pipeline

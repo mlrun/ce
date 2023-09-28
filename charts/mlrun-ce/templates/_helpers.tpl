@@ -121,7 +121,9 @@ Minio Service URL
 {{- define "mlrun-ce.minio.service.url" -}}
 http://minio.{{.Release.Namespace}}.svc.cluster.local:{{ .Values.minio.service.port }}
 {{- end -}}
-
+{{- define "mlrun-ce.minio-pipeline.service.url" -}}
+http://minio.{{.Release.Namespace}}.svc.cluster.local
+{{- end -}}
 
 {{/*
 Mlrun DB labels
