@@ -3,21 +3,21 @@ global:
   # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
   externalHostAddress: localhost
   registry:
-    url: false
+    url: mustprovide
     secretName:
   nuclio:
     dashboard:
-      nodePort: 30050
+      nodePort: 30150
 
 nuclio:
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
   fullnameOverride: nuclio
   controller:
-    enabled: false
+    enabled: true
     image:
       tag: 1.11.23-amd64
   dashboard:
-    enabled: false
+    enabled: true
 
     # nodePort - taken from global.nuclio.dashboard.nodePort for re-usability
     image:
@@ -30,12 +30,12 @@ nuclio:
   dlx:
     enabled: false
   rbac:
-    create: false
+    create: true
 
     # do not allow nuclio to listen on all namespaces
     crdAccessMode: namespaced
   crd:
-    create: true
+    create: false
   platform:
     logger:
       sinks:
@@ -55,7 +55,7 @@ nuclio:
 mlrun:
 
   # set the type of filesystem to use: filesystem, s3
-  enabled: false
+  enabled: true
   storage: filesystem
   secrets:
     s3:
@@ -80,7 +80,7 @@ mlrun:
       tag: 1.4.0
     service:
       type: NodePort
-      nodePort: 30070
+      nodePort: 30170
     volumes:
       storageOverride:
         persistentVolumeClaim:
@@ -110,7 +110,7 @@ mlrun:
     fullnameOverride: mlrun-ui
     service:
       type: NodePort
-      nodePort: 30060
+      nodePort: 30160
     image:
       tag: 1.4.0
   db:
@@ -150,10 +150,10 @@ jupyterNotebook:
   awsInstall: false
   fullnameOverride: mlrun-jupyter
   name: jupyter-notebook
-  enabled: false
+  enabled: true
   service:
     type: NodePort
-    nodePort: 30040
+    nodePort: 30140
     port: 8888
   ingress:
     enabled: false
@@ -192,7 +192,7 @@ jupyterNotebook:
     - configMapRef:
         name: jupyter-common-env
   persistence:
-    enabled: false
+    enabled: true
     existingClaim:
     storageClass:
     accessMode: "ReadWriteOnce"
@@ -210,17 +210,17 @@ jupyterNotebook:
 mpi-operator:
   fullnameOverride: mpi-operator
   crd:
-    create: true
+    create: false
   rbac:
     clusterResources:
-      create: true
-    namespaced:
       create: false
+    namespaced:
+      create: true
   deployment:
-    create: false
+    create: true
 
 minio:
-  enabled: false
+  enabled: true
   rootUser: minio
   rootPassword: minio123
   mode: distributed
@@ -231,11 +231,11 @@ minio:
   service:
     type: NodePort
     port: 9000
-    nodePort: 30080
+    nodePort: 30180
   consoleService:
     type: NodePort
     port: 9001
-    nodePort: 30090
+    nodePort: 30190
   persistence:
     enabled: true
     size: 1Gi
@@ -255,15 +255,15 @@ spark-operator:
       name: "sparkapp"
 
 pipelines:
-  enabled: false
+  enabled: true
   name: pipelines
-  scope: "cluster"
+  scope: "namespaced"
   service:
-    nodePort: 30100
+    nodePort: 30200
   crd:
-    enabled: true
+    enabled: false
   priority_class:
-    enabled: true
+    enabled: false
   persistence:
     enabled: true
     existingClaim:
@@ -281,7 +281,7 @@ pipelines:
   db:
     username: root
   minio:
-    enabled: false
+    enabled: true
     accessKey: "minio"
     secretKey: "minio123"
     endpoint: "minio.mlrun.svc.cluster.local"

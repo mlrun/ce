@@ -258,6 +258,8 @@ pipelines:
   enabled: true
   name: pipelines
   scope: "namespaced"
+  service:
+    nodePort: 30100
   crd:
     enabled: false
   priority_class:
