@@ -4,5 +4,5 @@ kind: ConfigMap
 metadata:
   name: mlrun-pipelines-config
 data:
-  MLRUN_KFP_URL: http://ml-pipeline.mlrun.svc.cluster.local:8888
+  MLRUN_KFP_URL: http://ml-pipeline.{{.Release.Namespace}}.svc.cluster.local:8888
 {{- end -}}
