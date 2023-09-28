@@ -36,21 +36,7 @@ nuclio:
     crdAccessMode: namespaced
   crd:
     create: true
-  platform:
-    logger:
-      sinks:
-        myStdoutLoggerSink:
-          kind: stdout
-          attributes:
-            encoding: console
-            timeFieldName: time
-            timeFieldEncoding: iso8601
-      system:
-      - level: debug
-        sink: myStdoutLoggerSink
-      functions:
-      - level: debug
-        sink: myStdoutLoggerSink
+  platform: {}
 
 mlrun:
 
