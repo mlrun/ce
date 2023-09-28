@@ -284,7 +284,6 @@ pipelines:
     enabled: true
     accessKey: "minio"
     secretKey: "minio123"
-    endpoint: "minio.mlrun.svc.cluster.local"
     endpointPort: "9000"
     bucket: "mlrun"
   images:
