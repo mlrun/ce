@@ -122,7 +122,7 @@ Minio Service URL
 http://minio.{{.Release.Namespace}}.svc.cluster.local:{{ .Values.minio.service.port }}
 {{- end -}}
 {{- define "mlrun-ce.minio-pipeline.service.url" -}}
-http://minio.{{.Release.Namespace}}.svc.cluster.local
+minio.{{.Release.Namespace}}.svc.cluster.local
 {{- end -}}
 
 {{/*
