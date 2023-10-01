@@ -35,12 +35,11 @@ You're up and running !
 {{- end }}
 
 {{- if index .Values "kube-prometheus-stack" "enabled" }}
-
 8. Grafana UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:30110
+  http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort"}}
 
 9. Prometheus UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:30120
+  http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "prometheus" "service" "nodePort"}}
   
 {{- end }}
 
