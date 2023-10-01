@@ -31,7 +31,7 @@ You're up and running !
 {{- if .Values.pipelines.enabled }}
 
 7. Pipelines UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:30100
+  http://{{ .Values.global.externalHostAddress }}:{{ .Values.pipelines.service.nodePort }}
 {{- end }}
 
 {{- if index .Values "kube-prometheus-stack" "enabled" }}
