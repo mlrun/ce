@@ -4,7 +4,7 @@ data:
   artifactRepository: |
     archiveLogs: true
     s3:
-      endpoint: "{{ .Values.pipelines.minio.endpoint }}:{{ .Values.pipelines.minio.endpointPort }}"
+      endpoint: "{{ include "mlrun-ce.minio-pipeline.service.url" . }}:{{ .Values.pipelines.minio.endpointPort }}"
       bucket: "{{ .Values.pipelines.minio.bucket }}"
       insecure: true
       accessKeySecret:
