@@ -1,0 +1,407 @@
+# We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
+global:
+  # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
+  externalHostAddress: localhost
+  registry:
+    url: mustprovide
+    secretName:
+  nuclio:
+    dashboard:
+      nodePort: ""
+
+nuclio:
+  # coupled with mlrun.nuclio.dashboardName template in mlrun chart
+  fullnameOverride: nuclio
+  controller:
+    enabled: true
+    image:
+      tag: 1.11.23-amd64
+  dashboard:
+    enabled: true
+
+    # nodePort - taken from global.nuclio.dashboard.nodePort for re-usability
+    image:
+      tag: 1.11.23-amd64
+
+    # k8s has deprecated docker support since v1.20
+    containerBuilderKind: kaniko
+  autoscaler:
+    enabled: false
+  dlx:
+    enabled: false
+  rbac:
+    create: true
+
+    # do not allow nuclio to listen on all namespaces
+    crdAccessMode: namespaced
+  crd:
+    create: false
+  platform:
+    logger:
+      sinks:
+        myStdoutLoggerSink:
+          kind: stdout
+          attributes:
+            encoding: console
+            timeFieldName: time
+            timeFieldEncoding: iso8601
+      system:
+      - level: debug
+        sink: myStdoutLoggerSink
+      functions:
+      - level: debug
+        sink: myStdoutLoggerSink
+
+mlrun:
+
+  # set the type of filesystem to use: filesystem, s3
+  enabled: true
+  storage: filesystem
+  secrets:
+    s3:
+      accessKey: ""
+      secretKey: ""
+  s3:
+    region: us-east-1
+    regionEndpoint: s3.us-east-1.amazonaws.com
+    bucket: mlrun
+    encrypt: false
+    secure: true
+  fullnameOverride: mlrun
+  nuclio:
+    mode: enabled
+  rbac:
+    create: true
+  v3io:
+    enabled: false
+  api:
+    fullnameOverride: mlrun-api
+    image:
+      tag: 1.4.0
+    service:
+      type: ClusterIP
+      nodePort: ""
+    volumes:
+      storageOverride:
+        persistentVolumeClaim:
+          claimName: mlrun-api-pvc
+    persistence:
+      enabled: true
+      existingClaim:
+      storageClass:
+      accessMode: "ReadWriteOnce"
+      size: "8Gi"
+      annotations:
+        helm.sh/resource-policy: "keep"
+    envFrom:
+      - configMapRef:
+          name: mlrun-common-env
+      - configMapRef:
+          name: mlrun-pipelines-config
+          optional: true
+      - configMapRef:
+          name: mlrun-spark-config
+          optional: true
+      - configMapRef:
+          name: mlrun-override-env
+          optional: true
+    extraPersistentVolumeMounts: ~
+  ui:
+    fullnameOverride: mlrun-ui
+    service:
+      type: ClusterIP
+      nodePort: ""
+    image:
+      tag: 1.4.0
+  db:
+    name: db
+    fullnameOverride: mlrun-db
+    securityContext:
+      runAsUser: 999
+    podSecurityContext:
+      runAsUser: 999
+      fsGroup: 999
+    volumes:
+      storageOverride:
+        persistentVolumeClaim:
+          claimName: mlrun-db-pvc
+    persistence:
+      enabled: true
+      existingClaim:
+      storageClass:
+      accessMode: "ReadWriteOnce"
+      size: "8Gi"
+      annotations:
+        helm.sh/resource-policy: "keep"
+
+  httpDB:
+    dbType: mysql
+    dirPath: "/mlrun/db"
+    dsn: mysql+pymysql://root@mlrun-db:3306/mlrun
+    oldDsn: sqlite:////mlrun/db/mlrun.db?check_same_thread=false
+  modelMonitoring:
+    # If no dsn has been provided, will initiate monitoring database under mlrun-db service:
+    # mysql+pymysql://root@mlrun-db:3306/mlrun_model_monitoring
+    dsn:
+  ce:
+    mode: full
+
+jupyterNotebook:
+  awsInstall: false
+  fullnameOverride: mlrun-jupyter
+  name: jupyter-notebook
+  enabled: true
+  service:
+    type: ClusterIP
+    nodePort: ""
+    port: 8888
+  ingress:
+    enabled: false
+    annotations: { }
+
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    hosts:
+      - host: chart-example.local
+        paths: [ ]
+    tls: [ ]
+
+    #  - secretName: chart-example-tls
+    #    hosts:
+    #      - chart-example.local
+  image:
+    repository: quay.io/mlrun/jupyter
+    tag: 1.4.0
+    pullPolicy: IfNotPresent
+
+  # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
+  # mlrun UI's node port
+  mlrunUIURL:
+  extraEnv:
+    - name: MLRUN_ARTIFACT_PATH
+      value: s3://mlrun/projects/{{run.project}}/artifacts
+    - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT
+      value: s3://mlrun/projects/{project}/FeatureStore/{name}/{kind}
+    - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL
+      value: ""
+    - name: MLRUN_FEATURE_STORE__DEFAULT_TARGETS
+      value: "parquet"
+
+  extraEnvKeyValue: {}
+  envFrom:
+    - configMapRef:
+        name: jupyter-common-env
+  persistence:
+    enabled: true
+    existingClaim:
+    storageClass:
+    accessMode: "ReadWriteOnce"
+    size: "8Gi"
+    annotations:
+      helm.sh/resource-policy: "keep"
+
+  nodeSelector: {}
+    # node-role.kubernetes.io/node: "true"
+    # tier: cs
+  tolerations: []
+    #  - key: "node-role.kubernetes.io/master"
+    #    effect: NoSchedule
+
+mpi-operator:
+  fullnameOverride: mpi-operator
+  crd:
+    create: false
+  rbac:
+    clusterResources:
+      create: false
+    namespaced:
+      create: true
+  deployment:
+    create: true
+
+minio:
+  enabled: true
+  rootUser: minio
+  rootPassword: minio123
+  mode: distributed
+  replicas: 4
+  resources:
+    requests:
+      memory: 0.5Gi
+  service:
+    type: ClusterIP
+    port: 9000
+    nodePort: ""
+  consoleService:
+    type: ClusterIP
+    port: 9001
+    nodePort: ""
+  persistence:
+    enabled: true
+    size: 1Gi
+  fullnameOverride: minio
+  buckets:
+    - name: mlrun
+      policy: none
+      purge: false
+
+spark-operator:
+  enabled: false
+  fullnameOverride: spark-operator
+  webhook:
+     enable: true
+  serviceAccounts:
+    spark:
+      name: "sparkapp"
+
+pipelines:
+  enabled: true
+  name: pipelines
+  service:
+    type : ClusterIP
+    nodePort: ""
+  crd:
+    enabled: false
+  priority_class:
+    enabled: false
+  persistence:
+    enabled: true
+    existingClaim:
+    storageClass:
+    accessMode: "ReadWriteOnce"
+    size: "20Gi"
+    annotations:
+      helm.sh/resource-policy: "keep"
+  nodeSelector: {}
+    # node-role.kubernetes.io/node: "true"
+    # tier: cs
+  tolerations: []
+    #  - key: "node-role.kubernetes.io/master"
+    #    effect: NoSchedule
+  db:
+    username: root
+  minio:
+    enabled: true
+    accessKey: "minio"
+    secretKey: "minio123"
+    endpointPort: "9000"
+    bucket: "mlrun"
+  images:
+    argoexec:
+      repository: gcr.io/ml-pipeline/argoexec
+      tag: v3.3.8-license-compliance
+    workflowController:
+      repository: gcr.io/ml-pipeline/workflow-controller
+      tag: v3.3.8-license-compliance
+    apiServer:
+      repository: gcr.io/ml-pipeline/api-server
+      tag: 1.8.3
+    persistenceagent:
+      repository: gcr.io/ml-pipeline/persistenceagent
+      tag: 1.8.3
+    scheduledworkflow:
+      repository: gcr.io/ml-pipeline/scheduledworkflow
+      tag: 1.8.3
+    ui:
+      repository: gcr.io/ml-pipeline/frontend
+      tag: 1.8.3
+    viewerCrdController:
+      repository: gcr.io/ml-pipeline/viewer-crd-controller
+      tag: 1.8.3
+    visualizationServer:
+      repository: gcr.io/ml-pipeline/visualization-server
+      tag: 1.8.3
+    metadata:
+      container:
+        repository: gcr.io/tfx-oss-public/ml_metadata_store_server
+        tag: 1.5.0
+    metadataEnvoy:
+      repository: gcr.io/ml-pipeline/metadata-envoy
+      tag: 1.8.3
+    metadataWriter:
+      repository: gcr.io/ml-pipeline/metadata-writer
+      tag: 1.8.3
+    mysql:
+      repository: mysql
+      tag: 5.7
+    cacheImage:
+      repository: gcr.io/google-containers/busybox
+      tag: latest
+
+kube-prometheus-stack:
+  fullnameOverride: monitoring
+  enabled: false
+  alertmanager:
+    enabled: false
+  grafana:
+    adminUser: admin
+    adminPassword: admin
+    additionalDataSources:
+    - name: iguazio
+      type: mysql
+      url: mlrun-db:3306
+      user: root
+      password:
+      database: mlrun_model_monitoring
+      editable: true
+      maxOpenConns: 100
+      maxIdleConns: 100
+      maxIdleConnsAuto: true
+    persistence:
+      type: pvc
+      enabled: true
+      size: 10Gi
+    grafana.ini:
+      auth.anonymous:
+        enabled: true
+        org_role: Editor
+    fullnameOverride: grafana
+    enabled: true
+    service:
+      type: ClusterIP
+      nodePort: ""
+  prometheus:
+    enabled: true
+    service:
+      type: ClusterIP
+      nodePort: ""
+    prometheusSpec:
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: local-path
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+      additionalScrapeConfigs:
+        - job_name: model-monitoring-job
+          metrics_path: /model-monitoring-metrics
+          scheme: http
+          tls_config:
+            insecure_skip_verify: true
+          scrape_interval: 30s
+          scrape_timeout: 10s
+          relabel_configs:
+            - source_labels: [ __meta_kubernetes_namespace ]
+              separator: ;
+              regex: (.*)
+              target_label: namespace
+              replacement: $1
+              action: replace
+          kubernetes_sd_configs:
+            - role: pod
+              kubeconfig_file: ""
+              follow_redirects: true
+              enable_http2: true
+              namespaces:
+                own_namespace: false
+                names:
+                  - mlrun
+              selectors:
+                - role: "pod"
+                  label: "type=model-monitoring-stream"
+  kube-state-metrics:
+    fullnameOverride: state-metrics
+  prometheus-node-exporter:
+    fullnameOverride: node-exporter
