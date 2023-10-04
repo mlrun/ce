@@ -4,10 +4,11 @@ You're up and running !
 1. Jupyter UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.jupyterNotebook.service.nodePort }}
 {{- end}}
-{{- if .Values.mlrun.enabled }}
+{{- if .Values.nuclio.dashboard.enabled }}
 2. Nuclio UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.global.nuclio.dashboard.nodePort }}
-
+{{- end}}
+{{- if .Values.mlrun.enabled }}
 3. MLRun UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.ui.service.nodePort }}
 

@@ -1,3 +1,6 @@
+#Use this Values file for installing MLRun CE resources such as: deploymentsn, non cluster resources (.e.g. crd, cluter role) and installing service as NodePorts.
+#remember to use a different namespace that used for the cluster resource installation. (support MLRun. mpi, nuclio and kfp pipeline installation)
+
 # We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
 global:
   # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
@@ -7,7 +10,7 @@ global:
     secretName:
   nuclio:
     dashboard:
-      nodePort: ""
+      nodePort: 30050
 
 nuclio:
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
@@ -79,8 +82,8 @@ mlrun:
     image:
       tag: 1.4.0
     service:
-      type: ClusterIP
-      nodePort: ""
+      type: NodePort
+      nodePort: 30070
     volumes:
       storageOverride:
         persistentVolumeClaim:
@@ -109,8 +112,8 @@ mlrun:
   ui:
     fullnameOverride: mlrun-ui
     service:
-      type: ClusterIP
-      nodePort: ""
+      type: NodePort
+      nodePort: 30060
     image:
       tag: 1.4.0
   db:
@@ -152,8 +155,8 @@ jupyterNotebook:
   name: jupyter-notebook
   enabled: true
   service:
-    type: ClusterIP
-    nodePort: ""
+    type: NodePort
+    nodePort: 30040
     port: 8888
   ingress:
     enabled: false
@@ -229,13 +232,13 @@ minio:
     requests:
       memory: 0.5Gi
   service:
-    type: ClusterIP
+    type: NodePort
     port: 9000
-    nodePort: ""
+    nodePort: 30080
   consoleService:
-    type: ClusterIP
+    type: NodePort
     port: 9001
-    nodePort: ""
+    nodePort: 30090
   persistence:
     enabled: true
     size: 1Gi
@@ -258,8 +261,7 @@ pipelines:
   enabled: true
   name: pipelines
   service:
-    type : ClusterIP
-    nodePort: ""
+    nodePort: 30100
   crd:
     enabled: false
   priority_class:
@@ -358,13 +360,13 @@ kube-prometheus-stack:
     fullnameOverride: grafana
     enabled: true
     service:
-      type: ClusterIP
-      nodePort: ""
+      type: NodePort
+      nodePort: 30010
   prometheus:
     enabled: true
     service:
-      type: ClusterIP
-      nodePort: ""
+      type: NodePort
+      nodePort: 30020
     prometheusSpec:
       storageSpec:
         volumeClaimTemplate:
