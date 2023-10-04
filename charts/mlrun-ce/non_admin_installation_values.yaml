@@ -1,5 +1,5 @@
-#Use this Values file for installing MLRun CE resources such as: deploymentsn, non cluster resources (.e.g. crd, cluter role) and installing service as NodePorts.
-#remember to use a different namespace that used for the cluster resource installation. (support MLRun. mpi, nuclio and kfp pipeline installation)
+# Use this Values file for installing MLRun CE resources such as: deploymentsn, non cluster resources (.e.g. crd, cluter role) and installing service as NodePorts.
+# remember to use a different namespace that used for the cluster resource installation. (support MLRun. mpi, nuclio and kfp pipeline installation)
 
 # We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
 global:
