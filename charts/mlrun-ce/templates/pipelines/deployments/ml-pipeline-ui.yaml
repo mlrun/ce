@@ -90,10 +90,6 @@ spec:
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 2
-        resources:
-          requests:
-            cpu: 10m
-            memory: 70Mi
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
