@@ -19,11 +19,11 @@ mlrun:
   ui:
     service:
       type: NodePort
-      nodePort: ""
+      nodePort: 30060
 jupyterNotebook:
   service:
     type: NodePort
-    nodePort: 30060
+    nodePort: 30040
     port: 8888
 
 mpi-operator:
