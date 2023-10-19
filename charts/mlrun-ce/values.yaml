@@ -405,7 +405,7 @@ kube-prometheus-stack:
   prometheus-node-exporter:
     fullnameOverride: node-exporter
 
-sql:
+mysql:
   enabled: false
   auth:
     rootPassword: sql123

@@ -46,7 +46,7 @@ You're up and running !
 
 {{- if .Values.sql.enabled}}
 10. SQL service is available at:
-    mysql+pymysql://root:{{.Release.Namespace}}@{{.Release.Name}}-mysql.{{.Release.Namespace}}.svc.cluster.local:{{.Values.sql.primary.service.ports}}/{{.Values.sql.auth.database}}
+    mysql+pymysql://root:{{.Release.Namespace}}@{{.Release.Name}}-mysql.{{.Release.Namespace}}.svc.cluster.local:{{.Values.mysql.primary.service.ports}}/{{.Values.mysql.auth.database}}
 {{- end}}
 
 Happy MLOPSing !!! :]
