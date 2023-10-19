@@ -23,5 +23,5 @@ dependencies:
     condition: kube-prometheus-stack.enabled
   - name: sql
     version: "9.12.3"
-    repository: "https://charts.bitnami.com/bitnami"
+    repository: "https://charts.bitnami.com/bitnami/mysql"
     condition: sql.enabled

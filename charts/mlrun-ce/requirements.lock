@@ -19,7 +19,7 @@ dependencies:
   version: 41.7.2
 - name: sql
   version: "9.12.3"
-  repository: "https://charts.bitnami.com/bitnami"
+  repository: "https://charts.bitnami.com/bitnami/mysql"
   condition: sql.enabled
 digest: sha256:1fe93cb969f5c1e6676a58feb4c8b18210158a12cfe6fc8a6acf58ad1b2c4327
 generated: "2023-10-04T11:56:24.400537+03:00"
