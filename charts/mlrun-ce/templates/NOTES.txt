@@ -8,7 +8,7 @@ You're up and running !
 2. Nuclio UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.global.nuclio.dashboard.nodePort }}
 {{- end}}
-{{- if .Values.mlrun.enabled }}
+{{- if and .Values.mlrun.enabled .Values.mlrun.ui.service}}
 3. MLRun UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.ui.service.nodePort }}
 
@@ -44,6 +44,10 @@ You're up and running !
   
 {{- end }}
 
+{{- if .Values.sql.enabled}}
+10. SQL service is available at:
+    mysql+pymysql://root:{{.Release.Namespace}}@{{.Release.Name}}-mysql.{{.Release.Namespace}}.svc.cluster.local:{{.Values.sql.primary.service.ports}}/{{.Values.sql.auth.database}}
+{{- end}}
 
 Happy MLOPSing !!! :]
 {{- end}}
