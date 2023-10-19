@@ -232,7 +232,7 @@ minio:
     type: NodePort
     port: 9000
     nodePort: 30080
-  consoleService:
+  consoleSxervice:
     type: NodePort
     port: 9001
     nodePort: 30090
@@ -406,9 +406,9 @@ kube-prometheus-stack:
     fullnameOverride: node-exporter
 
 mysql:
-  enabled: false
+  enabled: true
   auth:
-    rootPassword: sql123
+    rootPassword: sql1234
     database: mlrun_sql
   primary:
     service:
