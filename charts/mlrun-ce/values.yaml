@@ -1,6 +1,5 @@
 # We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
 global:
-
   # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
   externalHostAddress: localhost
   registry:
@@ -11,7 +10,6 @@ global:
       nodePort: 30050
 
 nuclio:
-
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
   fullnameOverride: nuclio
   controller:
@@ -57,6 +55,7 @@ nuclio:
 mlrun:
 
   # set the type of filesystem to use: filesystem, s3
+  enabled: true
   storage: filesystem
   secrets:
     s3:
@@ -117,11 +116,11 @@ mlrun:
   db:
     name: db
     fullnameOverride: mlrun-db
-    securityContext: 
+    securityContext:
       runAsUser: 999
     podSecurityContext:
       runAsUser: 999
-      fsGroup: 999    
+      fsGroup: 999
     volumes:
       storageOverride:
         persistentVolumeClaim:
@@ -178,7 +177,6 @@ jupyterNotebook:
   # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
   # mlrun UI's node port
   mlrunUIURL:
-
   extraEnv:
     - name: MLRUN_ARTIFACT_PATH
       value: s3://mlrun/projects/{{run.project}}/artifacts
@@ -188,13 +186,11 @@ jupyterNotebook:
       value: ""
     - name: MLRUN_FEATURE_STORE__DEFAULT_TARGETS
       value: "parquet"
-    - name: S3_ENDPOINT_URL
-      value: http://minio.mlrun.svc.cluster.local:9000
-    - name: AWS_SECRET_ACCESS_KEY
-      value: minio123
-    - name: AWS_ACCESS_KEY_ID
-      value: minio
 
+  extraEnvKeyValue: {}
+  envFrom:
+    - configMapRef:
+        name: jupyter-common-env
   persistence:
     enabled: true
     existingClaim:
@@ -261,6 +257,12 @@ spark-operator:
 pipelines:
   enabled: true
   name: pipelines
+  service:
+    nodePort: 30100
+  crd:
+    enabled: true
+  priority_class:
+    enabled: true
   persistence:
     enabled: true
     existingClaim:
@@ -281,7 +283,6 @@ pipelines:
     enabled: true
     accessKey: "minio"
     secretKey: "minio123"
-    endpoint: "minio.mlrun.svc.cluster.local"
     endpointPort: "9000"
     bucket: "mlrun"
   images:
@@ -357,12 +358,12 @@ kube-prometheus-stack:
     enabled: true
     service:
       type: NodePort
-      nodePort: 30110
+      nodePort: 30010
   prometheus:
     enabled: true
     service:
       type: NodePort
-      nodePort: 30120
+      nodePort: 30020
     prometheusSpec:
       storageSpec:
         volumeClaimTemplate:

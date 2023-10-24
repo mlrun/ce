@@ -1,3 +1,4 @@
+{{ if .Values.mlrun.enabled}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -19,4 +20,4 @@ data:
   MLRUN_FEATURE_STORE__DEFAULT_TARGETS: parquet
   MLRUN_MODEL_ENDPOINT_MONITORING__STORE_TYPE: sql
   MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: "{{ template "mlrun-ce.mlrun.modelMonitoring.DSN" . }}"
-
+{{- end}}
