@@ -1,7 +1,7 @@
 dependencies:
 - name: nuclio
   repository: https://nuclio.github.io/nuclio/charts
-  version: 0.18.13
+  version: 0.18.3
 - name: mlrun
   repository: https://v3io.github.io/helm-charts/stable
   version: 0.9.16
