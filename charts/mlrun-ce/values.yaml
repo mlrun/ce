@@ -232,7 +232,7 @@ minio:
     type: NodePort
     port: 9000
     nodePort: 30080
-  consoleSxervice:
+  consoleService:
     type: NodePort
     port: 9001
     nodePort: 30090
