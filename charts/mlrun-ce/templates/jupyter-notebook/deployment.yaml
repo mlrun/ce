@@ -77,7 +77,7 @@ spec:
         ports:
         - containerPort: 8888
           name: http
-        command: ["/bin/bash", "/usr/local/bin/mlcestart.sh"]
+        command: ["/bin/bash", "/usr/local/bin/mlce-start.sh"]
       {{- with .Values.jupyterNotebook.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
       {{- end }}
