@@ -148,7 +148,6 @@ mlrun:
 
 jupyterNotebook:
   awsInstall: false
-  authType: cred
   fullnameOverride: mlrun-jupyter
   name: jupyter-notebook
   enabled: true
