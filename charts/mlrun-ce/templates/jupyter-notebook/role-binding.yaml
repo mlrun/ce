@@ -8,6 +8,6 @@ subjects:
     name: {{ .Values.jupyterNotebook.serviceAccount.name }}
 roleRef:
   kind: Role
-  name: juputer-role
+  name: jupyter-role
   apiGroup: rbac.authorization.k8s.io
 {{- end -}}
