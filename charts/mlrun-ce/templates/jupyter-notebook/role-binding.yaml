@@ -5,7 +5,7 @@ metadata:
   name: jupyter-role-binding
 subjects:
   - kind: ServiceAccount
-    name: {{ .Values.jupyterNotebook.serviceAccount }}
+    name: {{ .Values.jupyterNotebook.serviceAccount.name }}
 roleRef:
   kind: Role
   name: juputer-role
