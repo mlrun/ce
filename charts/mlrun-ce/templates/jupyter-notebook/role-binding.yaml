@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: juputer-binding
+  name: jupyter-role-binding
 subjects:
   - kind: ServiceAccount
     name: {{ .Values.jupyterNotebook.serviceAccount }}
