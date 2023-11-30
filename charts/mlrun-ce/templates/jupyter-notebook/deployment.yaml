@@ -16,7 +16,7 @@ spec:
         {{- include "mlrun-ce.jupyter.selectorLabels" . | nindent 8 }}
     spec:
 {{- if  .Values.jupyterNotebook.serviceAccount }}
-      serviceAccount: {{ .Values.jupyterNotebook.serviceAccount }}
+      serviceAccount: {{ .Values.jupyterNotebook.serviceAccount.name }}
 {{- end }}
       securityContext:
         runAsUser: 1000
