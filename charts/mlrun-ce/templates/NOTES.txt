@@ -44,6 +44,10 @@ You're up and running !
   
 {{- end }}
 
+{{- if .Values.mysql.enabled }}
+10. SQL service is available at:
+    mysql+pymysql://root:{{.Values.mysql.auth.rootPassword}}@{{.Release.Name}}-mysql.{{.Release.Namespace}}.svc.cluster.local:{{.Values.mysql.primary.service.ports.mysql}}/{{.Values.mysql.auth.database}}
+{{- end}}
 
 Happy MLOPSing !!! :]
 {{- end}}

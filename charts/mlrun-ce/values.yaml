@@ -405,3 +405,13 @@ kube-prometheus-stack:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
     fullnameOverride: node-exporter
+
+mysql:
+  enabled: true
+  auth:
+    rootPassword: sql1234
+    database: mlrun_sql
+  primary:
+    service:
+      ports:
+        mysql: 3000
