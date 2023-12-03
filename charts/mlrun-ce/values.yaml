@@ -147,7 +147,10 @@ mlrun:
     mode: full
 
 jupyterNotebook:
-  awsInstall: false
+  serviceAccount:
+    create: true
+    name: mlrun-jupyter
+  awsInstall: false 
   fullnameOverride: mlrun-jupyter
   name: jupyter-notebook
   enabled: true
