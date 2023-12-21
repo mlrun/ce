@@ -20,5 +20,5 @@ data:
   MLRUN_FEATURE_STORE__DEFAULT_TARGETS: parquet
   MLRUN_MODEL_ENDPOINT_MONITORING__STORE_TYPE: sql
   MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: "{{ template "mlrun-ce.mlrun.modelMonitoring.DSN" . }}"
-  MLRUN_GRAFANA_URL: {{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort" }}
+  MLRUN_GRAFANA_URL: http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort" }}
 {{- end}}
