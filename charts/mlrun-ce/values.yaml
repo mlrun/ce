@@ -262,6 +262,7 @@ pipelines:
   enabled: true
   name: pipelines
   service:
+    type: NodePort
     nodePort: 30100
   crd:
     enabled: true
