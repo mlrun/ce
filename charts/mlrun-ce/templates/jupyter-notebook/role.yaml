@@ -1,0 +1,51 @@
+{{- if .Values.jupyterNotebook.enabled -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jupyter-role
+rules:
+  - apiGroups:
+    - ""
+    resources:
+    - pods
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - delete
+  - apiGroups:
+    - ""
+    resources:
+    - pods/log
+    verbs:
+    - get
+    - list
+  - apiGroups:
+    - metrics.k8s.io
+    resources:
+    - pods
+    verbs:
+    - list
+    - get
+  - apiGroups:
+    - ""
+    resources:
+    - services
+    verbs:
+    - list
+    - get
+  - apiGroups:
+    - extensions
+    resources:
+    - ingresses
+    verbs:
+    - list
+    - get
+  - apiGroups:
+    - ""
+    resources:
+    - secrets
+    verbs:
+    - create
+{{- end -}}

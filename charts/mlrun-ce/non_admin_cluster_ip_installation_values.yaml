@@ -1,0 +1,60 @@
+# Use this Values file for installing MLRun CE resources such as: deployments, non cluster resources (.e.g. crd, cluter role) and installing service as clusterIP.
+# remember to use a different namespace that used for the cluster resource installation. (support MLRun. mpi, nuclio and kfp pipeline installation)
+
+# We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
+global:
+  nuclio:
+    dashboard:
+      nodePort: ""
+
+nuclio:
+  crd:
+    create: false
+
+mlrun:
+  api:
+    service:
+      type: ClusterIP
+      nodePort: ""
+  ui:
+    service:
+      type: ClusterIP
+      nodePort: ""
+jupyterNotebook:
+  service:
+    type: ClusterIP
+    nodePort: ""
+    port: 8888
+
+mpi-operator:
+  fullnameOverride: mpi-operator
+  crd:
+    create: false
+  rbac:
+    clusterResources:
+      create: false
+
+minio:
+  service:
+    type: ClusterIP
+    port: 9000
+    nodePort: ""
+  consoleService:
+    type: ClusterIP
+    port: 9001
+    nodePort: ""
+
+spark-operator:
+  enabled: false
+
+pipelines:
+  service:
+    type : ClusterIP
+    nodePort: ""
+  crd:
+    enabled: false
+  priority_class:
+    enabled: false
+
+kube-prometheus-stack:
+  enabled: false

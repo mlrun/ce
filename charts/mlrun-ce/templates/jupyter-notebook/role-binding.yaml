@@ -1,0 +1,13 @@
+{{- if .Values.jupyterNotebook.enabled -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jupyter-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.jupyterNotebook.serviceAccount.name }}
+roleRef:
+  kind: Role
+  name: jupyter-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end -}}

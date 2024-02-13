@@ -15,9 +15,9 @@ spec:
       labels:
         {{- include "mlrun-ce.jupyter.selectorLabels" . | nindent 8 }}
     spec:
-{{- if  .Values.jupyterNotebook.awsInstall }}
-      serviceAccount: {{ .Values.jupyterNotebook.serviceAccount }}
-{{- end }}      
+{{- if  .Values.jupyterNotebook.serviceAccount.name }}
+      serviceAccount: {{ .Values.jupyterNotebook.serviceAccount.name }}
+{{- end }}
       securityContext:
         runAsUser: 1000
         runAsGroup: 100
@@ -25,13 +25,13 @@ spec:
       initContainers:
       - name: init-chown-data
         # jupyter default NB user: uid=1000(jovyan) gid=100(users) groups=100(users)
-        command: ["chown", "-R", "1000:100", "/home/jovyan/data"]
+        command: ["chown", "-R", "1000:100", "/home/jovyan/"]
         image: busybox:1.35
         imagePullPolicy: IfNotPresent
         securityContext:
           runAsUser: 0
         volumeMounts:
-        - mountPath: /home/jovyan/data
+        - mountPath: /home/jovyan/
           name: notebooks
       containers:
       - name: jupyter-notebook
@@ -52,8 +52,8 @@ spec:
           value: {{ index .Values "mpi-operator" "crd" "version" }}
 {{- if  .Values.jupyterNotebook.persistence.enabled }}
         - name: MLRUN_PVC_MOUNT
-          value: {{ printf "%s:/home/jovyan/data" (include "mlrun-ce.jupyter.fullname" .) }}
-{{- end }}          
+          value: {{ printf "%s:/home/jovyan/" (include "mlrun-ce.jupyter.fullname" .) }}
+{{- end }}
         - name: CHOWN_HOME
           value: "yes"
         - name: CHOWN_HOME_OPTS
@@ -61,19 +61,23 @@ spec:
         {{- if .Values.jupyterNotebook.extraEnv }}
         {{ toYaml .Values.jupyterNotebook.extraEnv | nindent 8 }}
         {{- end }}
+        {{- if .Values.jupyterNotebook.extraEnvKeyValue }}
+        {{- range $name, $value := .Values.jupyterNotebook.extraEnvKeyValue }}
+        - name: {{ $name }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.jupyterNotebook.envFrom }}
+        envFrom:
+        {{ toYaml .Values.jupyterNotebook.envFrom | nindent 10 }}
+        {{- end }}
         volumeMounts:
-        - mountPath: /home/jovyan/data
+        - mountPath: /home/jovyan/
           name: notebooks
         ports:
         - containerPort: 8888
           name: http
-        command: [ "start-notebook.sh" ]
-        args:
-        - --ip="0.0.0.0"
-        - --port=8888
-        - --NotebookApp.token=''
-        - --NotebookApp.password=''
-        - --NotebookApp.default_url="/lab"
+        command: ["/bin/bash", "/usr/local/bin/mlce-start.sh"]
       {{- with .Values.jupyterNotebook.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
       {{- end }}

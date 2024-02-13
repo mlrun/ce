@@ -1,0 +1,45 @@
+# Use this Values file for installing MLRun CE cluster resources such as: crd, cluster role on a namespace that will not use for
+# the deployment's installation.
+# After you installed the helm chart using this values file you will need to use the non_admin_cluster_ip_installtion_values.yaml
+# or the non_admin__installtion_values.yaml for installing the mlrun ce deployments (support MLRun. mpi, nuclio and kfp pipeline installation)
+
+# We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
+global:
+  # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
+  registry:
+    url: false
+
+nuclio:
+  # coupled with mlrun.nuclio.dashboardName template in mlrun chart
+  controller:
+    enabled: false
+  dashboard:
+    enabled: false
+  rbac:
+    create: false
+  platform: false
+
+mlrun:
+  enabled: false
+
+jupyterNotebook:
+  enabled: false
+
+mpi-operator:
+  rbac:
+    namespaced:
+      create: false
+  deployment:
+    create: false
+
+minio:
+  enabled: false
+
+spark-operator:
+  enabled: false
+
+pipelines:
+  enabled: false
+
+kube-prometheus-stack:
+  enabled: false

@@ -1,17 +1,20 @@
+{{- if or (.Values.jupyterNotebook.enabled) (.Values.mlrun.enabled) (.Values.minio.enabled) (.Values.pipelines.enabled) ( index .Values "kube-prometheus-stack" "enabled")}}
 You're up and running !
-
+{{- if .Values.jupyterNotebook.enabled }}
 1. Jupyter UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.jupyterNotebook.service.nodePort }}
-
+{{- end}}
+{{- if .Values.nuclio.dashboard.enabled }}
 2. Nuclio UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.global.nuclio.dashboard.nodePort }}
-
+{{- end}}
+{{- if .Values.mlrun.enabled }}
 3. MLRun UI is available at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.ui.service.nodePort }}
 
 4. MLRun API is exposed externally at:
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.api.service.nodePort }}
-
+{{- end}}
 {{- if .Values.minio.enabled }}
 
 5. Minio API is exposed externally at:
@@ -29,18 +32,18 @@ You're up and running !
 {{- if .Values.pipelines.enabled }}
 
 7. Pipelines UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:30100
+  http://{{ .Values.global.externalHostAddress }}:{{ .Values.pipelines.service.nodePort }}
 {{- end }}
 
 {{- if index .Values "kube-prometheus-stack" "enabled" }}
-
 8. Grafana UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:30110
+  http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort"}}
 
 9. Prometheus UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:30120
+  http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "prometheus" "service" "nodePort"}}
   
 {{- end }}
 
 
 Happy MLOPSing !!! :]
+{{- end}}
