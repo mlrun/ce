@@ -105,6 +105,9 @@ mlrun:
       - configMapRef:
           name: mlrun-override-env
           optional: true
+      - secretRef:
+          name: minio-env-secret
+          optional : true
     extraPersistentVolumeMounts: ~
   ui:
     fullnameOverride: mlrun-ui
@@ -192,9 +195,9 @@ jupyterNotebook:
 
   extraEnvKeyValue: {}
   envFrom:
-    - configMapRef:
-        name: jupyter-common-env
-        optional: true        
+    - secretRef:
+        name: minio-env-secret
+        optional: true
   persistence:
     enabled: true
     existingClaim:
