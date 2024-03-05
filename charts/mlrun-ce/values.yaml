@@ -146,6 +146,9 @@ mlrun:
   ce:
     mode: full
 
+MinioEnabled:
+  enabled: True
+
 jupyterNotebook:
   serviceAccount:
     create: true
