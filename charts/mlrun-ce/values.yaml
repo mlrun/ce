@@ -105,6 +105,9 @@ mlrun:
       - configMapRef:
           name: mlrun-override-env
           optional: true
+      - secretRef:
+        name: minio-env-secret
+        optional : true
     extraPersistentVolumeMounts: ~
   ui:
     fullnameOverride: mlrun-ui
@@ -145,9 +148,6 @@ mlrun:
     dsn:
   ce:
     mode: full
-
-MinioEnabled:
-  enabled: True
 
 jupyterNotebook:
   serviceAccount:
@@ -197,7 +197,7 @@ jupyterNotebook:
   envFrom:
     - secretRef:
         name: minio-env-secret
-        optional: false
+        optional: true
   persistence:
     enabled: true
     existingClaim:
