@@ -106,8 +106,8 @@ mlrun:
           name: mlrun-override-env
           optional: true
       - secretRef:
-        name: minio-env-secret
-        optional : true
+          name: minio-env-secret
+          optional : true
     extraPersistentVolumeMounts: ~
   ui:
     fullnameOverride: mlrun-ui
