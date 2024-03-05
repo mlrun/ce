@@ -192,9 +192,9 @@ jupyterNotebook:
 
   extraEnvKeyValue: {}
   envFrom:
-    - configMapRef:
-        name: jupyter-common-env
-        optional: true        
+    - secretRef:
+        name: minio-env-secret
+        optional: false
   persistence:
     enabled: true
     existingClaim:
