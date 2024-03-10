@@ -356,3 +356,7 @@ grafana:
       enabled: true
       org_role":  "Editor"
       security.disable_initial_admin_creation": true
+
+
+kube-prometheus-stack:
+  enabled: false
