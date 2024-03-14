@@ -332,80 +332,27 @@ pipelines:
       repository: gcr.io/google-containers/busybox
       tag: latest
 
-kube-prometheus-stack:
-  fullnameOverride: monitoring
+prometheus:
   enabled: true
-  alertmanager:
-    enabled: false
-  grafana:
-    adminUser: admin
-    adminPassword: admin
-    additionalDataSources:
-    - name: iguazio
-      type: mysql
-      url: mlrun-db:3306
-      user: root
-      password:
-      database: mlrun_model_monitoring
-      editable: true
-      maxOpenConns: 100
-      maxIdleConns: 100
-      maxIdleConnsAuto: true
-    persistence:
-      type: pvc
+  persistentVolume:
+    enabled: true
+    size: "10Gi"
+    storageClassName": "local-path"
+
+
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    size: "10Gi"
+    storageClassName: "local-path"
+    persistence.type: "pvc"
+  fullnameOverride: "grafana"
+  service:
+    type: "ClusterIP"
+  grafana.ini:
+    auth.anonymous:
       enabled: true
-      size: 10Gi
-    grafana.ini:
-      auth.anonymous:
-        enabled: true
-        org_role: Editor
-    fullnameOverride: grafana
-    enabled: true
-    service:
-      type: NodePort
-      nodePort: 30010
-  prometheus:
-    enabled: true
-    service:
-      type: NodePort
-      nodePort: 30020
-    prometheusSpec:
-      storageSpec:
-        volumeClaimTemplate:
-          spec:
-            storageClassName: local-path
-            accessModes: ["ReadWriteOnce"]
-            resources:
-              requests:
-                storage: 5Gi
-      additionalScrapeConfigs:
-        - job_name: model-monitoring-job
-          metrics_path: /model-monitoring-metrics
-          scheme: http
-          tls_config:
-            insecure_skip_verify: true
-          scrape_interval: 30s
-          scrape_timeout: 10s
-          relabel_configs:
-            - source_labels: [ __meta_kubernetes_namespace ]
-              separator: ;
-              regex: (.*)
-              target_label: namespace
-              replacement: $1
-              action: replace
-          kubernetes_sd_configs:
-            - role: pod
-              kubeconfig_file: ""
-              follow_redirects: true
-              enable_http2: true
-              namespaces:
-                own_namespace: false
-                names:
-                  - mlrun
-              selectors:
-                - role: "pod"
-                  label: "type=model-monitoring-stream"
-  kube-state-metrics:
-    fullnameOverride: state-metrics
-  prometheus-node-exporter:
-    fullnameOverride: node-exporter
+      org_role":  "Editor"
+      security.disable_initial_admin_creation": true
+

@@ -41,5 +41,9 @@ spark-operator:
 pipelines:
   enabled: false
 
-kube-prometheus-stack:
+
+prometheus:
+  enabled: false
+
+grafana:
   enabled: false

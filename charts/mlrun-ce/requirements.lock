@@ -11,11 +11,14 @@ dependencies:
 - name: minio
   repository: https://charts.min.io/
   version: 4.0.2
+- name: grafana
+  repository: https://grafana.github.io/helm-charts
+  version: 7.3.3
+- name: prometheus
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 25.16.0
 - name: spark-operator
   repository: https://googlecloudplatform.github.io/spark-on-k8s-operator
   version: 1.1.25
-- name: kube-prometheus-stack
-  repository: https://prometheus-community.github.io/helm-charts
-  version: 41.7.2
-digest: sha256:1fe93cb969f5c1e6676a58feb4c8b18210158a12cfe6fc8a6acf58ad1b2c4327
+digest: sha256:cdb28eddffbe14f3e886246e0923fe77a41685a95a5aa3e541a2712f8e7e4103
 generated: "2023-10-04T11:56:24.400537+03:00"
