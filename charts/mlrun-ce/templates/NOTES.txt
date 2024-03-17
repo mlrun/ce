@@ -35,6 +35,16 @@ You're up and running !
   http://{{ .Values.global.externalHostAddress }}:{{ .Values.pipelines.service.nodePort }}
 {{- end }}
 
+{{- if .Values.grafana.enabled }}
+8. Grafana UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:{{ index .Values "grafana" "service" "nodePort"}}
+{{- end }}
+
+{{- if .Values.prometheus.enabled }}
+9. Prometheus UI is available at:
+  http://{{ .Values.global.externalHostAddress }}:{{ index .Values "prometheus" "server" "service" "nodePort"}}
+{{- end }}
+
 
 
 Happy MLOPSing !!! :]

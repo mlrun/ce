@@ -333,14 +333,45 @@ pipelines:
       tag: latest
 
 prometheus:
+  fullnameOverride: "prometheus"
   enabled: true
-  persistentVolume:
-    enabled: true
-    size: "10Gi"
-    storageClassName": "local-path"
+  statefulSetNameOverride: prometheus 
+  server:
+    persistentVolume:
+      enabled: true
+      size: "10Gi"
+      storageClassName": "local-path"
 
+    service:
+      enabled: true
+      type: "NodePort"
+      nodePort: 30020
+  alertmanager:
+    enabled: false
+  kube-state-metrics:
+    enabled: false
+  prometheus-node-exporter:
+    enabled: false
+  prometheus-pushgateway:
+    enabled: false
+  
 
 grafana:
+  adminUser: admin
+  adminPassword: admin
+  additionalDataSources:
+    - name: iguazio
+      type: mysql
+      url: mlrun-db:3306
+      user: root
+      password:
+      database: mlrun_model_monitoring
+      editable: true
+      maxOpenConns: 100
+      maxIdleConns: 100
+      maxIdleConnsAuto: true
+  rbac:
+    create: false 
   enabled: true
   persistence:
     enabled: true
@@ -349,7 +380,8 @@ grafana:
     persistence.type: "pvc"
   fullnameOverride: "grafana"
   service:
-    type: "ClusterIP"
+    type: "NodePort"
+    nodePort: 30010 
   grafana.ini:
     auth.anonymous:
       enabled: true
