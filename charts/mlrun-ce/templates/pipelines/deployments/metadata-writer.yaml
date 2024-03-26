@@ -2,9 +2,6 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  annotations:
-    deployment.kubernetes.io/revision: "1"
-  generation: 1
   labels:
     app: metadata-writer
     application-crd-id: kubeflow-pipelines
