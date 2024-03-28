@@ -5,7 +5,6 @@ metadata:
   annotations:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/application/pull/2
     controller-gen.kubebuilder.io/version: v0.4.0
-  generation: 1
   labels:
     controller-tools.k8s.io: "1.0"
   name: applications.app.k8s.io
