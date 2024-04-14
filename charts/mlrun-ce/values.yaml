@@ -75,6 +75,11 @@ mlrun:
   v3io:
     enabled: false
   api:
+    sidecars:
+      logCollector:
+        enabled: true
+        image:
+          tag: 1.6.1
     fullnameOverride: mlrun-api
     image:
       tag: 1.6.1
