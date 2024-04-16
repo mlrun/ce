@@ -304,6 +304,44 @@ entries:
     - https://github.com/mlrun/ce/releases/download/mlrun-ce-0.6.3-rc2/mlrun-ce-0.6.3-rc2.tgz
     version: 0.6.3-rc2
   - apiVersion: v1
+    created: "2024-04-16T07:07:07.914586929Z"
+    dependencies:
+    - name: nuclio
+      repository: https://nuclio.github.io/nuclio/charts
+      version: 0.18.14
+    - condition: mlrun.enabled
+      name: mlrun
+      repository: https://v3io.github.io/helm-charts/stable
+      version: 0.9.16
+    - name: mpi-operator
+      repository: https://v3io.github.io/helm-charts/stable
+      version: 0.6.0
+    - condition: minio.enabled
+      name: minio
+      repository: https://charts.min.io/
+      version: 4.0.2
+    - condition: spark-operator.enabled
+      name: spark-operator
+      repository: https://kubeflow.github.io/spark-operator
+      version: 1.1.25
+    - condition: kube-prometheus-stack.enabled
+      name: kube-prometheus-stack
+      repository: https://prometheus-community.github.io/helm-charts
+      version: 41.7.2
+    description: MLRUn Open Source Stack
+    digest: 062fc6fc83056234fa1fcac8af4744f5a2530ddcab98eec749b2bf7a5a416cc9
+    home: https://iguazio.com
+    icon: https://www.iguazio.com/wp-content/uploads/2019/10/Iguazio-Logo.png
+    maintainers:
+    - email: adamm@iguazio.com
+      name: Adam Melnick
+    - email: eliyahun@iguazio.com
+      name: Eliyahu Noach
+    name: mlrun-ce
+    urls:
+    - https://github.com/mlrun/ce/releases/download/mlrun-ce-0.6.3-rc15/mlrun-ce-0.6.3-rc15.tgz
+    version: 0.6.3-rc15
+  - apiVersion: v1
     created: "2024-04-03T13:35:03.324163096Z"
     dependencies:
     - name: nuclio
