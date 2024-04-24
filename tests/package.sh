@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright 2022 Iguazio
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,20 +14,17 @@
 # limitations under the License.
 #
 
-# Set the default shell to bash instead of sh
-SHELL := bash
+set -o errexit
+set -o nounset
+set -o pipefail
 
-# Set the default target to help
-.DEFAULT_GOAL := help
+dirname=$(dirname $0)
 
-.PHONY: help
-help: ## Display available commands
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+# Install chart dependencies
+echo "Installing chart dependencies"
+cd "$dirname"/../charts/mlrun-ce
+helm dependency update
 
-.PHONY: tests
-tests: ## Run tests
-	@./tests/run.sh
-
-.PHONY: package
-package: ## Package the application
-	@./tests/package.sh
+# Create MLRun CE tarball
+helm package .
+exit 0
