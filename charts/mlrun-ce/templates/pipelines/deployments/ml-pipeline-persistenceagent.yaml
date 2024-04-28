@@ -48,6 +48,17 @@ spec:
             memory: 500Mi
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
+        volumeMounts:
+          - mountPath: /var/run/secrets/kubeflow/tokens
+            name: persistenceagent-sa-token
+      volumes:
+        - name: persistenceagent-sa-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: persistenceagent-sa-token
+                  expirationSeconds: 3600
+                  audience: pipelines.kubeflow.org
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler

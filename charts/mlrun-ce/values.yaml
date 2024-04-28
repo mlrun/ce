@@ -181,6 +181,9 @@ jupyterNotebook:
     repository: quay.io/mlrun/jupyter
     tag: 1.6.1
     pullPolicy: IfNotPresent
+  busybox:
+    image: busybox
+    tag: 1.35
 
   # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
   # mlrun UI's node port
