@@ -15,13 +15,13 @@ nuclio:
   controller:
     enabled: true
     image:
-      tag: 1.11.23-amd64
+      tag: 1.12.14-amd64
   dashboard:
     enabled: true
 
     # nodePort - taken from global.nuclio.dashboard.nodePort for re-usability
     image:
-      tag: 1.11.23-amd64
+      tag: 1.12.14-amd64
 
     # k8s has deprecated docker support since v1.20
     containerBuilderKind: kaniko
@@ -75,9 +75,14 @@ mlrun:
   v3io:
     enabled: false
   api:
+    sidecars:
+      logCollector:
+        enabled: true
+        image:
+          tag: 1.6.1
     fullnameOverride: mlrun-api
     image:
-      tag: 1.6.0-rc10
+      tag: 1.6.1
     service:
       type: NodePort
       nodePort: 30070
@@ -112,7 +117,7 @@ mlrun:
       type: NodePort
       nodePort: 30060
     image:
-      tag: 1.6.0-rc10
+      tag: 1.6.1
   db:
     name: db
     fullnameOverride: mlrun-db
@@ -174,8 +179,11 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.6.0-rc10
+    tag: 1.6.1
     pullPolicy: IfNotPresent
+  busybox:
+    image: busybox
+    tag: 1.35
 
   # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
   # mlrun UI's node port
@@ -262,6 +270,7 @@ pipelines:
   enabled: true
   name: pipelines
   service:
+    type: NodePort
     nodePort: 30100
   crd:
     enabled: true
