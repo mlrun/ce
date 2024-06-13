@@ -226,3 +226,14 @@ Model monitoring DSN
 {{- end -}}
 {{- end -}}
 
+{{/*
+serviceAccounts for AWS
+*/}}
+{{- define "aws.serviceAccounts" -}}
+mlrun-api-aws-sa
+mlrun-jobs-aws-sa
+ml-pipeline-ui-sa
+ml-pipeline-sa
+argo-sa
+{{- end -}}
+
