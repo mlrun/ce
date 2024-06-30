@@ -418,8 +418,3 @@ kube-prometheus-stack:
   prometheus-node-exporter:
     fullnameOverride: node-exporter
 
-cloud:
-  aws:
-    enabled: false
-    roleArn: ~
-

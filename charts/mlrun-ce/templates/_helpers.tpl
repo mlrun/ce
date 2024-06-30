@@ -227,6 +227,7 @@ Model monitoring DSN
 {{- end -}}
 
 {{/*
+TODO: Remove when dust settles, probably not needed
 serviceAccounts for AWS
 */}}
 {{- define "aws.serviceAccounts" -}}
