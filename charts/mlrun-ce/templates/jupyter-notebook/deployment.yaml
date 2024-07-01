@@ -52,7 +52,7 @@ spec:
           value: {{ index .Values "mpi-operator" "crd" "version" }}
 {{- if  .Values.jupyterNotebook.persistence.enabled }}
         - name: MLRUN_PVC_MOUNT
-          value: {{ printf "%s:/home/jovyan/" (include "mlrun-ce.jupyter.fullname" .) }}
+          value: {{ printf "%s:/home/jovyan/" (include "mlrun-ce.jupyter.claimName" .) }}
 {{- end }}
         - name: CHOWN_HOME
           value: "yes"
@@ -88,6 +88,6 @@ spec:
       - name: notebooks
         persistentVolumeClaim:
 {{- if .Values.jupyterNotebook.persistence.enabled }}
-          claimName: {{ template "mlrun-ce.jupyter.fullname" . }}
+          claimName: {{ template "mlrun-ce.jupyter.claimName" . }}
 {{- end }}
 {{- end -}}
