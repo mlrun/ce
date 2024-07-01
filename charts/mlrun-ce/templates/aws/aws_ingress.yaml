@@ -1,0 +1,68 @@
+{{- if eq .Values.global.infrastructure.provider "aws" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mlrun-ce-ingress
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+  {{- if .Values.global.domainNameCertificate }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.domainNameCertificate }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+  {{- else }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+  {{- end }}
+spec:
+  ingressClassName: alb
+  rules:
+    - host: mlrun.{{ .Values.global.externalHostAddress }}
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: mlrun-ui
+                port:
+                  number: 80
+    - host: mlrun-api.{{ .Values.global.externalHostAddress }}
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: mlrun-api
+                port:
+                  number: 8080
+    - host: nuclio.{{ .Values.global.externalHostAddress }}
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nuclio-dashboard
+                port:
+                  number: 8070
+    - host: jupyter.{{ .Values.global.externalHostAddress }}
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: mlrun-jupyter
+                port:
+                  number: 80
+    - host: grafana.{{ .Values.global.externalHostAddress }}
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
+{{- end }}
