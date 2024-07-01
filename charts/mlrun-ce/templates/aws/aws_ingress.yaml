@@ -1,4 +1,4 @@
-{{- if eq .Values.global.infrastructure.provider "aws" }}
+{{- if and (eq .Values.global.infrastructure.provider "aws") .Values.global.infrastructure.cloud }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

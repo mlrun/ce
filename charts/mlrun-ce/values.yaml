@@ -8,6 +8,9 @@ global:
   nuclio:
     dashboard:
       nodePort: 30050
+  infrastructure:
+    kind: lab
+    provider: ~
 
 nuclio:
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
