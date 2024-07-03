@@ -53,6 +53,13 @@ Copied over from mlrun chart to duplicate the logic without constraining the val
 {{- end -}}
 {{- end -}}
 
+{{- define "mlrun-ce.jupyter.claimName" -}}
+{{- if .Values.jupyterNotebook.persistence.existingClaim -}}
+{{- .Values.jupyterNotebook.persistence.existingClaim -}}
+{{- else -}}
+{{- include "mlrun-ce.jupyter.fullname" . -}}
+{{- end -}}
+{{- end -}}
 
 {{/*
 Copied over from mlrun chart to duplicate the logic without constraining the values
