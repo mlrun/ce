@@ -1,4 +1,5 @@
 {{- if .Values.jupyterNotebook.persistence.enabled -}}
+{{- if not .Values.jupyterNotebook.persistence.existingClaim -}}
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -19,6 +20,7 @@ spec:
   storageClassName: ""
 {{- else }}
   storageClassName: "{{ .Values.jupyterNotebook.persistence.storageClass }}"
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end -}}
