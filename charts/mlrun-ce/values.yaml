@@ -182,7 +182,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.6.1
+    tag: 1.6.4
     pullPolicy: IfNotPresent
   busybox:
     image: busybox
