@@ -82,10 +82,10 @@ mlrun:
       logCollector:
         enabled: true
         image:
-          tag: 1.6.1
+          tag: 1.6.4
     fullnameOverride: mlrun-api
     image:
-      tag: 1.6.1
+      tag: 1.6.4
     service:
       type: NodePort
       nodePort: 30070
@@ -120,7 +120,7 @@ mlrun:
       type: NodePort
       nodePort: 30060
     image:
-      tag: 1.6.1
+      tag: 1.6.4
   db:
     name: db
     fullnameOverride: mlrun-db
@@ -182,7 +182,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.6.1
+    tag: 1.6.4
     pullPolicy: IfNotPresent
   busybox:
     image: busybox
