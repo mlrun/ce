@@ -272,3 +272,12 @@ $ rm -rf my-mlrun-mlrun-ce-mlrun
 MLRun enables you to run your functions while saving outputs and artifacts in a way that is visible to Kubeflow Pipelines.
 If you wish to use this capability you will need to install Kubeflow on your cluster.
 Refer to the [**Kubeflow documentation**](https://www.kubeflow.org/docs/started/getting-started/) for more information.
+
+
+## Version Matrix
+
+This table shows the versions of the main components in the MLRun CE chart:
+
+| MLRun CE  | MLRun | Nuclio | Jupyter | MPI Operator | Minio                        | Spark Operator | Pipelines | Kube-Prometheus-Stack | Prometheus | Grafana |
+|-----------|-------|--------|---------|--------------|------------------------------|----------------|-----------|-----------------------|------------|---------|
+| **0.6.3** | 1.6.4 | 1.13.5 | 6.4.0   | 0.2.3        | RELEASE.2022-05-08T23-50-31Z | v1beta2-1.1.25 | 1.8.1     | 17.0.0                | 2.39.1     | 6.40.4  |

@@ -17,14 +17,9 @@ nuclio:
   fullnameOverride: nuclio
   controller:
     enabled: true
-    image:
-      tag: 1.12.14-amd64
   dashboard:
     enabled: true
-
     # nodePort - taken from global.nuclio.dashboard.nodePort for re-usability
-    image:
-      tag: 1.12.14-amd64
 
     # k8s has deprecated docker support since v1.20
     containerBuilderKind: kaniko
@@ -81,11 +76,7 @@ mlrun:
     sidecars:
       logCollector:
         enabled: true
-        image:
-          tag: 1.6.4
     fullnameOverride: mlrun-api
-    image:
-      tag: 1.6.4
     service:
       type: NodePort
       nodePort: 30070
@@ -119,8 +110,6 @@ mlrun:
     service:
       type: NodePort
       nodePort: 30060
-    image:
-      tag: 1.6.4
   db:
     name: db
     fullnameOverride: mlrun-db
