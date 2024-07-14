@@ -23,6 +23,8 @@ nuclio:
 
     # k8s has deprecated docker support since v1.20
     containerBuilderKind: kaniko
+    ingress:
+      enabled: false
   autoscaler:
     enabled: false
   dlx:
@@ -107,6 +109,8 @@ mlrun:
     extraPersistentVolumeMounts: ~
   ui:
     fullnameOverride: mlrun-ui
+    ingress:
+      enabled: false
     service:
       type: NodePort
       nodePort: 30060
@@ -229,6 +233,8 @@ minio:
   rootPassword: minio123
   mode: distributed
   replicas: 4
+  ingress:
+    enabled: false
   resources:
     requests:
       memory: 0.5Gi
@@ -364,6 +370,8 @@ kube-prometheus-stack:
     service:
       type: NodePort
       nodePort: 30010
+    ingress:
+      enabled: false
   prometheus:
     enabled: true
     service:

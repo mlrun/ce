@@ -6,5 +6,6 @@ home: https://iguazio.com
 icon: https://www.iguazio.com/wp-content/uploads/2019/10/Iguazio-Logo.png
 sources: []
 maintainers:
-  - name: Adam Melnick
-    email: adamm@iguazio.com
+  - name: MLRun
+    email: mlrun@iguazio.com
+    url: https://www.mlrun.org/
