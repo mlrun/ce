@@ -151,7 +151,7 @@ jupyterNotebook:
   serviceAccount:
     create: true
     name: mlrun-jupyter
-  awsInstall: false 
+  awsInstall: false
   fullnameOverride: mlrun-jupyter
   name: jupyter-notebook
   enabled: true
@@ -198,7 +198,7 @@ jupyterNotebook:
   envFrom:
     - configMapRef:
         name: jupyter-common-env
-        optional: true        
+        optional: true
   persistence:
     enabled: true
     existingClaim:
@@ -259,7 +259,7 @@ spark-operator:
   enabled: true
   fullnameOverride: spark-operator
   webhook:
-     enable: true
+    enable: true
   serviceAccounts:
     spark:
       name: "sparkapp"
@@ -417,4 +417,3 @@ kube-prometheus-stack:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
     fullnameOverride: node-exporter
-

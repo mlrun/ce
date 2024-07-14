@@ -17,13 +17,17 @@ nuclio:
     enabled: false
   rbac:
     create: false
-  platform: false
+  platform: null
 
 mlrun:
   enabled: false
 
 jupyterNotebook:
   enabled: false
+  serviceAccount:
+    create: false
+  persistence:
+    enabled: false
 
 mpi-operator:
   rbac:
