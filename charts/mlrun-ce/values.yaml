@@ -227,8 +227,8 @@ minio:
   enabled: true
   rootUser: minio
   rootPassword: minio123
-  mode: distributed
-  replicas: 4
+  mode: standalone
+  replicas: 1
   resources:
     requests:
       memory: 0.5Gi
