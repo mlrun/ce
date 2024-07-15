@@ -20,6 +20,7 @@ mlrun:
     service:
       type: ClusterIP
       nodePort: ""
+
 jupyterNotebook:
   service:
     type: ClusterIP
@@ -51,7 +52,7 @@ spark-operator:
 
 pipelines:
   service:
-    type : ClusterIP
+    type: ClusterIP
     nodePort: ""
   crd:
     enabled: false

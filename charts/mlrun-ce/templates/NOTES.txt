@@ -1,49 +1,119 @@
-{{- if or (.Values.jupyterNotebook.enabled) (.Values.mlrun.enabled) (.Values.minio.enabled) (.Values.pipelines.enabled) ( index .Values "kube-prometheus-stack" "enabled")}}
-You're up and running !
+{{- if or (.Values.jupyterNotebook.enabled) (.Values.mlrun.enabled) (.Values.minio.enabled) (.Values.pipelines.enabled) (index .Values "kube-prometheus-stack" "enabled") }}
+You're up and running!
+
 {{- if .Values.jupyterNotebook.enabled }}
-1. Jupyter UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:{{ .Values.jupyterNotebook.service.nodePort }}
-{{- end}}
+{{- "\n" }}
+Jupyter UI is available at:
+{{- if eq .Values.global.infrastructure.kind "cloud" }}
+jupyter.{{ .Values.global.externalHostAddress }}
+{{- else }}
+{{- if .Values.jupyterNotebook.ingress.enabled }}
+{{ (index .Values.jupyterNotebook.ingress.hosts 0).host }}
+{{- else }}
+{{ .Values.global.externalHostAddress }}:{{ .Values.jupyterNotebook.service.nodePort }}
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{- if .Values.nuclio.dashboard.enabled }}
-2. Nuclio UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:{{ .Values.global.nuclio.dashboard.nodePort }}
-{{- end}}
+{{- "\n" }}
+Nuclio UI is available at:
+{{- if eq .Values.global.infrastructure.kind "cloud" }}
+nuclio.{{ .Values.global.externalHostAddress }}
+{{- else }}
+{{- if .Values.nuclio.dashboard.ingress.enabled }}
+{{ (index .Values.nuclio.dashboard.ingress.hosts 0) }}
+{{- else }}
+{{ .Values.global.externalHostAddress }}:{{ .Values.global.nuclio.dashboard.nodePort }}
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{- if .Values.mlrun.enabled }}
-3. MLRun UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.ui.service.nodePort }}
+{{- "\n" }}
+MLRun UI is available at:
+{{- if eq .Values.global.infrastructure.kind "cloud" }}
+mlrun.{{ .Values.global.externalHostAddress }}
+{{- else }}
+{{- if .Values.mlrun.ui.ingress.enabled }}
+{{ (index .Values.mlrun.ui.ingress.hosts 0).host }}
+{{- else }}
+{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.ui.service.nodePort }}
+{{- end }}
+{{- end }}
+{{- end }}
 
-4. MLRun API is exposed externally at:
-  http://{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.api.service.nodePort }}
-{{- end}}
+{{- if .Values.mlrun.enabled }}
+{{- "\n" }}
+MLRun API is available at:
+{{- if eq .Values.global.infrastructure.kind "cloud" }}
+mlrun-api.{{ .Values.global.externalHostAddress }}
+{{- else }}
+{{- if .Values.mlrun.ui.ingress.enabled }}
+{{ (index .Values.mlrun.api.ingress.hosts 0).host }}
+{{- else }}
+{{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.api.service.nodePort }}
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{- if .Values.minio.enabled }}
+{{- if ne .Values.global.infrastructure.kind "cloud" }}
+{{- "\n" }}
+Minio UI is available at:
+{{- if .Values.minio.ingress.enabled }}
+{{ (index .Values.minio.consoleIngress.hosts 0) }}
+{{- else }}
+{{ .Values.global.externalHostAddress }}:{{ .Values.minio.consoleService.nodePort }}
+{{- end }}
+-  username: {{ .Values.minio.rootUser }}
+-  password: {{ .Values.minio.rootPassword }}
+{{- end }}
+{{- end }}
 
-5. Minio API is exposed externally at:
-  http://{{ .Values.global.externalHostAddress }}:{{ .Values.minio.service.nodePort }}
-
-6. Minio UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:{{ .Values.minio.consoleService.nodePort }}
-
-  Credentials:
-    username: {{ .Values.minio.rootUser }}
-    password: {{ .Values.minio.rootPassword }}
-
+{{- if .Values.minio.enabled }}
+{{- if ne .Values.global.infrastructure.kind "cloud" }}
+{{- "\n" }}
+Minio API is available at:
+{{- if .Values.minio.ingress.enabled }}
+{{ (index .Values.minio.ingress.hosts 0) }}
+{{- else }}
+{{ .Values.global.externalHostAddress }}:{{ .Values.minio.service.nodePort }}
+{{- end }}
+{{- end }}
 {{- end }}
 
 {{- if .Values.pipelines.enabled }}
-
-7. Pipelines UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:{{ .Values.pipelines.service.nodePort }}
+{{- if ne .Values.global.infrastructure.kind "cloud" }}
+{{- if not .Values.minio.ingress.enabled }}
+{{- "\n" }}
+Pipelines UI is available at:
+{{ .Values.global.externalHostAddress }}:{{ .Values.pipelines.service.nodePort }}
+{{- end }}
+{{- end }}
 {{- end }}
 
 {{- if index .Values "kube-prometheus-stack" "enabled" }}
-8. Grafana UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort"}}
-
-9. Prometheus UI is available at:
-  http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "prometheus" "service" "nodePort"}}
-  
+{{- "\n" }}
+Grafana UI is available at:
+{{- if eq .Values.global.infrastructure.kind "cloud" }}
+grafana.{{ .Values.global.externalHostAddress }}
+{{- else }}
+{{- if index .Values "kube-prometheus-stack" "grafana" "ingress" "enabled" }}
+{{ (index .Values "kube-prometheus-stack" "grafana" "ingress" "hosts" 0) }}
+{{- else }}
+{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort"}}
+{{- end }}
+{{- end }}
 {{- end }}
 
+{{- if index .Values "kube-prometheus-stack" "enabled" }}
+{{- if ne .Values.global.infrastructure.kind "cloud" }}
+{{- "\n" }}
+Prometheus UI is available at:
+{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "prometheus" "service" "nodePort"}}
+{{- end }}
+{{- end }}
 
-Happy MLOPSing !!! :]
-{{- end}}
+Happy MLOPSing!!! :]
+{{- end }}

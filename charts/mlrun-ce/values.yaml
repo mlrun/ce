@@ -17,14 +17,9 @@ nuclio:
   fullnameOverride: nuclio
   controller:
     enabled: true
-    image:
-      tag: 1.12.14-amd64
   dashboard:
     enabled: true
-
     # nodePort - taken from global.nuclio.dashboard.nodePort for re-usability
-    image:
-      tag: 1.12.14-amd64
 
     # k8s has deprecated docker support since v1.20
     containerBuilderKind: kaniko
@@ -81,11 +76,7 @@ mlrun:
     sidecars:
       logCollector:
         enabled: true
-        image:
-          tag: 1.6.1
     fullnameOverride: mlrun-api
-    image:
-      tag: 1.6.1
     service:
       type: NodePort
       nodePort: 30070
@@ -119,8 +110,6 @@ mlrun:
     service:
       type: NodePort
       nodePort: 30060
-    image:
-      tag: 1.6.1
   db:
     name: db
     fullnameOverride: mlrun-db
@@ -158,7 +147,7 @@ jupyterNotebook:
   serviceAccount:
     create: true
     name: mlrun-jupyter
-  awsInstall: false 
+  awsInstall: false
   fullnameOverride: mlrun-jupyter
   name: jupyter-notebook
   enabled: true
@@ -182,7 +171,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.6.1
+    tag: 1.6.4
     pullPolicy: IfNotPresent
   busybox:
     image: busybox
@@ -205,7 +194,7 @@ jupyterNotebook:
   envFrom:
     - configMapRef:
         name: jupyter-common-env
-        optional: true        
+        optional: true
   persistence:
     enabled: true
     existingClaim:
@@ -264,7 +253,7 @@ spark-operator:
   enabled: true
   fullnameOverride: spark-operator
   webhook:
-     enable: true
+    enable: true
   serviceAccounts:
     spark:
       name: "sparkapp"
@@ -420,4 +409,3 @@ kube-prometheus-stack:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
     fullnameOverride: node-exporter
-
