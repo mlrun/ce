@@ -43,6 +43,8 @@ minio:
     type: NodePort
     port: 9001
     nodePort: 30090
+  mode: standalone
+  replicas: 1
 
 spark-operator:
   enabled: false
