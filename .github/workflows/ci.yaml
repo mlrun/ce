@@ -6,14 +6,44 @@ on:
       - development
 
 jobs:
-  lint:
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+          check-latest: true
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.6.1
+        with:
+          version: v3.10.1
+      - name: Run chart-testing (list-changed)
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
+          if [[ -n "$changed" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run chart-testing (lint)
+        run: make helm-lint
+        if: steps.list-changed.outputs.changed == 'true'
+        env:
+          HELM_LINT_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+  artifacthub-lint:
     runs-on: ubuntu-20.04
     container:
       image: artifacthub/ah
       options: --user 1001
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Run ah lint
         working-directory: ./charts/mlrun-ce
         run: ah lint

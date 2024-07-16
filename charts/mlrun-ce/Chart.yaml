@@ -1,10 +1,11 @@
 apiVersion: v1
 name: mlrun-ce
-version: 0.6.3-rc26
+version: 0.6.3-rc27
 description: MLRun Open Source Stack
 home: https://iguazio.com
 icon: https://www.iguazio.com/wp-content/uploads/2019/10/Iguazio-Logo.png
 sources: []
 maintainers:
-  - name: Adam Melnick
-    email: adamm@iguazio.com
+  - name: MLRun
+    email: mlrun@iguazio.com
+    url: https://www.mlrun.org/

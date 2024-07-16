@@ -16,6 +16,8 @@
 # Set the default shell to bash instead of sh
 SHELL := bash
 
+HELM_LINT_DEFAULT_BRANCH ?= development
+
 # Set the default target to help
 .DEFAULT_GOAL := help
 
@@ -30,3 +32,17 @@ tests: ## Run tests
 .PHONY: package
 package: ## Package the application
 	@./tests/package.sh
+
+.PHONY: helm-lint
+helm-lint: helm-repo-add ## Lint Helm Chart
+	@helm lint charts/mlrun-ce
+	@ct lint --target-branch $(HELM_LINT_DEFAULT_BRANCH)
+
+
+.PHONY: helm-repo-add
+helm-repo-add: ## Add Chart helm dependency repositories
+	@helm dependency list charts/mlrun-ce 2> /dev/null |\
+    	tail +2 |\
+     	awk 'NR>1{print l}{l=$$0}' |\
+      	awk '{ print "helm repo add " $$1 " " $$3 }' |\
+       	while read cmd; do $$cmd; done
