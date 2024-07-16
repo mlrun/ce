@@ -6,9 +6,16 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
+  {{- if .Values.global.infrastructure.inboundCidrs }}
+    alb.ingress.kubernetes.io/inbound-cidrs: {{ .Values.global.infrastructure.inboundCidrs }}
+  {{- end }}  
+  {{- if .Values.global.infrastructure.loadBalancerName }}
+    alb.ingress.kubernetes.io/load-balancer-name: {{ .Values.global.infrastructure.loadBalancerName }}
+  {{- end }}
   {{- if .Values.global.domainNameCertificate }}
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.domainNameCertificate }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
   {{- else }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
   {{- end }}

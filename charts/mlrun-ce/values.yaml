@@ -11,6 +11,8 @@ global:
   infrastructure:
     kind: lab
     provider: ~
+    inboundCidrs: ~
+    loadBalancerName: ~
 
 nuclio:
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
