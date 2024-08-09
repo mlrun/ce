@@ -36,8 +36,11 @@ pipelines:
       repository: gcr.io/ml-pipeline/metadata-writer
       tag: 2.2.0
     mysql:
-      repository: mysql
-      tag: "8.0"
+      # MySQL 8.0.26 because >= 8.0.27 has deprecated the default_authentication_plugin option
+      # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
+      # https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_default_authentication_plugin
+      repository: gcr.io/ml-pipeline/mysql
+      tag: "8.0.26"
     cacheImage:
       repository: gcr.io/google-containers/busybox
       tag: latest
