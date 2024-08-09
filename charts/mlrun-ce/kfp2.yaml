@@ -1,0 +1,43 @@
+pipelines:
+  releaseNamePrefix: kfp-
+  images:
+    argoexec:
+      repository: gcr.io/ml-pipeline/argoexec
+      tag: v3.4.17-license-compliance
+    workflowController:
+      repository: gcr.io/ml-pipeline/workflow-controller
+      tag: v3.4.17-license-compliance
+    apiServer:
+      repository: gcr.io/ml-pipeline/api-server
+      tag: 2.2.0
+    persistenceagent:
+      repository: gcr.io/ml-pipeline/persistenceagent
+      tag: 2.2.0
+    scheduledworkflow:
+      repository: gcr.io/ml-pipeline/scheduledworkflow
+      tag: 2.2.0
+    ui:
+      repository: gcr.io/ml-pipeline/frontend
+      tag: 2.2.0
+    viewerCrdController:
+      repository: gcr.io/ml-pipeline/viewer-crd-controller
+      tag: 2.2.0
+    visualizationServer:
+      repository: gcr.io/ml-pipeline/visualization-server
+      tag: 2.2.0
+    metadata:
+      container:
+        repository: gcr.io/tfx-oss-public/ml_metadata_store_server
+        tag: 1.14.0
+    metadataEnvoy:
+      repository: gcr.io/ml-pipeline/metadata-envoy
+      tag: 2.2.0
+    metadataWriter:
+      repository: gcr.io/ml-pipeline/metadata-writer
+      tag: 2.2.0
+    mysql:
+      repository: mysql
+      tag: "8.0"
+    cacheImage:
+      repository: gcr.io/google-containers/busybox
+      tag: latest

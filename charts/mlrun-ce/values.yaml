@@ -270,6 +270,7 @@ spark-operator:
 pipelines:
   enabled: true
   name: pipelines
+  releaseNamePrefix: ""
   service:
     type: NodePort
     nodePort: 30100
