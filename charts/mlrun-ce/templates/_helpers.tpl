@@ -231,11 +231,6 @@ Determines whether kfp pipelines v2 is set to be installed
 {{- end -}}
 {{- end -}}
 
-{{- define "mlrun-ce.pipelines.releaseNamePrefix" -}}
-{{- if .Values.pipelines.releaseNamePrefix -}}
-{{- .Values.pipelines.releaseNamePrefix }}
-{{- else -}}
-{{ "" }}
 {{- end -}}
 {{- end -}}
 

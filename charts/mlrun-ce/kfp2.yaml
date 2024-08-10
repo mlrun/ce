@@ -1,5 +1,4 @@
 pipelines:
-  releaseNamePrefix: kfp-
   images:
     argoexec:
       repository: gcr.io/ml-pipeline/argoexec
