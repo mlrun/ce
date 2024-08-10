@@ -231,9 +231,6 @@ Determines whether kfp pipelines v2 is set to be installed
 {{- end -}}
 {{- end -}}
 
-{{- end -}}
-{{- end -}}
-
 {{/*
 Model monitoring DSN
 */}}
