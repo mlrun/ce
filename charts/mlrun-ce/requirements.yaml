@@ -11,7 +11,7 @@ dependencies:
     repository: "https://v3io.github.io/helm-charts/stable"
   - name: minio
     repository: "https://charts.min.io/"
-    version: "4.0.9"
+    version: "4.0.15"
     condition: minio.enabled
   - name: spark-operator
     repository: "https://kubeflow.github.io/spark-operator"
