@@ -382,42 +382,6 @@ kube-prometheus-stack:
     service:
       type: NodePort
       nodePort: 30020
-    prometheusSpec:
-      storageSpec:
-        volumeClaimTemplate:
-          spec:
-            storageClassName: local-path
-            accessModes: ["ReadWriteOnce"]
-            resources:
-              requests:
-                storage: 5Gi
-      additionalScrapeConfigs:
-        - job_name: model-monitoring-job
-          metrics_path: /model-monitoring-metrics
-          scheme: http
-          tls_config:
-            insecure_skip_verify: true
-          scrape_interval: 30s
-          scrape_timeout: 10s
-          relabel_configs:
-            - source_labels: [__meta_kubernetes_namespace]
-              separator: ;
-              regex: (.*)
-              target_label: namespace
-              replacement: $1
-              action: replace
-          kubernetes_sd_configs:
-            - role: pod
-              kubeconfig_file: ""
-              follow_redirects: true
-              enable_http2: true
-              namespaces:
-                own_namespace: false
-                names:
-                  - mlrun
-              selectors:
-                - role: "pod"
-                  label: "type=model-monitoring-stream"
   kube-state-metrics:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
