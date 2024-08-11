@@ -5,7 +5,7 @@ data:
   minioServicePort: "{{ .Values.pipelines.minio.endpointPort }}"
   ConMaxLifeTime: 120s
   appName: pipeline
-  appVersion: 1.8.3
+  appVersion: {{ .Values.pipelines.images.apiServer.tag }}
   autoUpdatePipelineDefaultVersion: "false"
   bucketName: "{{ .Values.pipelines.minio.bucket }}"
   cacheDb: cachedb
