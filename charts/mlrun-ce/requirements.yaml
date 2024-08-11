@@ -1,9 +1,9 @@
 dependencies:
   - name: nuclio
-    version: "0.19.5"
+    version: "0.19.6"
     repository: "https://nuclio.github.io/nuclio/charts"
   - name: mlrun
-    version: "0.9.26"
+    version: "0.9.28"
     repository: "https://v3io.github.io/helm-charts/stable"
     condition: mlrun.enabled
   - name: mpi-operator
@@ -11,7 +11,7 @@ dependencies:
     repository: "https://v3io.github.io/helm-charts/stable"
   - name: minio
     repository: "https://charts.min.io/"
-    version: "4.0.2"
+    version: "4.0.9"
     condition: minio.enabled
   - name: spark-operator
     repository: "https://kubeflow.github.io/spark-operator"
