@@ -25,7 +25,15 @@ spec:
     spec:
       containers:
       - args:
+        {{- if semverCompare "~5.7" (.Values.pipelines.images.mysql.tag | toString) }}
         - --ignore-db-dir=lost+found
+        {{- end }}
+        {{- if semverCompare "~8.0" (.Values.pipelines.images.mysql.tag | toString) }}
+        # MLMD workloads (metadata-grpc-deployment and metadata-writer)
+        # depend on mysql_native_password authentication plugin.
+        - --default-authentication-plugin=mysql_native_password
+        - --disable-log-bin
+        {{- end }}
         - --datadir
         - /var/lib/mysql
         env:

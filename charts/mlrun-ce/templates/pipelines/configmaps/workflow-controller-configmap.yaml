@@ -13,7 +13,9 @@ data:
       secretKeySecret:
         name: mlpipeline-minio-artifact
         key: secretkey
+  {{- if not (include "mlrun-ce.pipelinesV2" .) }}
   containerRuntimeExecutor: emissary
+  {{- end }}
   executor: |
     imagePullPolicy: IfNotPresent
     resources:

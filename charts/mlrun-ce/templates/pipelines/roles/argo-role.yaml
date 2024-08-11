@@ -53,6 +53,9 @@ rules:
   - workflows/finalizers
   - workflowtasksets
   - workflowtasksets/finalizers
+  {{- if (include "mlrun-ce.pipelinesV2" .) }}
+  - workflowartifactgctasks
+  {{- end }}
   verbs:
   - get
   - list
