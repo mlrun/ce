@@ -2,10 +2,6 @@ name: demos_notebook_tests
 
 on:
   workflow_dispatch:
-  schedule:
-    # * is a special character in YAML so you have to quote this string
-    # Run every 8 hours (cron hours should divide 24 equally, otherwise there will be an overlap at the end of the day)
-    - cron:  '0 */4 * * *'
 
 jobs:
   demos-notebook-tests:
