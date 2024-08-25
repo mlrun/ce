@@ -7,7 +7,7 @@ metadata:
 data:
   S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
   MLRUN_STORAGE__AUTO_MOUNT_TYPE: s3
-  S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous | default "True" }}
+  S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous | default "True" | quote }}
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault }}
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}

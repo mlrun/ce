@@ -6,7 +6,7 @@ kind: ConfigMap
 metadata:
   name: mlrun-common-env
 data:
-  S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous | default "True"}}
+  S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous | default "True" | quote }}
   MLRUN_STORAGE__AUTO_MOUNT_TYPE: s3
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: "aws_access_key=minio,aws_secret_key=minio123,endpoint_url={{ include "mlrun-ce.minio.service.url" . }}"
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
