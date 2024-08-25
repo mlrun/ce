@@ -13,6 +13,9 @@ global:
     provider: ~
     inboundCidrs: ~
     loadBalancerName: ~
+    aws:
+      bucketName: ~
+      s3NonAnonymous: ~
 
 nuclio:
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
@@ -58,6 +61,7 @@ mlrun:
   # set the type of filesystem to use: filesystem, s3
   enabled: true
   storage: filesystem
+  storageAutoMountParams: ~
   secrets:
     s3:
       accessKey: ""
@@ -80,6 +84,7 @@ mlrun:
       logCollector:
         enabled: true
     fullnameOverride: mlrun-api
+    functionSpecServiceAccountDefault: ~
     service:
       type: NodePort
       nodePort: 30070

@@ -1,10 +1,17 @@
 {{ if .Values.jupyterNotebook.enabled}}
+{{- $bucket_name := .Values.global.infrastructure.aws.bucketName | default "mlrun" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: jupyter-common-env
 data:
   S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
+  MLRUN_STORAGE__AUTO_MOUNT_TYPE: s3
+  S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous | default "True" }}
+  MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault }}
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
+  MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ .Values.mlrun.storageAutoMountParams | default "non_anonymous=True" }}
+  MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts
+  MLRUN_HTTPDB__REAL_PATH: s3://
 {{- end}}
