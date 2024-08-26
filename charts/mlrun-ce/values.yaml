@@ -192,7 +192,7 @@ jupyterNotebook:
   mlrunUIURL:
   extraEnv:
     - name: MLRUN_ARTIFACT_PATH
-      value: s3://mlrun/projects/{{run.project}}/artifacts
+      value: s3://mlrun/projects/{{run.project}}/artifacts/{{run.uid}}
     - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT
       value: s3://mlrun/projects/{project}/FeatureStore/{name}/{kind}
     - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL
