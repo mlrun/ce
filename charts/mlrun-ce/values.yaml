@@ -190,16 +190,6 @@ jupyterNotebook:
   # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
   # mlrun UI's node port
   mlrunUIURL:
-  extraEnv:
-    - name: MLRUN_ARTIFACT_PATH
-      value: s3://mlrun/projects/{{run.project}}/artifacts/{{run.uid}}
-    - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT
-      value: s3://mlrun/projects/{project}/FeatureStore/{name}/{kind}
-    - name: MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL
-      value: ""
-    - name: MLRUN_FEATURE_STORE__DEFAULT_TARGETS
-      value: "parquet"
-
   extraEnvKeyValue: {}
   envFrom:
     - configMapRef:
