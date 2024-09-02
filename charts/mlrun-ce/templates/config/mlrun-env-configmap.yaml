@@ -11,7 +11,7 @@ data:
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: "aws_access_key=minio,aws_secret_key=minio123,endpoint_url={{ include "mlrun-ce.minio.service.url" . }}"
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
   S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
-  MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault }}
+  MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ .Values.mlrun.storageAutoMountParams | default "non_anonymous=True" }}
