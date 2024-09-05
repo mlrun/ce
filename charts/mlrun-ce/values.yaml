@@ -9,13 +9,16 @@ global:
     dashboard:
       nodePort: 30050
   infrastructure:
-    kind: lab
+    # Defines infra flavour, for instance: standalone, onprem, aws, azure, gcp...
+    kind: standalone
+    # Defines k8s flavour, for instance: eks, aks, gcp, kubespray, openshift, rancher, minikube...
     provider: ~
     inboundCidrs: ~
     loadBalancerName: ~
     aws:
       bucketName: ~
-      s3NonAnonymous: ~
+      s3NonAnonymous: True
+      domainNameCertificate: ~
 
 nuclio:
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart

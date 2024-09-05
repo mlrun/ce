@@ -1,4 +1,4 @@
-{{- if and (eq .Values.global.infrastructure.provider "aws") (eq .Values.global.infrastructure.kind "cloud") }}
+{{- if and (eq .Values.global.infrastructure.kind "aws") (eq .Values.global.infrastructure.provider "eks") }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,8 +12,8 @@ metadata:
   {{- if .Values.global.infrastructure.loadBalancerName }}
     alb.ingress.kubernetes.io/load-balancer-name: {{ .Values.global.infrastructure.loadBalancerName }}
   {{- end }}
-  {{- if .Values.global.domainNameCertificate }}
-    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.domainNameCertificate }}
+  {{- if .Values.global.infrastructure.aws.domainNameCertificate }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.infrastructure.aws.domainNameCertificate }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-redirect: '443'
   {{- else }}
