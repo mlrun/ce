@@ -57,6 +57,3 @@ pipelines:
     enabled: false
   priority_class:
     enabled: false
-
-kube-prometheus-stack:
-  enabled: false
