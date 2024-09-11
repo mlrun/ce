@@ -4,7 +4,7 @@ You're up and running!
 {{- if .Values.jupyterNotebook.enabled }}
 {{- "\n" }}
 Jupyter UI is available at:
-{{- if eq .Values.global.infrastructure.kind "cloud" }}
+{{- if eq .Values.global.infrastructure.kind "aws" }}
 jupyter.{{ .Values.global.externalHostAddress }}
 {{- else }}
 {{- if .Values.jupyterNotebook.ingress.enabled }}
@@ -18,7 +18,7 @@ jupyter.{{ .Values.global.externalHostAddress }}
 {{- if .Values.nuclio.dashboard.enabled }}
 {{- "\n" }}
 Nuclio UI is available at:
-{{- if eq .Values.global.infrastructure.kind "cloud" }}
+{{- if eq .Values.global.infrastructure.kind "aws" }}
 nuclio.{{ .Values.global.externalHostAddress }}
 {{- else }}
 {{- if .Values.nuclio.dashboard.ingress.enabled }}
@@ -32,7 +32,7 @@ nuclio.{{ .Values.global.externalHostAddress }}
 {{- if .Values.mlrun.enabled }}
 {{- "\n" }}
 MLRun UI is available at:
-{{- if eq .Values.global.infrastructure.kind "cloud" }}
+{{- if eq .Values.global.infrastructure.kind "aws" }}
 mlrun.{{ .Values.global.externalHostAddress }}
 {{- else }}
 {{- if .Values.mlrun.ui.ingress.enabled }}
@@ -46,7 +46,7 @@ mlrun.{{ .Values.global.externalHostAddress }}
 {{- if .Values.mlrun.enabled }}
 {{- "\n" }}
 MLRun API is available at:
-{{- if eq .Values.global.infrastructure.kind "cloud" }}
+{{- if eq .Values.global.infrastructure.kind "aws" }}
 mlrun-api.{{ .Values.global.externalHostAddress }}
 {{- else }}
 {{- if .Values.mlrun.ui.ingress.enabled }}
@@ -58,7 +58,7 @@ mlrun-api.{{ .Values.global.externalHostAddress }}
 {{- end }}
 
 {{- if .Values.minio.enabled }}
-{{- if ne .Values.global.infrastructure.kind "cloud" }}
+{{- if ne .Values.global.infrastructure.kind "aws" }}
 {{- "\n" }}
 Minio UI is available at:
 {{- if .Values.minio.ingress.enabled }}
@@ -72,7 +72,7 @@ Minio UI is available at:
 {{- end }}
 
 {{- if .Values.minio.enabled }}
-{{- if ne .Values.global.infrastructure.kind "cloud" }}
+{{- if ne .Values.global.infrastructure.kind "aws" }}
 {{- "\n" }}
 Minio API is available at:
 {{- if .Values.minio.ingress.enabled }}
@@ -84,7 +84,7 @@ Minio API is available at:
 {{- end }}
 
 {{- if .Values.pipelines.enabled }}
-{{- if ne .Values.global.infrastructure.kind "cloud" }}
+{{- if ne .Values.global.infrastructure.kind "aws" }}
 {{- if not .Values.minio.ingress.enabled }}
 {{- "\n" }}
 Pipelines UI is available at:
@@ -96,7 +96,7 @@ Pipelines UI is available at:
 {{- if index .Values "kube-prometheus-stack" "enabled" }}
 {{- "\n" }}
 Grafana UI is available at:
-{{- if eq .Values.global.infrastructure.kind "cloud" }}
+{{- if eq .Values.global.infrastructure.kind "aws" }}
 grafana.{{ .Values.global.externalHostAddress }}
 {{- else }}
 {{- if index .Values "kube-prometheus-stack" "grafana" "ingress" "enabled" }}
@@ -108,7 +108,7 @@ grafana.{{ .Values.global.externalHostAddress }}
 {{- end }}
 
 {{- if index .Values "kube-prometheus-stack" "enabled" }}
-{{- if ne .Values.global.infrastructure.kind "cloud" }}
+{{- if ne .Values.global.infrastructure.kind "aws" }}
 {{- "\n" }}
 Prometheus UI is available at:
 {{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "prometheus" "service" "nodePort"}}
