@@ -189,6 +189,8 @@ jupyterNotebook:
   busybox:
     image: busybox
     tag: 1.35
+  ce:
+    mode: full
 
   # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
   # mlrun UI's node port
