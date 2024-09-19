@@ -133,6 +133,21 @@ minio.{{.Release.Namespace}}.svc.cluster.local
 {{- end -}}
 
 {{/*
+MLRun storage auto mount params
+Global toggle is for fast toggling between on-prem/standalone and s3 cases
+Can be overriden if params are explicitly specified
+*/}}
+{{- define "mlrun.storage.auto.mount.params" -}}
+  {{- if .Values.mlrun.storageAutoMountParams -}}
+    {{ .Values.mlrun.storageAutoMountParams }}
+  {{- else if eq .Values.global.infrastructure.aws.s3NonAnonymous "False" -}}
+    "aws_access_key=minio,aws_secret_key=minio123,endpoint_url={{ include "mlrun-ce.minio.service.url" . }}"
+  {{- else -}}
+    "non_anonymous=True"
+  {{- end -}}
+{{- end -}}
+
+{{/*
 Mlrun DB labels
 */}}
 {{- define "mlrun-ce.mlrun.db.labels" -}}
