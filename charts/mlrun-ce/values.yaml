@@ -17,7 +17,7 @@ global:
     loadBalancerName: ~
     aws:
       bucketName: ~
-      s3NonAnonymous: True
+      s3NonAnonymous: "False"
       domainNameCertificate: ~
 
 nuclio:
