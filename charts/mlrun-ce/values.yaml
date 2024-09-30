@@ -33,6 +33,10 @@ nuclio:
     containerBuilderKind: kaniko
     ingress:
       enabled: false
+
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
   autoscaler:
     enabled: false
   dlx:
