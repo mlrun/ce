@@ -10,10 +10,12 @@ data:
   MLRUN_STORAGE__AUTO_MOUNT_TYPE: s3
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ include "mlrun.storage.auto.mount.params" . }}
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
-  S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
-  MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
+{{- if .Values.global.infrastructure.aws.s3NonAnonymous }}
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
+  S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
+{{- end }}
+  MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   MLRUN_HTTPDB__REAL_PATH: s3://
   MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts
   MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{project}/FeatureStore/{name}/{kind}
