@@ -24,6 +24,7 @@ data:
   MLRUN_CE__VERSION: {{ .Chart.Version }}
   MLRUN_DEFAULT_TENSORBOARD_LOGS_PATH: /home/jovyan/data/tensorboard/{{ `{{project}} `}}
   MLRUN_FEATURE_STORE__DEFAULT_TARGETS: parquet
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
   MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: "{{ template "mlrun-ce.mlrun.modelMonitoring.DSN" . }}"
   MLRUN_GRAFANA_URL: http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort" }}
 {{- end}}
