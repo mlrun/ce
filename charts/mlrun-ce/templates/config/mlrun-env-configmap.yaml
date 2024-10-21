@@ -6,7 +6,7 @@ kind: ConfigMap
 metadata:
   name: mlrun-common-env
 data:
-  S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous | quote | default "\"True\"" }}
+  S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous | toString | title | quote | default "\"True\"" }}
   MLRUN_STORAGE__AUTO_MOUNT_TYPE: s3
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ include "mlrun.storage.auto.mount.params" . }}
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
