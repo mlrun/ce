@@ -140,8 +140,8 @@ Can be overriden if params are explicitly specified
 {{- define "mlrun.storage.auto.mount.params" -}}
   {{- if .Values.mlrun.storageAutoMountParams -}}
     {{ .Values.mlrun.storageAutoMountParams }}
-  {{- else if eq .Values.global.infrastructure.aws.s3NonAnonymous "False" -}}
-    "aws_access_key=minio,aws_secret_key=minio123,endpoint_url={{ include "mlrun-ce.minio.service.url" . }}"
+  {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
+    "aws_access_key={{ .Values.minio.rootUser }},aws_secret_key={{ .Values.minio.rootPassword }},endpoint_url={{ include "mlrun-ce.minio.service.url" . }}"
   {{- else -}}
     "non_anonymous=True"
   {{- end -}}
