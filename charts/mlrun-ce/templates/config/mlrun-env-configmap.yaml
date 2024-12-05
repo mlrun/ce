@@ -17,7 +17,7 @@ data:
 {{- end }}
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   MLRUN_HTTPDB__REAL_PATH: s3://
-  MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts/{{ `{{run.uid}}` }}
+  MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts
   MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{project}/FeatureStore/{name}/{kind}
   MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL: ""
   MLRUN_CE__MODE: {{ .Values.mlrun.ce.mode }}

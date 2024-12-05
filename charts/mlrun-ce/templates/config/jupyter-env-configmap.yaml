@@ -17,7 +17,6 @@ data:
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT: s3:///{{ $bucket_name }}/projects/{project}/FeatureStore/{name}/{kind}
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ include "mlrun.storage.auto.mount.params" . }}
-  MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts/{{ `{{run.uid}}` }}
   MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL: ""
   MLRUN_FEATURE_STORE__DEFAULT_TARGETS: parquet
   MLRUN_HTTPDB__REAL_PATH: s3://
