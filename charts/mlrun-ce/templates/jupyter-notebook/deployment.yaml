@@ -22,17 +22,7 @@ spec:
         runAsUser: 1000
         runAsGroup: 100
         fsGroup: 100
-      initContainers:
-      - name: init-chown-data
-        # jupyter default NB user: uid=1000(jovyan) gid=100(users) groups=100(users)
-        command: ["chown", "-R", "1000:100", "/home/jovyan/"]
-        image: "{{ .Values.jupyterNotebook.busybox.image }}:{{ .Values.jupyterNotebook.busybox.tag }}"
-        imagePullPolicy: IfNotPresent
-        securityContext:
-          runAsUser: 0
-        volumeMounts:
-        - mountPath: /home/jovyan/
-          name: notebooks
+        fsGroupChangePolicy: OnRootMismatch
       containers:
       - name: jupyter-notebook
         image: "{{ .Values.jupyterNotebook.image.repository }}:{{ .Values.jupyterNotebook.image.tag }}"
