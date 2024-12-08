@@ -299,6 +299,11 @@ pipelines:
     #    effect: NoSchedule
   db:
     username: root
+    securityContext:
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+      fsGroupChangePolicy: OnRootMismatch
   minio:
     enabled: true
     accessKey: "minio"
