@@ -6,19 +6,19 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-  {{- if .Values.global.infrastructure.inboundCidrs }}
+    {{- if .Values.global.infrastructure.inboundCidrs }}
     alb.ingress.kubernetes.io/inbound-cidrs: {{ .Values.global.infrastructure.inboundCidrs }}
-  {{- end }}  
-  {{- if .Values.global.infrastructure.loadBalancerName }}
+    {{- end }}
+    {{- if .Values.global.infrastructure.loadBalancerName }}
     alb.ingress.kubernetes.io/load-balancer-name: {{ .Values.global.infrastructure.loadBalancerName }}
-  {{- end }}
-  {{- if .Values.global.infrastructure.aws.domainNameCertificate }}
+    {{- end }}
+    {{- if .Values.global.infrastructure.aws.domainNameCertificate }}
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.global.infrastructure.aws.domainNameCertificate }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-redirect: '443'
-  {{- else }}
+    {{- else }}
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-  {{- end }}
+    {{- end }}
 spec:
   ingressClassName: alb
   rules:
@@ -62,6 +62,7 @@ spec:
                 name: mlrun-jupyter
                 port:
                   number: 80
+    {{- if index .Values "kube-prometheus-stack" "enabled" }}
     - host: grafana.{{ .Values.global.externalHostAddress }}
       http:
         paths:
@@ -72,4 +73,5 @@ spec:
                 name: grafana
                 port:
                   number: 80
+    {{- end }}
 {{- end }}

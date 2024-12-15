@@ -36,3 +36,14 @@ jobs:
         uses: helm/chart-releaser-action@v1.1.0
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+  notify_mlefi:
+    runs-on: ubuntu-latest
+    steps:
+        - name: Send repository dispatch event
+          run: |
+            curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: token ${{ secrets.MLEfiGHTrigger }}" \
+            https://api.github.com/repos/iguazio/mlefi/dispatches \
+            -d '{"event_type":"helm-release","client_payload":{"chart_version":"${{ github.event.release.tag_name }}"}}'
