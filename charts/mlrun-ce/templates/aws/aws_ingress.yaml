@@ -4,6 +4,7 @@ kind: Ingress
 metadata:
   name: mlrun-ce-ingress
   annotations:
+    alb.ingress.kubernetes.io/group.name: {{ .Values.global.externalHostAddress }}
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     {{- if .Values.global.infrastructure.inboundCidrs }}
