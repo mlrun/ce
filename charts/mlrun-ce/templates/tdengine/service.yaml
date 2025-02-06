@@ -1,0 +1,23 @@
+{{- if .Values.tdengine.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mlrun-ce.tdengine.fullname" . }}
+  labels:
+    {{- include "mlrun-ce.tdengine.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.tdengine.service.type }}
+  ports: {{ range $idx, $val := .Values.tdengine.service.ports.tcp }}
+    - name: tcp{{- $idx}}
+      port: {{ $val }}
+      protocol: TCP
+    {{- end }}
+    {{ range $idx, $val := .Values.tdengine.service.ports.udp }}
+    - name: udp {{- $idx}}
+      port: {{ $val }}
+      protocol: UDP
+    {{- end }}
+  selector:
+    {{- include "mlrun-ce.tdengine.selectorLabels" . | nindent 4 }}
+    app: "taosd"
+{{- end -}}

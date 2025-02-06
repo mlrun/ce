@@ -405,3 +405,55 @@ kube-prometheus-stack:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
     fullnameOverride: node-exporter
+
+tdengine:
+  enabled: true
+  fullnameOverride: tdengine-tsdb
+  # For more detailes
+  # https://github.com/taosdata/TDengine-Operator/blob/3.0/helm/tdengine/values.yaml
+  replicaCount: 1
+  image:
+    prefix: tdengine/tdengine
+    pullPolicy: Always
+    tag: "3.0.2.2"
+  service:
+    type: ClusterIP
+    ports:
+      tcp: [6030, 6041, 6042, 6043, 6044, 6046, 6047, 6048, 6049, 6060]
+      udp: [6044, 6045]
+  # Set timezone here, not in taoscfg
+  timezone: "UTC"
+  resources:
+  storage:
+    className: ""
+    dataSize: "10Gi"
+    logSize: "1Gi"
+  nodeSelectors:
+    taosd:
+  clusterDomainSuffix: ""
+  taoscfg:
+    CLUSTER: "0"
+    TAOS_REPLICA: "1"
+
+kafka:
+  enabled: true
+  fullnameOverride: kafka-stream
+  controller:
+    replicaCount: 1
+  listeners:
+    client:
+      name: CLIENT
+      containerPort: 9092
+      protocol: PLAINTEXT
+    controller:
+      name: CONTROLLER
+      containerPort: 9093
+      protocol: PLAINTEXT
+    interbroker:
+      name: INTERNAL
+      containerPort: 9094
+      protocol: PLAINTEXT
+  advertisedListeners: >-
+    CLIENT://kafka-stream:9092
+    CONTROLLER://kafka-stream-controller-headless:9093,
+    INTERNAL://kafka-stream-controller-headless:9094,

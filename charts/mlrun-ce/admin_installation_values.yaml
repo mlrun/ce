@@ -47,3 +47,9 @@ pipelines:
 
 kube-prometheus-stack:
   enabled: false
+
+tdengine:
+  enabled: false
+
+kafka:
+  enabled: false
