@@ -44,6 +44,14 @@ jobs:
           run: |
             curl -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: token ${{ secrets.MLEfiGHTrigger }}" \
+            -H "Authorization: token ${{ secrets.MLEFIGHTRIGGER }}" \
             https://api.github.com/repos/iguazio/mlefi/dispatches \
-            -d '{"event_type":"helm-release","client_payload":{"chart_version":"${{ github.event.release.tag_name }}"}}'
+            -d '{
+              "event_type": "helm-release",
+              "client_payload": {
+                "target_type": "community", 
+                "tag_name": "${{ github.event.release.tag_name }}",
+                "platform": "linux",
+                "debug": "no"
+              }
+            }'

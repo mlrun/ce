@@ -87,6 +87,9 @@ mlrun:
   v3io:
     enabled: false
   api:
+    ingress:
+      enabled: false
+      annotations: {}
     sidecars:
       logCollector:
         enabled: true
@@ -175,6 +178,7 @@ jupyterNotebook:
   ingress:
     enabled: false
     annotations: {}
+    ingressClassName: ""
 
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
