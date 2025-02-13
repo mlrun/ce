@@ -192,12 +192,12 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.7.1
+    tag: 1.7.2
     pullPolicy: IfNotPresent
     pullSecrets: []
   busybox:
     image: busybox
-    tag: 1.35
+    tag: 1.37
   ce:
     mode: full
 
