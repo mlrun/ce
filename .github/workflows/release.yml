@@ -8,6 +8,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -37,19 +38,27 @@ jobs:
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
+
   notify_mlefi:
     runs-on: ubuntu-latest
+    needs: release  # Ensure this runs after the release job
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0  # Ensure full history for tag retrieval
 
-      - name: Get Latest Tag
-        id: get_tag
-        run: echo "TAG_NAME=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
+      - name: Extract Chart Version from Chart.yaml
+        run: |
+          CHART_VERSION=$(grep '^version:' charts/mlrun-ce/Chart.yaml | awk '{print $2}')
+          if [[ -z "$CHART_VERSION" ]]; then
+          echo "Error: Failed to extract version from Chart.yaml" >&2
+          exit 1
+          fi
+          TAG_NAME="mlrun-ce-$CHART_VERSION"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
-      - name: Debug TAG_NAME
+      - name: Debug Extracted Chart Version
         run: |
           echo "TAG_NAME is: '$TAG_NAME'"
 
