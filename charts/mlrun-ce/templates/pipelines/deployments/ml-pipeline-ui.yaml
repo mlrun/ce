@@ -53,8 +53,6 @@ spec:
               name: mlpipeline-minio-artifact
         - name: ALLOW_CUSTOM_VISUALIZATIONS
           value: "true"
-        - name: DISABLE_GKE_METADATA
-          value: "true"
         image: {{ .Values.pipelines.images.ui.repository }}:{{ .Values.pipelines.images.ui.tag }}
         imagePullPolicy: IfNotPresent
         livenessProbe:
