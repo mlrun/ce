@@ -17,7 +17,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  ingressClassName: nginx
+  ingressClassName: {{ .Values.jupyterNotebook.ingress.ingressClassName | default ""}}
 {{- if .Values.jupyterNotebook.ingress.tls }}
   tls:
   {{- range .Values.jupyterNotebook.ingress.tls }}

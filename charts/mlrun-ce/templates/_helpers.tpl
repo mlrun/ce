@@ -236,17 +236,6 @@ Pipelines labels
 {{- end -}}
 
 {{/*
-Determines whether kfp pipelines v2 is set to be installed
-*/}}
-{{- define "mlrun-ce.pipelinesV2" -}}
-{{- if semverCompare "~2.0" (.Values.pipelines.images.apiServer.tag | toString) -}}
-{{- true -}}
-{{- else -}}
-{{- false -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
 Model monitoring DSN
 */}}
 {{- define "mlrun-ce.mlrun.modelMonitoring.DSN" -}}

@@ -6,5 +6,5 @@ metadata:
 data:
   MLRUN_SPARK_OPERATOR_VERSION: spark-3
   MLRUN_SPARK_APP_IMAGE: gcr.io/iguazio/spark-app
-  MLRUN_SPARK_APP_IMAGE_TAG: v3.2.1-mlk
+  MLRUN_SPARK_APP_IMAGE_TAG: v3.5.3-mlrun-ce
 {{- end -}}

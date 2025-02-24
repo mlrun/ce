@@ -15,6 +15,10 @@ spec:
       labels:
         {{- include "mlrun-ce.jupyter.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.jupyterNotebook.image.pullSecrets }}
+      imagePullSecrets:
+          {{- toYaml . | nindent 8 }}
+      {{- end }}
 {{- if  .Values.jupyterNotebook.serviceAccount.name }}
       serviceAccount: {{ .Values.jupyterNotebook.serviceAccount.name }}
 {{- end }}
