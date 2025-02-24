@@ -30,6 +30,11 @@ spec:
     spec:
       containers:
       - env:
+        - name: TAG_NAME
+          value: "{{ .Values.pipelines.images.apiServer.tag | toString }}"
+        - name: COMMIT_SHA
+          # unharmful hard coded due to https://github.com/kubeflow/pipelines/issues/11573#issue-2822649951
+          value: 24ce44baf0070f76dcaf25d91a8c111de065c73f
         - name: AUTO_UPDATE_PIPELINE_DEFAULT_VERSION
           valueFrom:
             configMapKeyRef:

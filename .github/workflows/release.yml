@@ -4,19 +4,19 @@ on:
   push:
     branches:
       - development
+      - "[0-9]+.[0-9]+.x"
 
 jobs:
   release:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: azure/setup-helm@v1
-        with:
-          version: "v3.9.1"
+      - uses: azure/setup-helm@v4
 
       - name: Configure Git
         run: |
@@ -33,17 +33,42 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 
       - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.1.0
+        uses: helm/chart-releaser-action@v1.7.0
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
   notify_mlefi:
     runs-on: ubuntu-latest
+    needs: release # Ensure this runs after the release job
     steps:
-        - name: Send repository dispatch event
-          run: |
-            curl -X POST \
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Ensure full history for tag retrieval
+
+      - name: Extract Chart Version from Chart.yaml
+        run: |
+          CHART_VERSION=$(grep '^version:' charts/mlrun-ce/Chart.yaml | awk '{print $2}')
+          if [[ -z "$CHART_VERSION" ]]; then
+          echo "Error: Failed to extract version from Chart.yaml" >&2
+          exit 1
+          fi
+          TAG_NAME="mlrun-ce-$CHART_VERSION"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+
+      - name: Debug Extracted Chart Version
+        run: |
+          echo "TAG_NAME is: '$TAG_NAME'"
+
+      - name: Send repository dispatch event
+        run: |
+          JSON_PAYLOAD=$(jq -n --arg tag "$TAG_NAME" --arg target "community" --arg platform "linux" --arg debug "no" \
+            '{event_type: "helm-release", client_payload: {target_type: $target, tag_name: $tag, platform: $platform, debug: $debug}}')
+
+          echo "Sending JSON: $JSON_PAYLOAD"
+
+          curl -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: token ${{ secrets.MLEfiGHTrigger }}" \
+            -H "Authorization: token ${{ secrets.MLEFIGHTRIGGER }}" \
             https://api.github.com/repos/iguazio/mlefi/dispatches \
-            -d '{"event_type":"helm-release","client_payload":{"chart_version":"${{ github.event.release.tag_name }}"}}'
+            -d "$JSON_PAYLOAD"
