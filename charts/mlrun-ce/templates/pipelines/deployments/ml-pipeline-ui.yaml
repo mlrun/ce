@@ -37,10 +37,7 @@ spec:
         - name: MINIO_PORT
           value: "{{ .Values.pipelines.minio.endpointPort }}"
         - name: MINIO_NAMESPACE
-          valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.namespace
+          value: ""
         - name: MINIO_ACCESS_KEY
           valueFrom:
             secretKeyRef:
