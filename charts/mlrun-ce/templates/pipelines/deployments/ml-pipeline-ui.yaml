@@ -37,6 +37,7 @@ spec:
         - name: MINIO_PORT
           value: "{{ .Values.pipelines.minio.endpointPort }}"
         - name: MINIO_NAMESPACE
+          # This is required because otherwise the namespace is appended to the MinIO hostname used to fetch artifacts, causing the fetch to fail
           value: ""
         - name: MINIO_ACCESS_KEY
           valueFrom:
