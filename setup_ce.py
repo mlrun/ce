@@ -481,16 +481,18 @@ def is_valid_version(version):
     return bool(SEMVER_RC_REGEX.match(version))
 
 
-def get_all_tags(url):
+def get_all_tags(repo: str):
     tags = []
     page = 1
     per_page = 100
-    token = os.environ.get("GITHUB_TOKEN", "")
-    headers = {"Authorization": f"token {token}"}
+    token = os.environ.get("GITHUB_TOKEN", None)
+    headers = {}
+    if token is not None:
+        headers["Authorization"] =  f"token {token}"
     while True:
         params = {"page": page, "per_page": per_page}
         try:
-            response = requests.get(url, params=params, timeout=30, headers=headers)
+            response = requests.get(f"https://api.github.com/repos/{repo}/tags", params=params, timeout=30, headers=headers)
             response.raise_for_status()
             page_tags = response.json()
             if not page_tags:
@@ -503,9 +505,9 @@ def get_all_tags(url):
     return tags
 
 
-def get_latest_valid_version(tags_url):
+def get_latest_valid_version(repo_name: str):
     latest_version = None
-    tags = get_all_tags(tags_url)
+    tags = get_all_tags(repo_name)
     for tag in tags:
         tag_name = tag.get("name", "")
         cleaned_version = clean_version(tag_name)
@@ -520,15 +522,20 @@ def get_latest_valid_version(tags_url):
     return latest_version
 
 
-def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Path, debug: bool):
+def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Path, branch: str, debug: bool):
     if not ce_version:
         ce_version = get_latest_valid_version(
-            "https://api.github.com/repos/mlrun/ce/tags"
+            "mlrun/ce"
         )
         ce_version = ce_version.replace("mlrun-ce-", "")
 
     add_helm_repositories(debug=debug)
-
+    if not ce_dir.is_dir():
+        run_command(["git", "clone", REPO_URL, str(ce_dir)], debug=debug)
+    else:
+        if branch:
+            run_command(["git", "checkout", branch], cwd=ce_dir, debug=debug)
+            run_command(["git", "pull"], cwd=ce_dir, debug=debug)
     res = subprocess.run(
         ["helm", "status", "mlrun-admin", "-n", namespace],
         capture_output=True,
@@ -596,15 +603,9 @@ def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Pa
 
 
 def upgrade_images(
-        mlrun_ver: str, nuclio_ver: str, ce_dir: Path, user: str, server: str, branch: str, arch: str, namespace: str,
+        mlrun_ver: str, nuclio_ver: str, ce_dir: Path, user: str, server: str, arch: str, namespace: str,
         debug: bool
 ):
-    if not ce_dir.is_dir():
-        run_command(["git", "clone", REPO_URL, str(ce_dir)], debug=debug)
-    else:
-        if branch:
-            run_command(["git", "checkout", branch], cwd=ce_dir, debug=debug)
-            run_command(["git", "pull"], cwd=ce_dir, debug=debug)
 
     charts = ce_dir / "charts" / "mlrun-ce"
     if not charts.is_dir():
@@ -616,13 +617,13 @@ def upgrade_images(
 
     if not mlrun_ver:
         mlrun_ver = get_latest_valid_version(
-            "https://api.github.com/repos/mlrun/mlrun/tags"
+            "mlrun/mlrun"
         )
         mlrun_ver = mlrun_ver.replace("v", "")
 
     if not nuclio_ver:
         nuclio_ver = get_latest_valid_version(
-            "https://api.github.com/repos/nuclio/nuclio/tags"
+            "nuclio/nuclio"
         )
         nuclio_ver = nuclio_ver.replace("v", "")
 
@@ -750,7 +751,7 @@ def install_ce_on_docker(
 
     setup_ingress(debug)
     setup_registry_secret(user, passwd, server, namespace, debug)
-    setup_ce(user, server, ce_ver, namespace, ce_dir, debug)
+    setup_ce(user, server, ce_ver, namespace, ce_dir,branch, debug)
     upgrade_images(mlrun_ver, nuclio_ver, ce_dir, user, server, branch, arch, namespace, debug)
     create_ingress(namespace, debug)
     setup_telepresence(
