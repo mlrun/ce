@@ -22,19 +22,67 @@ app = typer.Typer(help="Manage MLRun CE installation & Telepresence intercept.")
 
 REPO_URL = "git@github.com:mlrun/ce.git"
 
-COMPONENT_IPS = {
-    "192.168.56.200": ["mlrun.k8s.internal"],
-    "192.168.56.201": ["mlrun-api.k8s.internal"],
-    "192.168.56.202": ["mlrun-api-chief.k8s.internal"],
-    "192.168.56.203": ["nuclio.k8s.internal", "nuclio-dashboard.k8s.internal"],
-    "192.168.56.204": ["jupyter.k8s.internal"],
-    "192.168.56.205": ["minio.k8s.internal"],
-    "192.168.56.206": ["grafana.k8s.internal"],
-    "192.168.56.207": ["kfp.k8s.internal"],
-    "192.168.56.208": ["metadata-envoy.k8s.internal"],
-    "192.168.56.209": ["workflow-metrics.k8s.internal"],
-    "192.168.56.210": ["workflow-controller.k8s.internal"],
-}
+INGRESS_HOSTS = [
+    {
+        "host": "mlrun.k8s.internal",
+        "paths": [{"path": "/", "serviceName": "mlrun-ui", "servicePort": 80}],
+    },
+    {
+        "host": "mlrun-api.k8s.internal",
+        "paths": [{"path": "/", "serviceName": "mlrun-api", "servicePort": 8080}],
+    },
+    {
+        "host": "mlrun-api-chief.k8s.internal",
+        "paths": [{"path": "/", "serviceName": "mlrun-api-chief", "servicePort": 8080}],
+    },
+    {
+        "host": "nuclio.k8s.internal",
+        "paths": [
+            {"path": "/", "serviceName": "nuclio-dashboard", "servicePort": 8070}
+        ],
+    },
+    {
+        "host": "nuclio-dashboard.k8s.internal",
+        "paths": [
+            {"path": "/", "serviceName": "nuclio-dashboard", "servicePort": 8070}
+        ],
+    },
+    {
+        "host": "jupyter.k8s.internal",
+        "paths": [{"path": "/", "serviceName": "mlrun-jupyter", "servicePort": 8888}],
+    },
+    {
+        "host": "minio.k8s.internal",
+        "paths": [{"path": "/", "serviceName": "minio-console", "servicePort": 9001}],
+    },
+    {
+        "host": "grafana.k8s.internal",
+        "paths": [{"path": "/", "serviceName": "grafana", "servicePort": 80}],
+    },
+    {
+        "host": "kfp.k8s.internal",
+        "paths": [
+            {"path": "/", "serviceName": "ml-pipeline-ui", "servicePort": 80},
+            {"path": "/apis/", "serviceName": "ml-pipeline", "servicePort": 8888},
+        ],
+    },
+    {
+        "host": "metadata-envoy.k8s.internal",
+        "paths": [
+            {"path": "/", "serviceName": "metadata-envoy-service", "servicePort": 9090}
+        ],
+    },
+    {
+        "host": "workflow-metrics.k8s.internal",
+        "paths": [
+            {
+                "path": "/",
+                "serviceName": "workflow-controller-metrics",
+                "servicePort": 9091,
+            }
+        ],
+    },
+]
 
 HELM_REPOS = {
     "mlrun": "https://mlrun.github.io/ce",
@@ -183,88 +231,6 @@ def windows_scheduled_task(debug: bool):
     echo_color(f"Scheduled task '{WINDOWS_SCHEDULED_TASK_NAME}' created or updated.")
 
 
-def create_virtual_interface(debug: bool):
-    sys_str = platform.system().lower()
-    ips = list(COMPONENT_IPS.keys())
-    if sys_str == "windows":
-        for ip in ips:
-            run_command(
-                [
-                    "netsh",
-                    "interface",
-                    "ip",
-                    "add",
-                    "address",
-                    "MLRun Loopback",
-                    ip,
-                    "255.255.255.0",
-                ],
-                debug=debug,
-            )
-    elif sys_str == "darwin":
-        for ip in ips:
-            res = subprocess.run(["ifconfig", "lo0"], capture_output=True, text=True)
-            if ip not in res.stdout:
-                run_command(["sudo", "-S", "ifconfig", "lo0", "alias", ip], debug=debug)
-    elif sys_str == "linux":
-        for ip in ips:
-            res = subprocess.run(
-                ["ip", "addr", "show", "lo"], capture_output=True, text=True
-            )
-            if ip not in res.stdout:
-                run_command(
-                    ["sudo", "-S", "ip", "address", "add", f"{ip}/32", "dev", "lo"],
-                    debug=debug,
-                )
-
-
-def persist_loopbacks_on_windows(debug: bool):
-    if platform.system().lower() == "windows":
-        ips = list(COMPONENT_IPS.keys())
-        windows_loopback_script(ips)
-        windows_scheduled_task(debug)
-
-
-def write_hosts(debug: bool):
-    echo_color("Checking if hosts file update is needed.")
-    sys_str = platform.system().lower()
-    hosts_file = (
-        Path(r"C:\Windows\System32\drivers\etc\hosts")
-        if sys_str == "windows"
-        else Path("/etc/hosts")
-    )
-
-    old_lines = []
-    if hosts_file.is_file():
-        try:
-            old_lines = hosts_file.read_text(encoding="utf-8").splitlines(keepends=True)
-        except Exception:
-            pass
-
-    new_lines = []
-    for line in old_lines:
-        if not any(h in line for ips in COMPONENT_IPS.values() for h in ips):
-            new_lines.append(line)
-    for ip, hosts in COMPONENT_IPS.items():
-        for h in hosts:
-            new_lines.append(f"{ip}\t{h}\n")
-
-    old_str = "".join(old_lines)
-    new_str = "".join(new_lines)
-
-    if old_str == new_str:
-        echo_color("No changes detected in hosts file. Skipping write.")
-        return
-
-    echo_color("Updating hosts file with new content.")
-    if sys_str in ("linux", "darwin"):
-        tmp_file = Path(tempfile.gettempdir()) / "hosts.tmp"
-        tmp_file.write_text(new_str, encoding="utf-8")
-        run_command(["sudo", "-S", "mv", str(tmp_file), str(hosts_file)], debug=debug)
-    else:
-        hosts_file.write_text(new_str, encoding="utf-8")
-
-
 def install_telepresence_all_os(debug: bool):
     echo_color("Installing Telepresence binary.")
 
@@ -390,44 +356,6 @@ def setup_telepresence(intercept: bool, install_telepresence: bool, namespace: s
         )
 
 
-def configure_metallb(debug: bool):
-    echo_color("Configuring MetalLB.")
-    run_command(
-        [
-            "kubectl",
-            "apply",
-            "-f",
-            "https://raw.githubusercontent.com/metallb/metallb/main/config/manifests/metallb-native.yaml",
-        ],
-        debug=debug,
-    )
-    run_command(
-        [
-            "kubectl",
-            "wait",
-            "--namespace",
-            "metallb-system",
-            "--for=condition=ready",
-            "pod",
-            "--selector=app=metallb",
-            "--timeout=300s",
-        ],
-        debug=debug,
-    )
-    res = subprocess.run(
-        ["kubectl", "get", "configmap", "config", "-n", "metallb-system"],
-        capture_output=True,
-        text=True,
-    )
-    if "NotFound" in res.stderr:
-        with tempfile.NamedTemporaryFile(
-                delete=False, suffix=".yaml", mode="w", encoding="utf-8"
-        ) as tmpf:
-            tmpf.write(METALLB_CONFIG_YAML)
-            tmpf.flush()
-            run_command(["kubectl", "apply", "-f", tmpf.name], debug=debug)
-
-
 def is_traefik_installed(debug: bool = False) -> bool:
     """
     Checks if Traefik is installed on the cluster by looking for Traefik pods in all namespaces.
@@ -449,7 +377,7 @@ def is_traefik_installed(debug: bool = False) -> bool:
     return "traefik" in res.stdout.lower()
 
 
-def setup_nginx(debug: bool):
+def setup_ingress(debug: bool):
     """
     Installs ingress-nginx only if Traefik is not detected.
     Otherwise, we assume the user wants to rely on Traefik for ingress.
@@ -490,7 +418,6 @@ def setup_nginx(debug: bool):
                 "controller.ingressClassResource.default=true",
                 "ingress-nginx",
                 "ingress-nginx/ingress-nginx",
-                "--debug",
             ],
             debug=debug,
         )
@@ -499,8 +426,8 @@ def setup_nginx(debug: bool):
 def add_helm_repositories(debug: bool):
     echo_color("Setting up Helm repositories.")
     for name, url in HELM_REPOS.items():
-        run_command(["helm", "repo", "add", name, url], debug=debug)
-    run_command(["helm", "repo", "update"], debug=debug)
+        run_command(["helm", "repo", "add", name, url], debug=False)
+    run_command(["helm", "repo", "update"], debug=False)
 
 
 def setup_registry_secret(
@@ -593,7 +520,7 @@ def get_latest_valid_version(tags_url):
     return latest_version
 
 
-def setup_ce(use_kfp_v2: bool, user: str, server: str, ce_version: str, namespace: str, debug: bool):
+def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Path, debug: bool):
     if not ce_version:
         ce_version = get_latest_valid_version(
             "https://api.github.com/repos/mlrun/ce/tags"
@@ -622,9 +549,9 @@ def setup_ce(use_kfp_v2: bool, user: str, server: str, ce_version: str, namespac
                 "--version",
                 ce_version,
                 "--values",
-                "charts/mlrun-ce/admin_installation_values.yaml",
+                f"{ce_dir}/charts/mlrun-ce/admin_installation_values.yaml",
             ],
-            debug=debug,
+            debug=False,
         )
 
     registry_url = f"{server.rstrip('/')}/{user}"
@@ -637,7 +564,7 @@ def setup_ce(use_kfp_v2: bool, user: str, server: str, ce_version: str, namespac
         "--set",
         "global.registry.secretName=registry-credentials",
         "--set",
-        "global.externalHostAddress=k8s.internal",
+        "global.externalHostAddress=mlrun.svc.cluster.local",
         "--set",
         "mlrun.api.securityContext.readOnlyRootFilesystem=false",
         "--set",
@@ -656,16 +583,16 @@ def setup_ce(use_kfp_v2: bool, user: str, server: str, ce_version: str, namespac
         "--devel",
         "--version",
         ce_version,
+        "--set",
+        'mlrun.ui.ingress.enabled=true',
         "--values",
-        "charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml",
+        f"{ce_dir}/charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml",
         "--set",
         "argoWorkflows.controller.metricsConfig.enabled=false",
     ]
-    if use_kfp_v2:
-        install_args += ["--values", "charts/mlrun-ce/kfp2.yaml"]
 
     run_command(
-        ["helm", "upgrade", "--install", "mlrun"] + install_args + ["--debug"],
+        ["helm", "upgrade", "--install", "mlrun"] + install_args,
         debug=debug,
     )
 
@@ -727,82 +654,23 @@ def upgrade_images(
             f"nuclio.controller.image.tag={nuclio_ver}-{arch}",
             "--set",
             f"nuclio.dashboard.image.tag={nuclio_ver}-{arch}",
-            "--debug",
+            "--set",
+            'mlrun.ui.ingress.enabled=true',
+            "--set",
+            "mlrun.api.ingress.hosts[0].host=mlrun-api"
+
         ],
         cwd=charts,
         debug=debug,
     )
 
 
-INGRESS_HOSTS = [
-    {
-        "host": "mlrun.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "mlrun-ui", "servicePort": 80}],
-    },
-    {
-        "host": "mlrun-api.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "mlrun-api", "servicePort": 8080}],
-    },
-    {
-        "host": "mlrun-api-chief.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "mlrun-api-chief", "servicePort": 8080}],
-    },
-    {
-        "host": "nuclio.k8s.internal",
-        "paths": [
-            {"path": "/", "serviceName": "nuclio-dashboard", "servicePort": 8070}
-        ],
-    },
-    {
-        "host": "nuclio-dashboard.k8s.internal",
-        "paths": [
-            {"path": "/", "serviceName": "nuclio-dashboard", "servicePort": 8070}
-        ],
-    },
-    {
-        "host": "jupyter.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "mlrun-jupyter", "servicePort": 8888}],
-    },
-    {
-        "host": "minio.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "minio-console", "servicePort": 9001}],
-    },
-    {
-        "host": "grafana.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "grafana", "servicePort": 80}],
-    },
-    {
-        "host": "kfp.k8s.internal",
-        "paths": [
-            {"path": "/", "serviceName": "ml-pipeline-ui", "servicePort": 80},
-            {"path": "/apis/", "serviceName": "ml-pipeline", "servicePort": 8888},
-        ],
-    },
-    {
-        "host": "metadata-envoy.k8s.internal",
-        "paths": [
-            {"path": "/", "serviceName": "metadata-envoy-service", "servicePort": 9090}
-        ],
-    },
-    {
-        "host": "workflow-metrics.k8s.internal",
-        "paths": [
-            {
-                "path": "/",
-                "serviceName": "workflow-controller-metrics",
-                "servicePort": 9091,
-            }
-        ],
-    },
-]
-
-
 def create_ingress(namespace: str, debug: bool):
     typer.echo("Ensuring Ingress resources are created...")
 
     traefik_found = is_traefik_installed(debug=debug)
-
     ingress_class = "traefik" if traefik_found else "nginx"
+
     ingress = {
         "apiVersion": "networking.k8s.io/v1",
         "kind": "Ingress",
@@ -865,7 +733,6 @@ def install_ce_on_docker(
         passwd: str,
         server: str,
         ce_dir: Path,
-        use_kfp_v2: bool,
         clear_ns: bool,
         intercept: bool,
         install_tel: bool,
@@ -883,13 +750,9 @@ def install_ce_on_docker(
         clear_namespaces(namespace, debug)
     (Path.home() / "mlrun-data").mkdir(exist_ok=True)
 
-    create_virtual_interface(debug)
-    persist_loopbacks_on_windows(debug)
-    configure_metallb(debug)
-    setup_nginx(debug)
+    setup_ingress(debug)
     setup_registry_secret(user, passwd, server, namespace, debug)
-    write_hosts(debug)
-    setup_ce(use_kfp_v2, user, server, ce_ver, namespace, debug)
+    setup_ce(user, server, ce_ver, namespace, ce_dir, debug)
     upgrade_images(mlrun_ver, nuclio_ver, ce_dir, user, server, branch, arch, namespace, debug)
     create_ingress(namespace, debug)
     setup_telepresence(
@@ -921,11 +784,6 @@ def install(
             Path.home() / "mlrun-ce",
             "--ce-folder",
             help="Folder in which to clone and store the MLRun CE source."
-        ),
-        use_kfp_v2: bool = typer.Option(
-            False,
-            "--use-kfp-v2",
-            help="Enable Kubeflow Pipelines V2 integration."
         ),
         clear_k8s_namespaces: bool = typer.Option(
             False,
@@ -983,7 +841,6 @@ def install(
         docker_password,
         docker_server,
         ce_folder,
-        use_kfp_v2,
         clear_k8s_namespaces,
         intercept,
         install_tel,
