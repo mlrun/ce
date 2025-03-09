@@ -583,8 +583,6 @@ def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Pa
         "--devel",
         "--version",
         ce_version,
-        "--set",
-        'mlrun.ui.ingress.enabled=true',
         "--values",
         f"{ce_dir}/charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml",
         "--set",
