@@ -31,6 +31,7 @@ jobs:
           helm repo add minio https://charts.min.io/
           helm repo add spark-operator https://kubeflow.github.io/spark-operator
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add bitnami https://charts.bitnami.com/bitnami
 
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.7.0
