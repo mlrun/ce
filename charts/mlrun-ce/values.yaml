@@ -404,7 +404,6 @@ kube-prometheus-stack:
   kube-state-metrics:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
-    hostRootFsMount: false
     fullnameOverride: node-exporter
 
 tdengine:
