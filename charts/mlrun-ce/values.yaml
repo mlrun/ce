@@ -403,8 +403,12 @@ kube-prometheus-stack:
       nodePort: 30020
   kube-state-metrics:
     fullnameOverride: state-metrics
-  prometheus-node-exporter:
-    fullnameOverride: node-exporter
+prometheus-node-exporter:
+  fullnameOverride: node-exporter
+  hostNetwork: false
+  hostRootFsMount:
+    enabled: false
+
 
 tdengine:
   enabled: true
