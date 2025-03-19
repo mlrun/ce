@@ -12,6 +12,7 @@ from typing import Optional
 import requests
 import typer
 import yaml
+from kubernetes import config, client
 
 try:
     import colorama
@@ -22,68 +23,6 @@ app = typer.Typer(help="Manage MLRun CE installation & Telepresence intercept.")
 
 REPO_URL = "git@github.com:mlrun/ce.git"
 
-INGRESS_HOSTS = [
-    {
-        "host": "mlrun.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "mlrun-ui", "servicePort": 80}],
-    },
-    {
-        "host": "mlrun-api.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "mlrun-api", "servicePort": 8080}],
-    },
-    {
-        "host": "mlrun-api-chief.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "mlrun-api-chief", "servicePort": 8080}],
-    },
-    {
-        "host": "nuclio.k8s.internal",
-        "paths": [
-            {"path": "/", "serviceName": "nuclio-dashboard", "servicePort": 8070}
-        ],
-    },
-    {
-        "host": "nuclio-dashboard.k8s.internal",
-        "paths": [
-            {"path": "/", "serviceName": "nuclio-dashboard", "servicePort": 8070}
-        ],
-    },
-    {
-        "host": "jupyter.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "mlrun-jupyter", "servicePort": 8888}],
-    },
-    {
-        "host": "minio.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "minio-console", "servicePort": 9001}],
-    },
-    {
-        "host": "grafana.k8s.internal",
-        "paths": [{"path": "/", "serviceName": "grafana", "servicePort": 80}],
-    },
-    {
-        "host": "kfp.k8s.internal",
-        "paths": [
-            {"path": "/", "serviceName": "ml-pipeline-ui", "servicePort": 80},
-            {"path": "/apis/", "serviceName": "ml-pipeline", "servicePort": 8888},
-        ],
-    },
-    {
-        "host": "metadata-envoy.k8s.internal",
-        "paths": [
-            {"path": "/", "serviceName": "metadata-envoy-service", "servicePort": 9090}
-        ],
-    },
-    {
-        "host": "workflow-metrics.k8s.internal",
-        "paths": [
-            {
-                "path": "/",
-                "serviceName": "workflow-controller-metrics",
-                "servicePort": 9091,
-            }
-        ],
-    },
-]
-
 HELM_REPOS = {
     "mlrun": "https://mlrun.github.io/ce",
     "nuclio": "https://nuclio.github.io/nuclio/charts",
@@ -92,23 +31,6 @@ HELM_REPOS = {
     "spark-operator": "https://kubeflow.github.io/spark-operator",
     "prometheus-community": "https://prometheus-community.github.io/helm-charts",
 }
-
-METALLB_CONFIG_YAML = """apiVersion: v1
-kind: ConfigMap
-metadata:
-  namespace: metallb-system
-  name: config
-data:
-  config: |
-    address-pools:
-    - name: default
-      protocol: layer2
-      addresses:
-      - 192.168.56.200-192.168.56.250
-"""
-
-WINDOWS_SCHEDULED_TASK_NAME = "LoopbackAliases"
-WINDOWS_LOOPBACK_SCRIPT = Path(r"C:\persist_loopbacks.bat")
 
 REQUIRED_COMMANDS = ["git", "helm", "kubectl"]
 
@@ -197,119 +119,33 @@ def clear_namespaces(namespace: str, debug: bool):
     )
 
 
-def windows_loopback_script(ips: list[str]):
-    lines = ["@echo off"]
-    for ip in ips:
-        lines.append(
-            f'netsh interface ip add address "Loopback Pseudo-Interface 1" {ip} 255.255.255.0 1>nul 2>nul'
-        )
-    lines.append("exit /b 0")
-    WINDOWS_LOOPBACK_SCRIPT.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def windows_scheduled_task(debug: bool):
-    run_command(
-        ["schtasks", "/delete", "/f", "/tn", WINDOWS_SCHEDULED_TASK_NAME], debug=debug
-    )
-    run_command(
-        [
-            "schtasks",
-            "/create",
-            "/tn",
-            WINDOWS_SCHEDULED_TASK_NAME,
-            "/sc",
-            "onstart",
-            "/ru",
-            "SYSTEM",
-            "/rl",
-            "HIGHEST",
-            "/tr",
-            str(WINDOWS_LOOPBACK_SCRIPT),
-        ],
-        debug=debug,
-    )
-    echo_color(f"Scheduled task '{WINDOWS_SCHEDULED_TASK_NAME}' created or updated.")
-
-
-def install_telepresence_all_os(debug: bool):
+def install_telepresence_linux(debug: bool):
     echo_color("Installing Telepresence binary.")
 
     if check_command_exists("telepresence"):
         echo_color("Telepresence is already installed. Skipping.")
         return
 
-    sys_str = platform.system().lower()
-    if sys_str == "darwin":
-        if not check_command_exists("brew"):
-            echo_color(
-                "Homebrew not found, cannot install Telepresence automatically.",
-                color=typer.colors.YELLOW,
-            )
-            return
-
-        formula_url = "https://raw.githubusercontent.com/datawire/homebrew-blackbird/97e0a28d02adb42221ae4160c35a35f3a00f9eed/Formula/telepresence-arm64.rb"
-        local_formula = "/tmp/telepresence-arm64.rb"
-
-        # Download the formula using wget
-        if not check_command_exists("wget"):
-            echo_color("wget not found, cannot download the formula.", err=True)
-            return
-
-        run_command(["wget", "-O", local_formula, formula_url], debug=debug)
-
-        # Install the formula using brew
-        run_command(
-            ["brew", "install", local_formula], debug=debug, raise_on_error=False
-        )
-    elif sys_str == "linux":
-        tmp_path = Path(tempfile.gettempdir()) / "telepresence"
-        run_command(
-            [
-                "curl",
-                "-fL",
-                "https://app.getambassador.io/download/tel2oss/releases/download/v2.14.4/telepresence-linux-amd64",
-                "-o",
-                str(tmp_path),
-            ],
-            debug=debug,
-        )
-        run_command(["chmod", "+x", str(tmp_path)], debug=debug)
-        run_command(
-            ["sudo", "-S", "mv", str(tmp_path), "/usr/local/bin/telepresence"],
-            debug=debug,
-        )
-    elif sys_str == "windows":
-        # If Telepresence is not installed, try installing via choco
-        if not check_command_exists("choco"):
-            run_command(
-                [
-                    "powershell.exe",
-                    "Set-ExecutionPolicy",
-                    "Bypass",
-                    "-Scope",
-                    "Process",
-                    "-Force;",
-                    "[System.Net.ServicePointManager]::SecurityProtocol="
-                    "[System.Net.ServicePointManager]::SecurityProtocol -bor 3072;",
-                    "iex",
-                    "(New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')",
-                ],
-                debug=debug,
-            )
-        if check_command_exists("choco"):
-            run_command(
-                ["choco", "install", "telepresence", "--version=2.14.4", "-y"],
-                debug=debug,
-            )
-        else:
-            echo_color(
-                "Chocolatey not available; cannot install Telepresence.", err=True
-            )
-
+    tmp_path = Path(tempfile.gettempdir()) / "telepresence"
+    run_command(
+        [
+            "curl",
+            "-fL",
+            "https://app.getambassador.io/download/tel2oss/releases/download/v2.14.4/telepresence-linux-amd64",
+            "-o",
+            str(tmp_path),
+        ],
+        debug=debug,
+    )
+    run_command(["chmod", "+x", str(tmp_path)], debug=debug)
+    run_command(
+        ["sudo", "-S", "mv", str(tmp_path), "/usr/local/bin/telepresence"],
+        debug=debug,
+    )
 
 def setup_telepresence(intercept: bool, install_telepresence: bool, namespace: str, debug: bool):
     if install_telepresence:
-        install_telepresence_all_os(debug)
+        install_telepresence_linux(debug)
 
     if intercept:
         echo_color("Installing Telepresence in Helm.")
@@ -431,7 +267,7 @@ def add_helm_repositories(debug: bool):
 
 
 def setup_registry_secret(
-        docker_user: str, docker_pass: str, docker_server: str, namespace: str, debug: bool
+        docker_user: str, docker_pass: str, docker_registry: str, namespace: str, debug: bool
 ):
     echo_color("Setting up Docker registry secret.")
     ns_cmd = subprocess.run(
@@ -461,7 +297,7 @@ def setup_registry_secret(
                 "--docker-password",
                 docker_pass,
                 "--docker-server",
-                docker_server,
+                docker_registry,
                 "--docker-email",
                 f"{docker_user}@iguazio.com",
             ],
@@ -481,18 +317,19 @@ def is_valid_version(version):
     return bool(SEMVER_RC_REGEX.match(version))
 
 
-def get_all_tags(repo: str):
+def get_all_tags(repository: str):
     tags = []
     page = 1
     per_page = 100
     token = os.environ.get("GITHUB_TOKEN", None)
     headers = {}
     if token is not None:
-        headers["Authorization"] =  f"token {token}"
+        headers["Authorization"] = f"token {token}"
     while True:
         params = {"page": page, "per_page": per_page}
         try:
-            response = requests.get(f"https://api.github.com/repos/{repo}/tags", params=params, timeout=30, headers=headers)
+            response = requests.get(f"https://api.github.com/repos/{repository}/tags", params=params, timeout=30,
+                                    headers=headers)
             response.raise_for_status()
             page_tags = response.json()
             if not page_tags:
@@ -500,7 +337,7 @@ def get_all_tags(repo: str):
             tags.extend(page_tags)
             page += 1
         except requests.RequestException as e:
-            print(f"HTTP error occurred while fetching tags: {e}")
+            echo_color(f"HTTP error occurred while fetching tags for repo {repository}: {e}", err=True)
             break
     return tags
 
@@ -513,12 +350,12 @@ def get_latest_valid_version(repo_name: str):
         cleaned_version = clean_version(tag_name)
         if is_valid_version(cleaned_version):
             latest_version = cleaned_version
-            print(f"Valid version found: {latest_version}")
+            echo_color(f"Valid version found for repo {repo_name}: {latest_version}")
             break
         else:
-            print(f"Ignoring invalid version: {cleaned_version}")
+            echo_color(f"Ignoring invalid version: {cleaned_version}")
     if not latest_version:
-        raise ValueError("No valid version found with the required criteria.")
+        raise ValueError(f"No valid version for repo {repo_name} found with the required criteria.")
     return latest_version
 
 
@@ -603,10 +440,15 @@ def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Pa
 
 
 def upgrade_images(
-        mlrun_ver: str, nuclio_ver: str, ce_dir: Path, user: str, server: str, arch: str, namespace: str,
-        debug: bool
+        mlrun_ver: str,
+        nuclio_ver: str,
+        ce_dir: Path,
+        user: str,
+        docker_registry: str,
+        arch: str,
+        namespace: str,
+        debug: bool,
 ):
-
     charts = ce_dir / "charts" / "mlrun-ce"
     if not charts.is_dir():
         echo_color(
@@ -627,7 +469,7 @@ def upgrade_images(
         )
         nuclio_ver = nuclio_ver.replace("v", "")
 
-    registry_url = f"{server.rstrip('/')}/{user}"
+    registry_url = f"{docker_registry.rstrip('/')}/{user}"
     run_command(["helm", "dependency", "build"], cwd=charts, debug=debug)
 
     run_command(
@@ -653,15 +495,72 @@ def upgrade_images(
             f"nuclio.controller.image.tag={nuclio_ver}-{arch}",
             "--set",
             f"nuclio.dashboard.image.tag={nuclio_ver}-{arch}",
-            "--set",
-            'mlrun.ui.ingress.enabled=true',
-            "--set",
-            "mlrun.api.ingress.hosts[0].host=mlrun-api"
 
         ],
         cwd=charts,
         debug=debug,
     )
+
+
+def get_k8s_dns_ip():
+    """
+    Retrieve the Kubernetes DNS (kube-dns or coredns) ClusterIP
+    using the native Kubernetes Python client.
+    """
+    try:
+        config.load_kube_config()
+        v1 = client.CoreV1Api()
+        try:
+            svc = v1.read_namespaced_service("kube-dns", "kube-system")
+        except client.exceptions.ApiException as e:
+            if e.status == 404:
+                svc = v1.read_namespaced_service("coredns", "kube-system")
+            else:
+                raise
+        return svc.spec.cluster_ip
+    except Exception as e:
+        echo_color(f"Error retrieving Kubernetes DNS IP: {e}", err=True)
+        raise e
+
+
+def set_dns(dns_ip: str):
+    resolv_conf = "/etc/resolv.conf"
+    backup_file = "/etc/resolv.conf.bak"
+
+    try:
+        with open(resolv_conf, "r") as f:
+            lines = f.readlines()
+    except Exception as e:
+        echo_color(f"Error reading {resolv_conf}: {e}", err=True)
+        return
+
+    new_lines = lines.copy()
+    nameserver_exists = any(line.strip().startswith("nameserver") and dns_ip in line for line in lines)
+    search_exists = any(line.strip().startswith("search") and "cluster.local" in line for line in lines)
+
+    if not nameserver_exists:
+        new_lines.insert(0, f"nameserver {dns_ip}\n")
+    if not search_exists:
+        new_lines.insert(0, "search cluster.local\n")
+
+    if new_lines != lines:
+        try:
+            if not os.path.exists(backup_file):
+                subprocess.run(["sudo", "cp", resolv_conf, backup_file], check=True)
+
+            # Write the new configuration to a temporary file
+            with tempfile.NamedTemporaryFile("w", delete=False) as tf:
+                tf.writelines(new_lines)
+                temp_file_name = tf.name
+
+            # Use sudo to copy the temporary file into place
+            subprocess.run(["sudo", "cp", temp_file_name, resolv_conf], check=True)
+            os.remove(temp_file_name)
+            echo_color("Modified /etc/resolv.conf with Kubernetes DNS settings.")
+        except Exception as e:
+            echo_color(f"Error modifying {resolv_conf}: {e}", err=True)
+    else:
+        echo_color("/etc/resolv.conf already configured with Kubernetes DNS.")
 
 
 def create_ingress(namespace: str, debug: bool):
@@ -681,7 +580,69 @@ def create_ingress(namespace: str, debug: bool):
         "spec": {"ingressClassName": ingress_class, "rules": []},
     }
 
-    for item in INGRESS_HOSTS:
+    ingress_hosts = [
+        {
+            "host": f"mlrun.{namespace}.svc.cluster.local",
+            "paths": [{"path": "/", "serviceName": "mlrun-ui", "servicePort": 80}],
+        },
+        {
+            "host": f"mlrun-api.{namespace}.svc.cluster.local",
+            "paths": [{"path": "/", "serviceName": "mlrun-api", "servicePort": 8080}],
+        },
+        {
+            "host": f"mlrun-api-chief.{namespace}.svc.cluster.local",
+            "paths": [{"path": "/", "serviceName": "mlrun-api-chief", "servicePort": 8080}],
+        },
+        {
+            "host": f"nuclio.{namespace}.svc.cluster.local",
+            "paths": [
+                {"path": "/", "serviceName": "nuclio-dashboard", "servicePort": 8070}
+            ],
+        },
+        {
+            "host": f"nuclio-dashboard.{namespace}.svc.cluster.local",
+            "paths": [
+                {"path": "/", "serviceName": "nuclio-dashboard", "servicePort": 8070}
+            ],
+        },
+        {
+            "host": f"jupyter.{namespace}.svc.cluster.local",
+            "paths": [{"path": "/", "serviceName": "mlrun-jupyter", "servicePort": 8888}],
+        },
+        {
+            "host": f"minio.{namespace}.svc.cluster.local",
+            "paths": [{"path": "/", "serviceName": "minio-console", "servicePort": 9001}],
+        },
+        {
+            "host": f"grafana.{namespace}.svc.cluster.local",
+            "paths": [{"path": "/", "serviceName": "grafana", "servicePort": 80}],
+        },
+        {
+            "host": f"kfp.{namespace}.svc.cluster.local",
+            "paths": [
+                {"path": "/", "serviceName": "ml-pipeline-ui", "servicePort": 80},
+                {"path": "/apis/", "serviceName": "ml-pipeline", "servicePort": 8888},
+            ],
+        },
+        {
+            "host": f"metadata-envoy.{namespace}.svc.cluster.local",
+            "paths": [
+                {"path": "/", "serviceName": "metadata-envoy-service", "servicePort": 9090}
+            ],
+        },
+        {
+            "host": f"workflow-metrics.{namespace}.svc.cluster.local",
+            "paths": [
+                {
+                    "path": "/",
+                    "serviceName": "workflow-controller-metrics",
+                    "servicePort": 9091,
+                }
+            ],
+        },
+    ]
+
+    for item in ingress_hosts:
         host_item = {"host": item["host"], "http": {"paths": []}}
         for p in item["paths"]:
             host_item["http"]["paths"].append(
@@ -727,10 +688,22 @@ def patch_mlrun_env():
         env_file.write_text(new_line + "\n", encoding="utf-8")
 
 
+def setup_dns():
+    system = platform.system()
+    if system == "Windows":
+        echo_color("Not setting DNS on Windows.")
+        return
+    dns_ip = get_k8s_dns_ip()
+    if not dns_ip:
+        echo_color("Failed to retrieve Kubernetes DNS IP. Exiting.")
+        return
+    set_dns(dns_ip)
+
+
 def install_ce_on_docker(
         user: str,
         passwd: str,
-        server: str,
+        docker_registry: str,
         ce_dir: Path,
         clear_ns: bool,
         intercept: bool,
@@ -750,9 +723,9 @@ def install_ce_on_docker(
     (Path.home() / "mlrun-data").mkdir(exist_ok=True)
 
     setup_ingress(debug)
-    setup_registry_secret(user, passwd, server, namespace, debug)
-    setup_ce(user, server, ce_ver, namespace, ce_dir,branch, debug)
-    upgrade_images(mlrun_ver, nuclio_ver, ce_dir, user, server, branch, arch, namespace, debug)
+    setup_registry_secret(user, passwd, docker_registry, namespace, debug)
+    setup_ce(user, docker_registry, ce_ver, namespace, ce_dir, branch, debug)
+    upgrade_images(mlrun_ver, nuclio_ver, ce_dir, user, docker_registry, arch, namespace, debug)
     create_ingress(namespace, debug)
     setup_telepresence(
         intercept=intercept,
@@ -761,6 +734,7 @@ def install_ce_on_docker(
         debug=debug,
     )
     patch_mlrun_env()
+    setup_dns()
     echo_color("MLRun CE installation complete!")
 
 
@@ -775,9 +749,9 @@ def install(
             ...,
             help="Password or token for the specified Docker user."
         ),
-        docker_server: str = typer.Option(
+        docker_registry: str = typer.Option(
             ...,
-            help="Docker registry server (e.g., 'docker.io' or a private registry)."
+            help="Docker registry (e.g., 'docker.io' or a private registry)."
         ),
         ce_folder: Path = typer.Option(
             Path.home() / "mlrun-ce",
@@ -838,7 +812,7 @@ def install(
     install_ce_on_docker(
         docker_user,
         docker_password,
-        docker_server,
+        docker_registry,
         ce_folder,
         clear_k8s_namespaces,
         intercept,
