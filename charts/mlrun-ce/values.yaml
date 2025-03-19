@@ -415,7 +415,7 @@ tdengine:
   image:
     prefix: tdengine/tdengine
     pullPolicy: Always
-    tag: "3.0.2.2"
+    tag: "3.0.7.1"
   service:
     type: ClusterIP
     ports:
@@ -447,7 +447,7 @@ kafka:
 
   controller:
     replicaCount: 1
-
+    resourcesPreset: "medium"
   listeners:
     client:
       name: CLIENT
