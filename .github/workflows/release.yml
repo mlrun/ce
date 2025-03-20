@@ -54,7 +54,7 @@ jobs:
           echo "Error: Failed to extract version from Chart.yaml" >&2
           exit 1
           fi
-          TAG_NAME="mlrun-ce-$CHART_VERSION"
+          TAG_NAME="$CHART_VERSION"
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
       - name: Debug Extracted Chart Version
