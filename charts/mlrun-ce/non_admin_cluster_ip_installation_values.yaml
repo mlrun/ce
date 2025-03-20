@@ -60,4 +60,10 @@ pipelines:
     enabled: false
 
 kube-prometheus-stack:
-  enabled: false
+  prometheus-node-exporter:
+    fullnameOverride: node-exporter
+    hostNetwork: false
+    service:
+      port: 9100
+    hostRootFsMount:
+      enabled: false

@@ -365,6 +365,9 @@ pipelines:
 kube-prometheus-stack:
   fullnameOverride: monitoring
   enabled: true
+  prometheusOperator:
+    admissionWebhooks:
+      enabled: false
   alertmanager:
     enabled: false
   grafana:
@@ -406,9 +409,10 @@ kube-prometheus-stack:
 prometheus-node-exporter:
   fullnameOverride: node-exporter
   hostNetwork: false
+  service:
+    port: 9100
   hostRootFsMount:
     enabled: false
-
 
 tdengine:
   enabled: true
