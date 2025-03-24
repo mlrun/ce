@@ -202,7 +202,7 @@ jupyterNotebook:
     mode: full
 
   # use this to override mlrunUIURL, by default it will be auto-resolved to externalHostAddress and
-  # mlrun UI's node port
+  # mlrun UI node port
   mlrunUIURL:
   extraEnvKeyValue: {}
   envFrom:
