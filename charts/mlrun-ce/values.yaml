@@ -270,6 +270,8 @@ minio:
 spark-operator:
   enabled: true
   fullnameOverride: spark-operator
+  controller:
+    serviceName: spark-operator-webhook
   webhook:
     enable: true
   spark:
