@@ -38,6 +38,10 @@ helm-lint: helm-repo-add ## Lint Helm Chart
 	@helm lint charts/mlrun-ce
 	@ct lint --target-branch $(HELM_LINT_DEFAULT_BRANCH)
 
+.PHONY: helm-update-dependencies
+helm-update-dependencies:  ## Update Helm Chart dependencies
+	@helm dependency update charts/mlrun-ce
+
 
 .PHONY: helm-repo-add
 helm-repo-add: ## Add Chart helm dependency repositories
