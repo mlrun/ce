@@ -326,32 +326,32 @@ pipelines:
       tag: v3.4.17-license-compliance
     apiServer:
       repository: ghcr.io/kubeflow/kfp-api-server
-      tag: 2.4.0
+      tag: 2.4.1
     persistenceagent:
       repository: ghcr.io/kubeflow/kfp-persistence-agent
-      tag: 2.4.0
+      tag: 2.4.1
     scheduledworkflow:
       repository: ghcr.io/kubeflow/kfp-scheduled-workflow-controller
-      tag: 2.4.0
+      tag: 2.4.1
     ui:
       repository: ghcr.io/kubeflow/kfp-frontend
-      tag: 2.4.0
+      tag: 2.4.1
     viewerCrdController:
       repository: ghcr.io/kubeflow/kfp-viewer-crd-controller
-      tag: 2.4.0
+      tag: 2.4.1
     visualizationServer:
       repository: ghcr.io/kubeflow/kfp-visualization-server
-      tag: 2.4.0
+      tag: 2.4.1
     metadata:
       container:
         repository: gcr.io/tfx-oss-public/ml_metadata_store_server
         tag: 1.16.0
     metadataEnvoy:
       repository: ghcr.io/kubeflow/kfp-metadata-envoy
-      tag: 2.4.0
+      tag: 2.4.1
     metadataWriter:
       repository: ghcr.io/kubeflow/kfp-metadata-writer
-      tag: 2.4.0
+      tag: 2.4.1
     mysql:
       # MySQL 8.0.26 because >= 8.0.27 has deprecated the default_authentication_plugin option
       # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
