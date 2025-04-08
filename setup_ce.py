@@ -297,7 +297,7 @@ def get_latest_valid_version(repo_name: str):
         raise ValueError(f"No valid version for repo {repo_name} found with the required criteria.")
     return latest_version
 
-def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Path, branch: str, debug: bool):
+def setup_ce(server: str, ce_version: str, namespace: str, ce_dir: Path, branch: str, debug: bool):
     if not ce_version:
         ce_version = get_latest_valid_version("mlrun/ce")
         ce_version = ce_version.replace("mlrun-ce-", "")
@@ -313,12 +313,12 @@ def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Pa
     if "not found" in (res.stdout + res.stderr).lower():
         run_command([
             "helm", "--namespace", namespace, "upgrade", "--install", "mlrun-admin",
-            "--create-namespace", "mlrun/mlrun-ce", "--devel", "--version", ce_version,
-            "--values", f"{ce_dir}/charts/mlrun-ce/admin_installation_values.yaml",
-        ], debug=False)
-    registry_url = f"{server.rstrip('/')}/{user}"
+            "--create-namespace", f"{ce_dir}/charts/mlrun-ce", "--devel", "--version", ce_version,
+            "--values", f"{ce_dir}/charts/mlrun-ce/admin_installation_values.yaml", "--force"
+        ], debug=False,cwd=ce_dir)
+    registry_url = f"{server.rstrip('/')}"
     install_args = [
-        "--namespace", namespace, "--create-namespace",
+        "--namespace", namespace,
         "--set", f"global.registry.url={registry_url}",
         "--set", "global.registry.secretName=registry-credentials",
         "--set", "global.externalHostAddress=mlrun.svc.cluster.local",
@@ -329,11 +329,11 @@ def setup_ce(user: str, server: str, ce_version: str, namespace: str, ce_dir: Pa
         "--set", "global.localEnvironment=true",
         "--set", "global.persistence.storageClass=hostpath",
         "--set", f"global.persistence.hostPath={Path.home() / 'mlrun-data'}",
-        "mlrun/mlrun-ce", "--devel", "--version", ce_version,
+        f"{ce_dir}/charts/mlrun-ce", "--devel", "--version", ce_version,
         "--values", f"{ce_dir}/charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml",
         "--set", "argoWorkflows.controller.metricsConfig.enabled=false",
     ]
-    run_command(["helm", "upgrade", "--install", "mlrun"] + install_args, debug=debug)
+    run_command(["helm", "upgrade", "--install", "mlrun"] + install_args, debug=debug,cwd=ce_dir)
 
 def upgrade_images(
     mlrun_ver: str, nuclio_ver: str, ce_dir: Path, user: str,
@@ -350,10 +350,14 @@ def upgrade_images(
         nuclio_ver = get_latest_valid_version("nuclio/nuclio")
         nuclio_ver = nuclio_ver.replace("v", "")
     registry_url = f"{docker_registry.rstrip('/')}/{user}"
-    run_command(["helm", "dependency", "build"], cwd=charts, debug=debug)
+    build_cmd = ["helm", "dependency", "build"]
+    if debug:
+        build_cmd.append("--debug")
+    run_command(build_cmd, cwd=charts, debug=debug)
     run_command([
         "helm", "upgrade", "mlrun", ".", "--namespace", namespace, "--reuse-values",
         "--set", f"global.registry.url={registry_url}",
+        "--set", "global.registry.secretName=registry-credentials",
         "--set", f"mlrun.api.image.tag={mlrun_ver}",
         "--set", f"mlrun.ui.image.tag={mlrun_ver}",
         "--set", f"mlrun.api.sidecars.logCollector.image.tag={mlrun_ver}",
@@ -515,7 +519,7 @@ def install_ce_on_docker(
     setup_ingress(debug)
     create_ingress(namespace, debug)
     setup_registry_secret(user, passwd, docker_registry, namespace, debug)
-    setup_ce(user, docker_registry, ce_ver, namespace, ce_dir, branch, debug)
+    setup_ce(docker_registry, ce_ver, namespace, ce_dir, branch, debug)
     upgrade_images(mlrun_ver, nuclio_ver, ce_dir, user, docker_registry, arch, namespace, debug)
     patch_mlrun_env()
     # Decide how to update DNS resolution:
