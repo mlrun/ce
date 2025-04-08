@@ -10,7 +10,7 @@ data:
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
 {{- end }}
-  MLRUN_STORAGE__AUTO_MOUNT_TYPE: s3
+  MLRUN_STORAGE__AUTO_MOUNT_TYPE: {{ default "" .Values.mlrun.storageAutoMountType }}
   S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous  | toString | title | quote | default "\"True\"" }}
   MLRUN_CE__MODE: {{ .Values.jupyterNotebook.ce.mode | default "full" }}
   MLRUN_CE__VERSION: {{ .Chart.Version }}
