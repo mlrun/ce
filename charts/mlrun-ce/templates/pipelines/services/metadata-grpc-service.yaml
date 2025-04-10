@@ -6,7 +6,7 @@ metadata:
   labels:
     app: metadata
     application-crd-id: kubeflow-pipelines
-  name: metadata-grpc-service
+  name: metadata-grpc
 spec:
   ports:
   - name: grpc-api

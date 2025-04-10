@@ -6,7 +6,7 @@ metadata:
   labels:
     app: metadata-envoy
     application-crd-id: kubeflow-pipelines
-  name: metadata-envoy-service
+  name: metadata-envoy
 spec:
   ports:
   - name: md-envoy
