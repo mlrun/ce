@@ -1,6 +1,11 @@
 {{- if .Values.pipelines.enabled -}}
 apiVersion: v1
 data:
+  metricsConfig: |
+    enabled: false
+    path: /metrics
+    port: 9090
+    ignoreErrors: false
   artifactRepository: |
     archiveLogs: true
     s3:
