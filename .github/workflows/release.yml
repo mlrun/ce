@@ -63,8 +63,8 @@ jobs:
 
       - name: Send repository dispatch event
         run: |
-          JSON_PAYLOAD=$(jq -n --arg tag "$TAG_NAME" --arg target "community" --arg platform "linux" --arg debug "no" \
-            '{event_type: "helm-release", client_payload: {target_type: $target, tag_name: $tag, platform: $platform, debug: $debug}}')
+          JSON_PAYLOAD=$(jq -n --arg tag "$TAG_NAME" --arg target "community" --arg platform "linux" --arg debug "no" --arg source_repo "ce" \
+            '{event_type: "ce-helm-release", client_payload: {target_type: $target, tag_name: $tag, platform: $platform, debug: $debug, source_repo: $source_repo}}')
 
           echo "Sending JSON: $JSON_PAYLOAD"
 
