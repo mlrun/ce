@@ -368,6 +368,8 @@ kube-prometheus-stack:
   fullnameOverride: monitoring
   enabled: true
   prometheusOperator:
+    tls:
+      enabled: false
     admissionWebhooks:
       enabled: false
   alertmanager:
