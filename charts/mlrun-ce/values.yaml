@@ -63,6 +63,8 @@ nuclio:
       functions:
         - level: debug
           sink: myStdoutLoggerSink
+      projectsLeader:
+        kind: mlrun
 
 mlrun:
   # set the type of filesystem to use: filesystem, s3
