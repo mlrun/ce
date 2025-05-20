@@ -1,4 +1,4 @@
-{{- if .Values.pipelines.enabled -}}
+{{- if and .Values.pipelines.enabled .Values.pipelines.ui.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:

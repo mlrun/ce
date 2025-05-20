@@ -283,6 +283,8 @@ spark-operator:
 pipelines:
   enabled: true
   name: pipelines
+  ui:
+    enabled: false
   service:
     type: NodePort
     nodePort: 30100
