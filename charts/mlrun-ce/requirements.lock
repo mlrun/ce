@@ -4,7 +4,7 @@ dependencies:
   version: 0.19.26
 - name: mlrun
   repository: https://v3io.github.io/helm-charts/stable
-  version: 0.10.9
+  version: 0.11.5
 - name: mpi-operator
   repository: https://v3io.github.io/helm-charts/stable
   version: 0.6.0
@@ -20,5 +20,5 @@ dependencies:
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
   version: 31.3.1
-digest: sha256:d5f947b79466c870754d0e2ec674e2c3e3ae1c51e27c97fd5cf0d0b1a9b2bf2c
-generated: "2025-05-21T09:19:27.922578+03:00"
+digest: sha256:1421e035b05fa2533b612717a2ba2207d1025da52c30acb650d5c85073c2f109
+generated: "2025-06-29T11:12:10.252392+03:00"
