@@ -2,6 +2,47 @@ apiVersion: v1
 entries:
   mlrun-ce:
   - apiVersion: v1
+    created: "2025-07-27T08:05:52.871635431Z"
+    dependencies:
+    - name: nuclio
+      repository: https://nuclio.github.io/nuclio/charts
+      version: 0.19.26
+    - condition: mlrun.enabled
+      name: mlrun
+      repository: https://v3io.github.io/helm-charts/stable
+      version: 0.11.5
+    - name: mpi-operator
+      repository: https://v3io.github.io/helm-charts/stable
+      version: 0.6.0
+    - condition: minio.enabled
+      name: minio
+      repository: https://charts.min.io/
+      version: 5.2.0
+    - condition: spark-operator.enabled
+      name: spark-operator
+      repository: https://kubeflow.github.io/spark-operator
+      version: 2.1.0
+    - condition: kube-prometheus-stack.enabled
+      name: kube-prometheus-stack
+      repository: https://prometheus-community.github.io/helm-charts
+      version: 41.7.2
+    - condition: kafka.enabled
+      name: kafka
+      repository: https://charts.bitnami.com/bitnami
+      version: 31.3.1
+    description: MLRun Open Source Stack
+    digest: 7d72dbd6d4685b7a4ab77b0b29a2f714147aa207e66687adaae00f90c5c17b30
+    home: https://iguazio.com
+    icon: https://www.iguazio.com/wp-content/uploads/2019/10/Iguazio-Logo.png
+    maintainers:
+    - email: mlrun@iguazio.com
+      name: MLRun
+      url: https://www.mlrun.org/
+    name: mlrun-ce
+    urls:
+    - https://github.com/mlrun/ce/releases/download/mlrun-ce-0.9.0/mlrun-ce-0.9.0.tgz
+    version: 0.9.0
+  - apiVersion: v1
     created: "2025-07-22T11:34:32.331358123Z"
     dependencies:
     - name: nuclio
@@ -4920,4 +4961,4 @@ entries:
     urls:
     - https://github.com/mlrun/ce/releases/download/mlrun-ce-0.0.1/mlrun-ce-0.0.1.tgz
     version: 0.0.1
-generated: "2025-07-22T11:34:32.331836926Z"
+generated: "2025-07-27T08:05:52.872091954Z"
