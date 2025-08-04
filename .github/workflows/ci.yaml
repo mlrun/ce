@@ -37,7 +37,7 @@ jobs:
           HELM_LINT_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
 
   artifacthub-lint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     container:
       image: artifacthub/ah
       options: --user 1001

@@ -83,7 +83,7 @@ Minio API is available at:
 {{- end }}
 {{- end }}
 
-{{- if .Values.pipelines.enabled }}
+{{- if and .Values.pipelines.enabled  .Values.pipelines.ui.enabled -}} }}
 {{- if ne .Values.global.infrastructure.kind "aws" }}
 {{- if not .Values.minio.ingress.enabled }}
 {{- "\n" }}
