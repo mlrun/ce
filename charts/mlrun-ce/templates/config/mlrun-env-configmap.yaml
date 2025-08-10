@@ -27,4 +27,8 @@ data:
   MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
   MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: "{{ template "mlrun-ce.mlrun.modelMonitoring.DSN" . }}"
   MLRUN_GRAFANA_URL: http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort" }}
+  MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__CPU: "{{ .Values.mlrun.defaultFunctionPodResources.limits.cpu | default "" }}"
+  MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__MEMORY: "{{ .Values.mlrun.defaultFunctionPodResources.limits.memory | default "" }}"
+  MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__REQUESTS__CPU: "{{ .Values.mlrun.defaultFunctionPodResources.requests.cpu | default "" }}"
+  MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__REQUESTS__MEMORY: "{{ .Values.mlrun.defaultFunctionPodResources.requests.memory | default "" }}"
 {{- end}}

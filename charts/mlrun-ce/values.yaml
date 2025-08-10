@@ -67,6 +67,13 @@ nuclio:
 mlrun:
   # set the type of filesystem to use: filesystem, s3
   enabled: true
+  defaultFunctionPodResources:
+    limits:
+      cpu: "2"
+      memory: "20Gi"
+    requests:
+      cpu: "25m"
+      memory: "1Mi"
   storage: filesystem
   storageAutoMountParams: ~
   secrets:
