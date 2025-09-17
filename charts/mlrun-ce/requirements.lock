@@ -16,9 +16,9 @@ dependencies:
   version: 2.1.0
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
-  version: 41.7.2
+  version: 72.1.1
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
   version: 31.3.1
-digest: sha256:248d2bfb503cf7290165ced88fbb1c4756613f642fdc9d1f25dedbdca961beb4
-generated: "2025-07-29T09:44:21.12086+03:00"
+digest: sha256:1439231e374c058be8837e9d0dc5eacfcd6e6e765b51ba7ec03eeb0686e93eda
+generated: "2025-08-20T11:37:28.150996+03:00"
