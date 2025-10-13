@@ -450,9 +450,13 @@ tdengine:
     TAOS_REPLICA: "1"
 
 kafka:
+  global:
+    security:
+      allowInsecureImages: true
   enabled: true
   fullnameOverride: kafka-stream
-
+  image:
+    repository: 'bitnamilegacy/kafka'
   extraConfigYaml:
     default.replication.factor: "1"
     offsets.topic.replication.factor: "1"
