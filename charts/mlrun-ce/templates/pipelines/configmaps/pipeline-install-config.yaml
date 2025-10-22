@@ -12,8 +12,8 @@ data:
   cacheImage: {{ .Values.pipelines.images.cacheImage.repository }}:{{ .Values.pipelines.images.cacheImage.tag }}
   cacheNodeRestrictions: "false"
   cronScheduleTimezone: UTC
-  dbHost: mysql
-  dbPort: "3306"
+  mysqlHost: mysql
+  mysqlPort: "3306"
   defaultPipelineRoot: ""
   mlmdDb: metadb
   pipelineDb: mlpipeline
