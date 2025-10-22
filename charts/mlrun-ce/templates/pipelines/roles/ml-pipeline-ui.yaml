@@ -1,4 +1,4 @@
-{{- if .Values.pipelines.enabled -}}
+{{- if and .Values.pipelines.enabled  .Values.pipelines.ui.enabled -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

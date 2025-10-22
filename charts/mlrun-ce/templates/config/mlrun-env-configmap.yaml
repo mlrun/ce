@@ -13,6 +13,7 @@ data:
 {{- if not .Values.global.infrastructure.aws.s3NonAnonymous }}
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
+  AWS_ENDPOINT_URL_S3: {{ include "mlrun-ce.minio.service.url" . }}
   S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
 {{- end }}
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
@@ -27,4 +28,8 @@ data:
   MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
   MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: "{{ template "mlrun-ce.mlrun.modelMonitoring.DSN" . }}"
   MLRUN_GRAFANA_URL: http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort" }}
+  MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__CPU: "{{ .Values.mlrun.defaultFunctionPodResources.limits.cpu | default "" }}"
+  MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__MEMORY: "{{ .Values.mlrun.defaultFunctionPodResources.limits.memory | default "" }}"
+  MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__REQUESTS__CPU: "{{ .Values.mlrun.defaultFunctionPodResources.requests.cpu | default "" }}"
+  MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__REQUESTS__MEMORY: "{{ .Values.mlrun.defaultFunctionPodResources.requests.memory | default "" }}"
 {{- end}}
