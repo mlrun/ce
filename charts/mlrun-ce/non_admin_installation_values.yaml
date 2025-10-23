@@ -33,6 +33,8 @@ mpi-operator:
   rbac:
     clusterResources:
       create: false
+    namespaced:
+      create: true
 
 minio:
   service:
