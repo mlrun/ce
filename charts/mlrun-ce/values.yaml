@@ -362,7 +362,7 @@ pipelines:
       tag: 2.5.0
     metadataWriter:
       repository: ghcr.io/kubeflow/kfp-metadata-writer
-      tag: 2.5.0
+      tag: 2.14.0
     mysql:
       # MySQL 8.0.26 because >= 8.0.27 has deprecated the default_authentication_plugin option
       # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
