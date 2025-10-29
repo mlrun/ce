@@ -199,7 +199,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.9.1
+    tag: 1.9.2
     pullPolicy: IfNotPresent
     pullSecrets: []
   busybox:
@@ -386,6 +386,8 @@ kube-prometheus-stack:
   grafana:
     adminUser: admin
     adminPassword: admin
+    initChownData:
+      enabled: false
     additionalDataSources:
       - name: iguazio
         type: mysql

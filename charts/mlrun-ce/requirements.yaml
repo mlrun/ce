@@ -19,7 +19,7 @@ dependencies:
     condition: spark-operator.enabled
   - name: kube-prometheus-stack
     repository: "https://prometheus-community.github.io/helm-charts"
-    version: "41.7.2"
+    version: "72.1.1"
     condition: kube-prometheus-stack.enabled
   - name: kafka
     repository: "https://charts.bitnami.com/bitnami"
