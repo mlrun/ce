@@ -386,6 +386,8 @@ kube-prometheus-stack:
   grafana:
     adminUser: admin
     adminPassword: admin
+    initChownData:
+      enabled: false
     additionalDataSources:
       - name: iguazio
         type: mysql
