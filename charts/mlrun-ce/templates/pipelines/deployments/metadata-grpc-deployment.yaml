@@ -56,12 +56,12 @@ spec:
         - name: MYSQL_HOST
           valueFrom:
             configMapKeyRef:
-              key: dbHost
+              key: mysqlHost
               name: pipeline-install-config
         - name: MYSQL_PORT
           valueFrom:
             configMapKeyRef:
-              key: dbPort
+              key: mysqlPort
               name: pipeline-install-config
         image: {{ .Values.pipelines.images.metadata.container.repository }}:{{ .Values.pipelines.images.metadata.container.tag }}
         imagePullPolicy: IfNotPresent
