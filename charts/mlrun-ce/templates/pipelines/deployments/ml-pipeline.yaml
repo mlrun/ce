@@ -47,7 +47,23 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: metadata.namespace
-
+            - name: OBJECTSTORECONFIG_ACCESSKEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlpipeline-minio-artifact
+                  key: accesskey
+            - name: OBJECTSTORECONFIG_SECRETACCESSKEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlpipeline-minio-artifact
+                  key: secretkey
+            - name: OBJECTSTORECONFIG_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: minioServiceHost
+            - name: OBJECTSTORECONFIG_PORT
+              value: "9000"
             - name: OBJECTSTORECONFIG_SECURE
               value: "false"
             - name: OBJECTSTORECONFIG_BUCKETNAME
@@ -87,16 +103,6 @@ spec:
                 configMapKeyRef:
                   name: pipeline-install-config
                   key: mysqlPort
-            - name: OBJECTSTORECONFIG_ACCESSKEY
-              valueFrom:
-                secretKeyRef:
-                  name: mlpipeline-minio-artifact
-                  key: accesskey
-            - name: OBJECTSTORECONFIG_SECRETACCESSKEY
-              valueFrom:
-                secretKeyRef:
-                  name: mlpipeline-minio-artifact
-                  key: secretkey
             - name: V2_DRIVER_IMAGE
               value: "{{ .Values.pipelines.images.driver.repository }}:{{ .Values.pipelines.images.driver.tag }}"
             - name: V2_LAUNCHER_IMAGE
