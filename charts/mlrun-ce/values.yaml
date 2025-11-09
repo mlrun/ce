@@ -329,6 +329,12 @@ pipelines:
     endpointPort: "9000"
     bucket: "mlrun"
   images:
+    driver:
+      repository: ghcr.io/kubeflow/kfp-driver
+      tag: 2.14.3
+    launcher:
+      repository: ghcr.io/kubeflow/kfp-launcher
+      tag: 2.14.3
     argoexec:
       repository: gcr.io/ml-pipeline/argoexec
       tag: v3.4.17-license-compliance
@@ -372,6 +378,7 @@ pipelines:
     cacheImage:
       repository: gcr.io/google-containers/busybox
       tag: latest
+
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
