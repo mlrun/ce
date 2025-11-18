@@ -1,0 +1,58 @@
+{{- if .Values.kafka.rbac.enabled -}}
+{{- $operatorNamespace := .Values.kafka.rbac.operatorNamespace | default .Release.Namespace -}}
+{{- $kafkaName := .Values.kafka.name | default "kafka-stream" -}}
+{{- $currentNamespace := .Release.Namespace -}}
+---
+# NetworkPolicy: Allow egress from this namespace to Kafka namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kafka-access
+  namespace: {{ $currentNamespace }}
+  labels:
+    app.kubernetes.io/name: mlrun-ce
+    app.kubernetes.io/component: kafka-rbac
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+spec:
+  # Apply to all pods in this namespace
+  podSelector: {}
+  
+  policyTypes:
+  - Egress
+  
+  egress:
+  # Allow egress to Kafka namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ $operatorNamespace }}
+      podSelector:
+        matchLabels:
+          strimzi.io/cluster: {{ $kafkaName }}
+    ports:
+    - protocol: TCP
+      port: 9092  # client listener
+    - protocol: TCP
+      port: 9093  # controller listener
+    - protocol: TCP
+      port: 9094  # internal listener
+  
+  # Allow DNS resolution (required for service discovery)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # Allow egress within same namespace
+  - to:
+    - podSelector: {}
+{{- end }}
+

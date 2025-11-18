@@ -21,7 +21,7 @@ dependencies:
     repository: "https://prometheus-community.github.io/helm-charts"
     version: "72.1.1"
     condition: kube-prometheus-stack.enabled
-  - name: kafka
-    repository: "https://charts.bitnami.com/bitnami"
-    version: "31.3.1"
-    condition: kafka.enabled
+  - name: strimzi-kafka-operator
+    repository: "https://strimzi.io/charts/"
+    version: "0.48.0"
+    condition: strimzi-kafka-operator.enabled

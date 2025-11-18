@@ -1,0 +1,29 @@
+{{- if .Values.kafka.enabled }}
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: {{ .Values.kafka.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: cluster
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+spec:
+  kafka:
+    listeners:
+    {{- range .Values.kafka.listeners }}
+      - name: {{ .name }}
+        port: {{ .port }}
+        type: {{ .type }}
+        tls: {{ .tls }}
+    {{- end }}
+    config:
+      {{- toYaml .Values.kafka.config | nindent 6 }}
+  {{- if gt (.Values.kafka.zookeeper.replicas | int) 0 }}
+  zookeeper:
+    replicas: {{ .Values.kafka.zookeeper.replicas }}
+    storage:
+      type: persistent-claim
+      size: 8Gi
+  {{- end }}
+{{- end }}

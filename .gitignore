@@ -1,3 +1,5 @@
 .idea/*
 charts/mlrun-ce/charts/*
 .DS_Store
+**/.DS_Store
+*.DS_Store
