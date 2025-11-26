@@ -336,10 +336,10 @@ pipelines:
       repository: ghcr.io/kubeflow/kfp-launcher
       tag: 2.14.3
     argoexec:
-      repository: gcr.io/ml-pipeline/argoexec
+      repository: gcr.io/iguazio/argoexec
       tag: v3.4.17-license-compliance
     workflowController:
-      repository: gcr.io/ml-pipeline/workflow-controller
+      repository: gcr.io/iguazio/workflow-controller
       tag: v3.4.17-license-compliance
     apiServer:
       repository: ghcr.io/kubeflow/kfp-api-server
@@ -373,11 +373,14 @@ pipelines:
       # MySQL 8.0.26 because >= 8.0.27 has deprecated the default_authentication_plugin option
       # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
       # https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_default_authentication_plugin
-      repository: gcr.io/ml-pipeline/mysql
+      repository: gcr.io/iguazio/mysql
       tag: "8.0.26"
     cacheImage:
       repository: gcr.io/google-containers/busybox
       tag: latest
+    minio:
+      repository: minio/minio
+      tag: "RELEASE.2025-10-15T17-29-55Z"
 
 
 kube-prometheus-stack:
