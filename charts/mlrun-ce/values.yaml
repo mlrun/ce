@@ -89,6 +89,10 @@ mlrun:
   fullnameOverride: mlrun
   nuclio:
     mode: enabled
+    # Used by MLRun UI for showing links to Nuclio UI
+    uiURL:
+    # Used by MLRun API/UI to access nuclio API to manipulate nuclio resources
+    apiURL:
   rbac:
     create: true
   v3io:
@@ -170,6 +174,14 @@ mlrun:
   ce:
     mode: full
 
+# ---- MinIO overrides
+minio:
+  resources:
+    requests:
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+
 jupyterNotebook:
   serviceAccount:
     create: true
@@ -248,8 +260,6 @@ mpi-operator:
 
 minio:
   enabled: true
-  rootUser: minio
-  rootPassword: minio123
   ingress:
     enabled: false
   mode: standalone
@@ -287,18 +297,25 @@ spark-operator:
     serviceAccount:
       name: sparkapp
 
-pipelines:
+
+
+pipelines-v2:
   enabled: true
   name: pipelines
+
   ui:
     enabled: false
+
   service:
     type: NodePort
     nodePort: 30100
+
   crd:
-    enabled: true
+    create: true
+
   priority_class:
     enabled: true
+
   persistence:
     enabled: true
     existingClaim:
@@ -316,72 +333,17 @@ pipelines:
     #  - key: "node-role.kubernetes.io/master"
     #    effect: NoSchedule
   db:
-    username: root
+    podSecurityContext:
+      runAsUser: 1001
+      fsGroup: 1001
+      fsGroupChangePolicy: OnRootMismatch
     securityContext:
       runAsUser: 1001
       runAsGroup: 1001
-      fsGroup: 1001
-      fsGroupChangePolicy: OnRootMismatch
-  minio:
-    enabled: true
-    accessKey: "minio"
-    secretKey: "minio123"
-    endpointPort: "9000"
-    bucket: "mlrun"
-  images:
-    driver:
-      repository: ghcr.io/kubeflow/kfp-driver
-      tag: 2.14.3
-    launcher:
-      repository: ghcr.io/kubeflow/kfp-launcher
-      tag: 2.14.3
-    argoexec:
-      repository: gcr.io/iguazio/argoexec
-      tag: v3.4.17-license-compliance
-    workflowController:
-      repository: gcr.io/iguazio/workflow-controller
-      tag: v3.4.17-license-compliance
-    apiServer:
-      repository: ghcr.io/kubeflow/kfp-api-server
-      tag: 2.14.3
-    persistenceagent:
-      repository: ghcr.io/kubeflow/kfp-persistence-agent
-      tag: 2.14.3
-    scheduledworkflow:
-      repository: ghcr.io/kubeflow/kfp-scheduled-workflow-controller
-      tag: 2.14.3
-    ui:
-      repository: ghcr.io/kubeflow/kfp-frontend
-      tag: 2.14.3
-    viewerCrdController:
-      repository: ghcr.io/kubeflow/kfp-viewer-crd-controller
-      tag: 2.14.3
-    visualizationServer:
-      repository: ghcr.io/kubeflow/kfp-visualization-server
-      tag: 2.14.3
-    metadata:
-      container:
-        repository: gcr.io/tfx-oss-public/ml_metadata_store_server
-        tag: 1.16.0
-    metadataEnvoy:
-      repository: ghcr.io/kubeflow/kfp-metadata-envoy
-      tag: 2.14.3
-    metadataWriter:
-      repository: ghcr.io/kubeflow/kfp-metadata-writer
-      tag: 2.14.3
-    mysql:
-      # MySQL 8.0.26 because >= 8.0.27 has deprecated the default_authentication_plugin option
-      # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
-      # https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_default_authentication_plugin
-      repository: gcr.io/iguazio/mysql
-      tag: "8.0.26"
-    cacheImage:
-      repository: gcr.io/google-containers/busybox
-      tag: latest
-    minio:
-      repository: minio/minio
-      tag: "RELEASE.2025-10-15T17-29-55Z"
 
+  managedstorage:
+    enabled: false
+    gcsBucketName: ""
 
 kube-prometheus-stack:
   fullnameOverride: monitoring

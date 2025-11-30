@@ -30,7 +30,7 @@ jupyterNotebook:
 mpi-operator:
   fullnameOverride: mpi-operator
   crd:
-    create: false
+    create: true
   rbac:
     clusterResources:
       create: false

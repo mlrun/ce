@@ -25,3 +25,6 @@ dependencies:
     repository: "https://charts.bitnami.com/bitnami"
     version: "31.3.1"
     condition: kafka.enabled
+  - name: pipelines-v2
+    version: 0.11.20
+    repository: "https://v3io.github.io/helm-charts/stable"

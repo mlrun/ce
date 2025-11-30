@@ -20,5 +20,8 @@ dependencies:
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
   version: 31.3.1
-digest: sha256:d92e2702f26b3fbbe527fd4439cec8ce50bc79ad54fc69e10c28301e04e0114a
-generated: "2025-11-04T09:39:37.92185Z"
+- name: pipelines-v2
+  repository: ""
+  version: 0.11.19
+digest: sha256:f2e3c64194d8adb83bec4fc262ef4948427d5bd9f3cf7b066cb7d0e1af2c3fb7
+generated: "2025-11-26T15:13:44.117768+02:00"
