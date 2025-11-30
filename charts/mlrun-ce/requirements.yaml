@@ -1,6 +1,6 @@
 dependencies:
   - name: nuclio
-    version: "0.21.6"
+    version: "0.19.26"
     repository: "https://nuclio.github.io/nuclio/charts"
   - name: mlrun
     version: "0.11.6"
@@ -26,5 +26,5 @@ dependencies:
     version: "31.3.1"
     condition: kafka.enabled
   - name: pipelines-v2
-    version: 0.11.20
+    version: 0.12.0
     repository: "https://v3io.github.io/helm-charts/stable"

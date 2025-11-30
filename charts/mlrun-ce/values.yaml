@@ -175,12 +175,39 @@ mlrun:
     mode: full
 
 # ---- MinIO overrides
+minioConsoleCredentials: &minioConsoleCredentials
+  accessKey: mlrun
+  secretKey: mlrun123
+
 minio:
+  enabled: true
+  users:
+    - <<: *minioConsoleCredentials
+      policy: consoleAdmin
+  ingress:
+    enabled: false
+  mode: standalone
+  replicas: 1
   resources:
     requests:
-      memory: 1Gi
-    limits:
-      memory: 2Gi
+      memory: 0.5Gi
+  service:
+    type: NodePort
+    port: 9000
+    nodePort: 30080
+  consoleService:
+    type: NodePort
+    port: 9001
+    nodePort: 30090
+  persistence:
+    enabled: true
+    size: 1Gi
+  fullnameOverride: minio
+  buckets:
+    - name: mlrun
+      policy: none
+      purge: false
+
 
 jupyterNotebook:
   serviceAccount:
@@ -258,32 +285,6 @@ mpi-operator:
   deployment:
     create: true
 
-minio:
-  enabled: true
-  ingress:
-    enabled: false
-  mode: standalone
-  replicas: 1
-  resources:
-    requests:
-      memory: 0.5Gi
-  service:
-    type: NodePort
-    port: 9000
-    nodePort: 30080
-  consoleService:
-    type: NodePort
-    port: 9001
-    nodePort: 30090
-  persistence:
-    enabled: true
-    size: 1Gi
-  fullnameOverride: minio
-  buckets:
-    - name: mlrun
-      policy: none
-      purge: false
-
 spark-operator:
   enabled: true
   fullnameOverride: spark-operator
@@ -302,6 +303,12 @@ spark-operator:
 pipelines-v2:
   enabled: true
   name: pipelines
+
+  # Use MinIO with the same console credentials as the MinIO chart
+  storageMode:
+    kind: minio
+    minio:
+      <<: *minioConsoleCredentials
 
   ui:
     enabled: false
