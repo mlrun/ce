@@ -181,6 +181,8 @@ minioConsoleCredentials: &minioConsoleCredentials
 
 minio:
   enabled: true
+  repository: minio/minio
+  tag: "RELEASE.2025-10-15T17-29-55Z"
   users:
     - <<: *minioConsoleCredentials
       policy: consoleAdmin

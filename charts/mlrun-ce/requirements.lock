@@ -21,7 +21,7 @@ dependencies:
   repository: https://charts.bitnami.com/bitnami
   version: 31.3.1
 - name: pipelines-v2
-  repository: ""
-  version: 0.11.19
-digest: sha256:f2e3c64194d8adb83bec4fc262ef4948427d5bd9f3cf7b066cb7d0e1af2c3fb7
-generated: "2025-11-26T15:13:44.117768+02:00"
+  repository: https://v3io.github.io/helm-charts/stable
+  version: 0.12.0
+digest: sha256:f1b3fb6565ed7be226322d0791628755601cc37b0b46ca8306b32250cff97122
+generated: "2025-12-01T15:38:22.246415+02:00"
