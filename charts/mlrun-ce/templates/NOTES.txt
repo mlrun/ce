@@ -1,4 +1,4 @@
-{{- if or (.Values.jupyterNotebook.enabled) (.Values.mlrun.enabled) (.Values.minio.enabled) (.Values.pipelines.enabled) (index .Values "kube-prometheus-stack" "enabled") }}
+{{- if or (.Values.jupyterNotebook.enabled) (.Values.mlrun.enabled) (.Values.minio.enabled) (index .Values "pipelines-v2" "enabled") (index .Values "kube-prometheus-stack" "enabled") }}
 You're up and running!
 
 {{- if .Values.jupyterNotebook.enabled }}
@@ -49,7 +49,7 @@ MLRun API is available at:
 {{- if eq .Values.global.infrastructure.kind "aws" }}
 mlrun-api.{{ .Values.global.externalHostAddress }}
 {{- else }}
-{{- if .Values.mlrun.ui.ingress.enabled }}
+{{- if .Values.mlrun.api.ingress.enabled }}
 {{ (index .Values.mlrun.api.ingress.hosts 0).host }}
 {{- else }}
 {{ .Values.global.externalHostAddress }}:{{ .Values.mlrun.api.service.nodePort }}
@@ -83,12 +83,12 @@ Minio API is available at:
 {{- end }}
 {{- end }}
 
-{{- if and .Values.pipelines.enabled  .Values.pipelines.ui.enabled -}} }}
+{{- if index .Values "pipelines-v2" "enabled" }}
 {{- if ne .Values.global.infrastructure.kind "aws" }}
 {{- if not .Values.minio.ingress.enabled }}
 {{- "\n" }}
 Pipelines UI is available at:
-{{ .Values.global.externalHostAddress }}:{{ .Values.pipelines.service.nodePort }}
+{{ .Values.global.externalHostAddress }}:{{ index .Values "pipelines-v2" "service" "nodePort" }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -102,7 +102,7 @@ grafana.{{ .Values.global.externalHostAddress }}
 {{- if index .Values "kube-prometheus-stack" "grafana" "ingress" "enabled" }}
 {{ (index .Values "kube-prometheus-stack" "grafana" "ingress" "hosts" 0) }}
 {{- else }}
-{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort"}}
+{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort" }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -111,7 +111,7 @@ grafana.{{ .Values.global.externalHostAddress }}
 {{- if ne .Values.global.infrastructure.kind "aws" }}
 {{- "\n" }}
 Prometheus UI is available at:
-{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "prometheus" "service" "nodePort"}}
+{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "prometheus" "service" "nodePort" }}
 {{- end }}
 {{- end }}
 
