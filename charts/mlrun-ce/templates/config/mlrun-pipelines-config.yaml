@@ -1,4 +1,4 @@
-{{- if .Values.pipelines.enabled -}}
+{{- if index .Values "pipelines-v2" "enabled" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
