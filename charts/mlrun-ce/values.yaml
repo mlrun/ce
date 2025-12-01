@@ -300,8 +300,6 @@ spark-operator:
     serviceAccount:
       name: sparkapp
 
-
-
 pipelines-v2:
   enabled: true
   name: pipelines
