@@ -1,10 +1,10 @@
 dependencies:
 - name: nuclio
   repository: https://nuclio.github.io/nuclio/charts
-  version: 0.21.6
+  version: 0.21.9
 - name: mlrun
   repository: https://v3io.github.io/helm-charts/stable
-  version: 0.11.12
+  version: 0.11.6
 - name: mpi-operator
   repository: https://v3io.github.io/helm-charts/stable
   version: 0.6.0
@@ -20,5 +20,5 @@ dependencies:
 - name: kafka
   repository: https://charts.bitnami.com/bitnami
   version: 31.3.1
-digest: sha256:07ea098cda68610f238f13b461bd5bb93735d023384e62b4f26ee61c51a8acc9
-generated: "2025-12-02T11:20:04.084652+02:00"
+digest: sha256:73faa0a05edc86eaed9b57fc29d4e790fcae3c47928f528b589b03b750266dd1
+generated: "2025-12-02T13:02:49.902628+02:00"
