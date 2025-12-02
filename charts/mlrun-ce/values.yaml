@@ -63,6 +63,9 @@ nuclio:
       functions:
         - level: debug
           sink: myStdoutLoggerSink
+      projectsLeader:
+        kind: mlrun
+        synchronizationInterval: 0m
 
 mlrun:
   # set the type of filesystem to use: filesystem, s3
