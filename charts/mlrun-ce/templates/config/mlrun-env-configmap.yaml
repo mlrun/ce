@@ -14,7 +14,6 @@ data:
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
   AWS_ENDPOINT_URL_S3: {{ include "mlrun-ce.minio.service.url" . }}
-  S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
 {{- end }}
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   MLRUN_HTTPDB__REAL_PATH: s3://

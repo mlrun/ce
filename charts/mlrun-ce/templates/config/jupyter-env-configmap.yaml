@@ -6,7 +6,6 @@ metadata:
   name: jupyter-common-env
 data:
 {{- if not .Values.global.infrastructure.aws.s3NonAnonymous }}
-  S3_ENDPOINT_URL: {{ include "mlrun-ce.minio.service.url" . }}
   AWS_ENDPOINT_URL_S3: {{ include "mlrun-ce.minio.service.url" . }}
   AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
   AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
