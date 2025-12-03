@@ -285,6 +285,7 @@ spark-operator:
   webhook:
     enable: true
   spark:
+    # User should set this value accordingly when installing in another namespace
     jobNamespaces:
       - mlrun
     serviceAccount:
