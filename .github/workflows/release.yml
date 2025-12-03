@@ -95,5 +95,6 @@ jobs:
       version: ${{ needs.release.outputs.version }}
     secrets:
       DEPLOYMENT_TRIGGER_TOKEN: ${{ secrets.DEPLOYMENT_TRIGGER_TOKEN }}
+      DEPLOYMENT_REPO: ${{ secrets.DEPLOYMENT_REPO }}
       SYSTEM_ID: ${{ secrets.SYSTEM_ID }}
       TEST_PARAMS: ${{ secrets.TEST_PARAMS }}
