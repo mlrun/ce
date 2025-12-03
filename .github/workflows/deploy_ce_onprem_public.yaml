@@ -1,0 +1,54 @@
+name: Trigger Private Deployment
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'MLRun CE Chart version (e.g. 0.9.2)'
+        required: true
+        type: string
+    secrets:
+      DEPLOYMENT_TRIGGER_TOKEN:
+        required: true
+      DEPLOYMENT_REPO:
+        required: false
+      SYSTEM_ID:
+        required: true
+      TEST_PARAMS:
+        required: false
+
+jobs:
+  trigger-deployment:
+    name: Trigger Deployment in Private Repo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Repository Dispatch to Private Deployment Repo
+        run: |
+          # Resolve target repo from secret
+          DEPLOYMENT_REPO="${{ secrets.DEPLOYMENT_REPO }}"
+          if [ -z "$DEPLOYMENT_REPO" ]; then
+            echo "::error::DEPLOYMENT_REPO secret is required but not set."
+            exit 1
+          fi
+          
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: token ${{ secrets.DEPLOYMENT_TRIGGER_TOKEN }}" \
+            https://api.github.com/repos/${DEPLOYMENT_REPO}/dispatches \
+            -d "$(jq -n \
+              --arg version "${{ inputs.version }}" \
+              --arg system_id "${{ secrets.SYSTEM_ID }}" \
+              --arg naipi_params "${{ secrets.TEST_PARAMS }}" \
+              '{
+                event_type: "deploy-ce-onprem",
+                client_payload: {
+                  version: $version,
+                  system_id: $system_id,
+                  run_naipi: true,
+                  naipi_params: $naipi_params,
+                  source_repo: "ce",
+                  triggered_by: "${{ github.actor }}"
+                }
+              }')"
+          
+          echo "Deployment triggered in private repository: ${DEPLOYMENT_REPO}"
