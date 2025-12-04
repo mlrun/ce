@@ -8,7 +8,9 @@ on:
         required: true
         type: string
     secrets:
-      DEPLOYMENT_TRIGGER_TOKEN:
+      GH_APP_ID:
+        required: true
+      GH_APP_PRIVATE_KEY:
         required: true
       DEPLOYMENT_REPO:
         required: false
@@ -22,6 +24,13 @@ jobs:
     name: Trigger Deployment in Private Repo
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
       - name: Send Repository Dispatch to Private Deployment Repo
         run: |
           # Resolve target repo from secret
@@ -33,7 +42,7 @@ jobs:
           
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: token ${{ secrets.DEPLOYMENT_TRIGGER_TOKEN }}" \
+            -H "Authorization: token ${{ steps.app-token.outputs.token }}" \
             https://api.github.com/repos/${DEPLOYMENT_REPO}/dispatches \
             -d "$(jq -n \
               --arg version "${{ inputs.version }}" \
@@ -51,4 +60,4 @@ jobs:
                 }
               }')"
           
-          echo "Deployment triggered in private repository: ${DEPLOYMENT_REPO}"
+          echo "Deployment triggered in private repository"
