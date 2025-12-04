@@ -65,7 +65,7 @@ nuclio:
           sink: myStdoutLoggerSink
     projectsLeader:
       kind: mlrun
-      synchronizationInterval: 1m
+      synchronizationInterval: 10m
       apiAddress: http://mlrun-api-chief:8080/api
 
 mlrun:
