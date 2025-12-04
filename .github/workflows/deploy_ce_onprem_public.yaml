@@ -13,7 +13,7 @@ on:
       GH_APP_PRIVATE_KEY:
         required: true
       DEPLOYMENT_REPO:
-        required: false
+        required: true
       SYSTEM_ID:
         required: true
       TEST_PARAMS:
@@ -24,22 +24,35 @@ jobs:
     name: Trigger Deployment in Private Repo
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve target repository
+        id: repo-info
+        run: |
+          DEPLOYMENT_REPO="${{ secrets.DEPLOYMENT_REPO }}"
+
+          if [[ "$DEPLOYMENT_REPO" != */* ]]; then
+            echo "::error::DEPLOYMENT_REPO must be in the form owner/repo."
+            exit 1
+          fi
+
+          OWNER="${DEPLOYMENT_REPO%%/*}"
+          REPO="${DEPLOYMENT_REPO#*/}"
+
+          echo "owner=$OWNER" >> $GITHUB_OUTPUT
+          echo "repo=$REPO" >> $GITHUB_OUTPUT
+          echo "full_name=$DEPLOYMENT_REPO" >> $GITHUB_OUTPUT
+
       - name: Generate GitHub App Token
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ steps.repo-info.outputs.owner }}
+          repositories: ${{ steps.repo-info.outputs.repo }}
 
       - name: Send Repository Dispatch to Private Deployment Repo
         run: |
-          # Resolve target repo from secret
-          DEPLOYMENT_REPO="${{ secrets.DEPLOYMENT_REPO }}"
-          if [ -z "$DEPLOYMENT_REPO" ]; then
-            echo "::error::DEPLOYMENT_REPO secret is required but not set."
-            exit 1
-          fi
-          
+          DEPLOYMENT_REPO="${{ steps.repo-info.outputs.full_name }}"
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: token ${{ steps.app-token.outputs.token }}" \
