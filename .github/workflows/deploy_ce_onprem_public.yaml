@@ -58,14 +58,12 @@ jobs:
             -d "$(jq -n \
               --arg version "${{ inputs.version }}" \
               --arg system_id "${{ secrets.SYSTEM_ID }}" \
-              --arg naipi_params "${{ secrets.TEST_PARAMS }}" \
               '{
                 event_type: "deploy-ce-onprem",
                 client_payload: {
                   version: $version,
                   system_id: $system_id,
                   run_naipi: true,
-                  naipi_params: $naipi_params,
                   source_repo: "ce",
                   triggered_by: "${{ github.actor }}"
                 }
