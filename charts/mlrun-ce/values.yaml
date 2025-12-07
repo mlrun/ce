@@ -63,9 +63,10 @@ nuclio:
       functions:
         - level: debug
           sink: myStdoutLoggerSink
-      projectsLeader:
-        kind: mlrun
-        synchronizationInterval: 0m
+    projectsLeader:
+      kind: mlrun
+      synchronizationInterval: 10m
+      apiAddress: http://mlrun-api-chief:8080/api
 
 mlrun:
   # set the type of filesystem to use: filesystem, s3
