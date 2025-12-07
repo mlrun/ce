@@ -98,4 +98,3 @@ jobs:
       GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
       DEPLOYMENT_REPO: ${{ secrets.DEPLOYMENT_REPO }}
       SYSTEM_ID: ${{ secrets.SYSTEM_ID }}
-      TEST_PARAMS: ${{ secrets.TEST_PARAMS }}

@@ -16,8 +16,6 @@ on:
         required: true
       SYSTEM_ID:
         required: true
-      TEST_PARAMS:
-        required: false
 
 jobs:
   trigger-deployment:
