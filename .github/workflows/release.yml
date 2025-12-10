@@ -1,5 +1,8 @@
 name: Release Charts
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -10,6 +13,8 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
