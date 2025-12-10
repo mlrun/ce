@@ -17,6 +17,8 @@ on:
       SYSTEM_ID:
         required: true
 
+permissions: {}
+
 jobs:
   trigger-deployment:
     name: Trigger Deployment in Private Repo
