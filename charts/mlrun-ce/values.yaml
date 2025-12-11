@@ -477,7 +477,7 @@ tdengine:
     enabled: false
     ingressClassName: ""
     annotations: {}
-    hosts: 
+    hosts:
       # - tdengine.example.com
       # - another.host.com
 
