@@ -25,7 +25,7 @@ spec:
           service:
             name: {{ include "mlrun-ce.tdengine.fullname" $root }}
             port:
-              number: 6041
+              number: {{ default 6041 $root.Values.tdengine.service.restPort }}
   {{- end }}
 {{- end }}
 

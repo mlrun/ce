@@ -455,6 +455,7 @@ tdengine:
     pullPolicy: Always
     tag: "3.0.7.1"
   service:
+    restPort: 6041
     type: ClusterIP
     ports:
       tcp: [6030, 6041, 6042, 6043, 6044, 6046, 6047, 6048, 6049, 6060]
@@ -476,7 +477,9 @@ tdengine:
     enabled: false
     ingressClassName: ""
     annotations: {}
-    hosts: []
+    hosts: 
+      # - tdengine.example.com
+      # - another.host.com
 
 kafka:
   global:
