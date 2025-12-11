@@ -472,6 +472,11 @@ tdengine:
   taoscfg:
     CLUSTER: "0"
     TAOS_REPLICA: "1"
+  ingress:
+    enabled: false
+    ingressClassName: ""
+    annotations: {}
+    hosts: []
 
 kafka:
   global:
