@@ -109,7 +109,7 @@ grafana.{{ .Values.global.externalHostAddress }}
 
 {{- if index .Values "kube-prometheus-stack" "enabled" }}
 {{- if ne .Values.global.infrastructure.kind "aws" }}
-{{- if and (not (index .Values "kube-prometheus-stack" "prometheus" "ingress" "enabled")) (eq (index .Values "kube-prometheus-stack" "prometheus" "service" "type") "NodePort") }}
+{{- if eq (index .Values "kube-prometheus-stack" "prometheus" "service" "type") "NodePort" }}
 {{- "\n" }}
 Prometheus UI is available at:
 {{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "prometheus" "service" "nodePort"}}
