@@ -477,9 +477,10 @@ tdengine:
     enabled: false
     ingressClassName: ""
     annotations: {}
-    hosts:
-      # - tdengine.example.com
-      # - another.host.com
+    # Example:
+    # - tdengine.example.com
+    # - another.host.com
+    hosts: []
 
 kafka:
   global:
