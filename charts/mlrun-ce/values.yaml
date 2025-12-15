@@ -134,6 +134,20 @@ mlrun:
           name: mlrun-override-env
           optional: true
     extraPersistentVolumeMounts: ~
+
+    # Set mlrun api workers count by setting the minReplicas value.
+    # This is recommended for production environments running at high scale.
+    # more informatino on https://github.com/v3io/helm-charts/blob/7add12015d51f7ce500a71cb40fbb658b2c9ff3d/stable/mlrun/values.yaml#L99-L102
+    # worker:
+      # minReplicas: 1
+
+    # Enable microservices is recommended for production environments running at high scale.
+    # more information on https://github.com/v3io/helm-charts/blob/7add12015d51f7ce500a71cb40fbb658b2c9ff3d/stable/mlrun/values.yaml#L8-L53
+    # microservices:
+      # enabled: false
+      # services:
+      # - name: alerts
+
   ui:
     fullnameOverride: mlrun-ui
     ingress:
