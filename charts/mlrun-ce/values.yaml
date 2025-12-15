@@ -134,6 +134,14 @@ mlrun:
           name: mlrun-override-env
           optional: true
     extraPersistentVolumeMounts: ~
+
+    # more information on https://github.com/v3io/helm-charts/blob/7add12015d51f7ce500a71cb40fbb658b2c9ff3d/stable/mlrun/values.yaml#L8-L53
+    # microservices:
+      # Enable/disable microservices. When enabled, individual microservices can be configured below.
+      # enabled: false
+      # services:
+      # - name: alerts
+
   ui:
     fullnameOverride: mlrun-ui
     ingress:
