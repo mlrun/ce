@@ -40,7 +40,7 @@ spec:
           value: "yes"
         - name: MLRUN_DBPATH
           value: {{ printf "http://%s:%s" (include "mlrun-ce.mlrun.api.fullname" .) (include "mlrun-ce.mlrun.api.port" .) }}
-        - name: MLRUN_UI_URL
+        - name: MLRUN_UI__URL
           value: {{ template "mlrun-ce.jupyter.mlrunUIURL" . }}
         - name: MLRUN_MPIJOB_CRD_VERSION
           value: {{ index .Values "mpi-operator" "crd" "version" }}
