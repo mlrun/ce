@@ -458,41 +458,12 @@ prometheus-node-exporter:
   hostRootFsMount:
     enabled: false
 
-tdengine:
-  enabled: true
-  fullnameOverride: tdengine-tsdb
-  # For more detailes
-  # https://github.com/taosdata/TDengine-Operator/blob/3.0/helm/tdengine/values.yaml
-  replicaCount: 1
-  image:
-    prefix: tdengine/tdengine
-    pullPolicy: Always
-    tag: "3.0.7.1"
-  service:
-    type: ClusterIP
-    ports:
-      tcp: [6030, 6041, 6042, 6043, 6044, 6046, 6047, 6048, 6049, 6060]
-      udp: [6044, 6045]
-  # Set timezone here, not in taoscfg
-  timezone: "UTC"
-  resources:
-  storage:
-    className: ""
-    dataSize: "10Gi"
-    logSize: "1Gi"
-  nodeSelectors:
-    taosd:
-  clusterDomainSuffix: ""
-  taoscfg:
-    CLUSTER: "0"
-    TAOS_REPLICA: "1"
-
 timescaledb:
-  enabled: false
+  enabled: true
   fullnameOverride: timescaledb
   image:
     repository: timescale/timescaledb-ha
-    tag: "pg16-ts2.17.2-all"
+    tag: "pg17"
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
