@@ -487,6 +487,37 @@ tdengine:
     CLUSTER: "0"
     TAOS_REPLICA: "1"
 
+timescaledb:
+  enabled: false
+  fullnameOverride: timescaledb
+  image:
+    repository: timescale/timescaledb-ha
+    tag: "pg16-ts2.17.2-all"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5432
+  auth:
+    username: postgres
+    password: postgres
+    database: postgres
+  persistence:
+    enabled: true
+    size: "10Gi"
+    storageClass: ""
+    accessMode: "ReadWriteOnce"
+    annotations:
+      helm.sh/resource-policy: "keep"
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "1Gi"
+      cpu: "1"
+  nodeSelector: {}
+  tolerations: []
+
 kafka:
   global:
     security:

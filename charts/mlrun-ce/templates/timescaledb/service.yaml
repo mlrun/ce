@@ -1,0 +1,17 @@
+{{- if .Values.timescaledb.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mlrun-ce.timescaledb.fullname" . }}
+  labels:
+    {{- include "mlrun-ce.timescaledb.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.timescaledb.service.type }}
+  ports:
+    - name: postgresql
+      port: {{ .Values.timescaledb.service.port }}
+      targetPort: postgresql
+      protocol: TCP
+  selector:
+    {{- include "mlrun-ce.timescaledb.selectorLabels" . | nindent 4 }}
+{{- end }}

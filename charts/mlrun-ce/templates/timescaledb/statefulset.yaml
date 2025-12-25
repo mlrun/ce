@@ -1,0 +1,97 @@
+{{- if .Values.timescaledb.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mlrun-ce.timescaledb.fullname" . }}
+  labels:
+    {{- include "mlrun-ce.timescaledb.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "mlrun-ce.timescaledb.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mlrun-ce.timescaledb.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.timescaledb.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.timescaledb.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.timescaledb.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: timescaledb
+          image: "{{ .Values.timescaledb.image.repository }}:{{ .Values.timescaledb.image.tag }}"
+          imagePullPolicy: {{ .Values.timescaledb.image.pullPolicy }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mlrun-ce.timescaledb.fullname" . }}-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mlrun-ce.timescaledb.fullname" . }}-secret
+                  key: password
+            - name: POSTGRES_DB
+              value: {{ .Values.timescaledb.auth.database | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.timescaledb.auth.username }}
+                - -d
+                - {{ .Values.timescaledb.auth.database }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.timescaledb.auth.username }}
+                - -d
+                - {{ .Values.timescaledb.auth.database }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.timescaledb.resources | nindent 12 }}
+  {{- if .Values.timescaledb.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        {{- with .Values.timescaledb.persistence.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          - {{ .Values.timescaledb.persistence.accessMode | quote }}
+        {{- if .Values.timescaledb.persistence.storageClass }}
+        storageClassName: {{ .Values.timescaledb.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.timescaledb.persistence.size | quote }}
+  {{- end }}
+{{- end }}

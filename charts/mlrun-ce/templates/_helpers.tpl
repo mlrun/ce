@@ -301,3 +301,65 @@ app.kubernetes.io/name: {{ include "mlrun-ce.tdengine.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{/*
+TimescaleDB helpers
+*/}}
+
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "mlrun-ce.timescaledb.name" -}}
+{{- default "timescaledb" .Values.timescaledb.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+*/}}
+{{- define "mlrun-ce.timescaledb.fullname" -}}
+{{- if .Values.timescaledb.fullnameOverride }}
+{{- .Values.timescaledb.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+    {{- $name := default "timescaledb" .Values.timescaledb.nameOverride }}
+    {{- if contains $name .Release.Name }}
+        {{- .Release.Name | trunc 63 | trimSuffix "-" }}
+    {{- else }}
+        {{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+    {{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "mlrun-ce.timescaledb.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+TimescaleDB Common labels
+*/}}
+{{- define "mlrun-ce.timescaledb.labels" -}}
+helm.sh/chart: {{ include "mlrun-ce.timescaledb.chart" . }}
+{{ include "mlrun-ce.timescaledb.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+TimescaleDB Selector labels
+*/}}
+{{- define "mlrun-ce.timescaledb.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "mlrun-ce.timescaledb.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: timescaledb
+{{- end }}
+
+{{/*
+TimescaleDB connection string for MLRun model monitoring
+*/}}
+{{- define "mlrun-ce.timescaledb.connectionString" -}}
+postgresql://{{ .Values.timescaledb.auth.username }}:{{ .Values.timescaledb.auth.password }}@{{ include "mlrun-ce.timescaledb.fullname" . }}:{{ .Values.timescaledb.service.port }}/{{ .Values.timescaledb.auth.database }}
+{{- end }}
+
