@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2022 Iguazio
+# Copyright 2025 Iguazio
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,9 +47,10 @@ trap cleanup EXIT
 
 check_requirements() {
     local missing=()
-    for cmd in docker kind kubectl helm; do
-        if ! command -v "$cmd" &> /dev/null; then
-            missing+=("$cmd")
+    local tool
+    for tool in docker kind kubectl helm; do
+        if ! command -v "$tool" &> /dev/null; then
+            missing+=("$tool")
         fi
     done
     if [[ ${#missing[@]} -gt 0 ]]; then
