@@ -7,6 +7,9 @@ on:
       - "[0-9]+.[0-9]+.x"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   helm-lint:
     runs-on: ubuntu-latest
