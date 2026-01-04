@@ -308,6 +308,6 @@ app.kubernetes.io/component: timescaledb
 TimescaleDB connection string for MLRun model monitoring
 */}}
 {{- define "mlrun-ce.timescaledb.connectionString" -}}
-postgresql://{{ .Values.timescaledb.auth.username }}:{{ .Values.timescaledb.auth.password }}@{{ include "mlrun-ce.timescaledb.fullname" . }}:{{ .Values.timescaledb.service.port }}/{{ .Values.timescaledb.auth.database }}
+postgresql://{{ .Values.timescaledb.auth.username | urlquery }}:{{ .Values.timescaledb.auth.password | urlquery }}@{{ include "mlrun-ce.timescaledb.fullname" . }}:{{ .Values.timescaledb.service.port }}/{{ .Values.timescaledb.auth.database }}
 {{- end }}
 

@@ -463,7 +463,7 @@ timescaledb:
   fullnameOverride: timescaledb
   image:
     repository: timescale/timescaledb-ha
-    tag: "pg17"
+    tag: "pg17.7-ts2.24.0"
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
