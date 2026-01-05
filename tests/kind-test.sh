@@ -104,6 +104,8 @@ install_chart() {
     # Create minimal values for local testing
     local values_file
     values_file=$(mktemp)
+    # Ensure temp file cleanup on function exit (success or failure)
+    trap "rm -f '${values_file}'" RETURN
     cat > "${values_file}" <<EOF
 # Minimal values for local Kind testing
 mlrun:
@@ -187,8 +189,6 @@ EOF
         --timeout 10m \
         --wait \
         --debug
-
-    rm -f "${values_file}"
 }
 
 verify_installation() {
