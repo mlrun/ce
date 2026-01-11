@@ -6,8 +6,7 @@ permissions:
 on:
   push:
     branches:
-      - development
-      - "[0-9]+.[0-9]+.x"
+      - "[0-9]*.[0-9]*.x"
   workflow_dispatch:
 
 jobs:
@@ -17,6 +16,13 @@ jobs:
       contents: write
 
     steps:
+      - name: Validate release branch
+        run: |
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^[0-9]+\.[0-9]+\.x$ ]]; then
+            echo "Refusing to release from non-version branch: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
