@@ -123,25 +123,75 @@ Create chart name and version as used by the chart label.
 {{- end -}}
 
 {{/*
-Minio Service URL
+=============================================================================
+S3 Storage Backend Helpers
+Supports both MinIO and SeaweedFS as S3-compatible storage backends
+=============================================================================
+*/}}
+
+{{/*
+S3 Service URL - returns the endpoint URL for SeaweedFS
+*/}}
+{{- define "mlrun-ce.s3.service.url" -}}
+http://seaweedfs-s3.{{.Release.Namespace}}.svc.cluster.local:{{ .Values.seaweedfs.s3.port }}
+{{- end -}}
+
+{{/*
+S3 Service Host - returns just the hostname for pipeline config
+*/}}
+{{- define "mlrun-ce.s3.service.host" -}}
+seaweedfs-s3.{{.Release.Namespace}}.svc.cluster.local
+{{- end -}}
+
+{{/*
+S3 Service Port - returns the port for pipeline config
+*/}}
+{{- define "mlrun-ce.s3.service.port" -}}
+{{- .Values.seaweedfs.s3.port | toString -}}
+{{- end -}}
+
+{{/*
+S3 Access Key - uses top-level s3.accessKey for all components (MLRun, Jupyter, Pipelines)
+*/}}
+{{- define "mlrun-ce.s3.accessKey" -}}
+{{- .Values.s3.accessKey -}}
+{{- end -}}
+
+{{/*
+S3 Secret Key - uses top-level s3.secretKey for all components (MLRun, Jupyter, Pipelines)
+*/}}
+{{- define "mlrun-ce.s3.secretKey" -}}
+{{- .Values.s3.secretKey -}}
+{{- end -}}
+
+{{/*
+S3 Bucket - uses top-level s3.bucket for all components
+*/}}
+{{- define "mlrun-ce.s3.bucket" -}}
+{{- .Values.s3.bucket -}}
+{{- end -}}
+
+{{/*
+Legacy Minio Service URL - kept for backward compatibility
 */}}
 {{- define "mlrun-ce.minio.service.url" -}}
-http://minio.{{.Release.Namespace}}.svc.cluster.local:{{ .Values.minio.service.port }}
+{{ include "mlrun-ce.s3.service.url" . }}
 {{- end -}}
 {{- define "mlrun-ce.minio-pipeline.service.url" -}}
-minio.{{.Release.Namespace}}.svc.cluster.local
+{{ include "mlrun-ce.s3.service.host" . }}
 {{- end -}}
 
 {{/*
 MLRun storage auto mount params
 Global toggle is for fast toggling between on-prem/standalone and s3 cases
 Can be overriden if params are explicitly specified
+Uses SeaweedFS as the storage backend
 */}}
 {{- define "mlrun.storage.auto.mount.params" -}}
   {{- if hasKey .Values.mlrun "storageAutoMountParams" -}}
     {{ .Values.mlrun.storageAutoMountParams }}
   {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
-    "aws_access_key={{ .Values.minio.rootUser }},aws_secret_key={{ .Values.minio.rootPassword }},endpoint_url={{ include "mlrun-ce.minio.service.url" . }}"
+    "aws_access_key={{ include "mlrun-ce.s3.accessKey" . }},aws_secret_key={{ include "mlrun-ce.s3.secretKey" . }},endpoint_url={{ include "mlrun-ce.s3.service.url" . }}"
   {{- else -}}
     "non_anonymous=True"
   {{- end -}}

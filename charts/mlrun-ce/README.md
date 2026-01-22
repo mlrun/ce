@@ -10,7 +10,7 @@ The Open source MLRun ce chart includes the following stack:
 * MLRun - https://github.com/mlrun/mlrun
 * Jupyter - https://github.com/jupyter/notebook (+MLRun integrated)
 * MPI Operator - https://github.com/kubeflow/mpi-operator
-* Minio - https://github.com/minio/minio/tree/master/helm/minio
+* SeaweedFS - https://github.com/seaweedfs/seaweedfs (S3-compatible storage)
 * Spark Operator - https://github.com/GoogleCloudPlatform/spark-on-k8s-operator
 * Pipelines - https://github.com/kubeflow/pipelines
 * Prometheus stack - https://github.com/prometheus-community/helm-charts
@@ -162,9 +162,9 @@ helm --namespace mlrun \
     --wait \
     ... other overrides ... \
     --set global.registry.url=${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com \
+    --set global.registry.secretName=ecr-registry-credentials \
     --set nuclio.dashboard.kaniko.registryProviderSecretName=aws-credentials \
     --set mlrun.defaultDockerRegistrySecretName=aws-credentials \
-    --set global.registry.secretName=ecr-registry-credentials \
     mlrun/mlrun-ce
 ```
 
@@ -173,19 +173,23 @@ helm --namespace mlrun \
 ## Usage
 
 Your applications are now available in your local browser:
-- jupyter-notebook - http://nodeipaddress:30040
-- nuclio - http://nodeipaddress:30050
-- mlrun UI - http://nodeipaddress:30060
-- mlrun API (external) - http://nodeipaddress:30070
-- minio API - http://nodeipaddress:30080
-- minio UI - http://nodeipaddress:30090
-- pipeline UI - http://nodeipaddress:30100
-- grafana UI - http://nodeipaddress:30110
+- Jupyter Notebook - http://nodeipaddress:30040
+- Nuclio - http://nodeipaddress:30050
+- MLRun UI - http://nodeipaddress:30060
+- MLRun API (external) - http://nodeipaddress:30070
+- SeaweedFS Admin UI (user/policy management) - http://nodeipaddress:30093
+- Pipeline UI - http://nodeipaddress:30100
+- Grafana UI - http://nodeipaddress:30010
+- Prometheus UI - http://nodeipaddress:30020
 
+**With Ingress enabled**, the UI is available at:
+- `https://seaweedfs-admin.<namespace>.<cluster>.lab.iguazeng.com`
 
 > **Note:**
 > The above links assume your Kubernetes cluster is exposed on localhost.
 > If that's not the case, the different components will be available on `externalHostAddress`
+>
+> For production deployments, consider enabling ingress for each service instead of using NodePorts.
 
 ## Start Working
 
@@ -278,6 +282,6 @@ Refer to the [**Kubeflow documentation**](https://www.kubeflow.org/docs/started/
 
 This table shows the versions of the main components in the MLRun CE chart:
 
-| MLRun CE   | MLRun  | Nuclio   | Jupyter lab | MPI Operator | Minio                        | Spark Operator | Pipelines | Kube-Prometheus-Stack | Prometheus | Grafana |
-|------------|--------|----------|-------------|--------------|------------------------------|----------------|-----------|-----------------------|------------|---------|
-| **0.10.0** | 1.10.0 | 1.15.9   | 4.5.0       |  0.2.3       | RELEASE.2024-04-18T19-09-19Z | 2.1.0          | 2.14.3    | 0.82.0                | 3.3.1      | 11.6.1  |
+| MLRun CE   | MLRun  | Nuclio | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack |
+|------------|--------|--------|---------|--------------|-----------|----------------|-----------|-----------------------|
+| **0.11.0** | 1.11.0 | 1.15.9 | 4.5.0   | 0.2.3        | 4.0.407   | 2.1.0          | 2.14.3    | 72.1.1                |

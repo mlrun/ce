@@ -11,11 +11,8 @@ data:
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ include "mlrun.storage.auto.mount.params" . }}
   MLRUN_HTTPDB__PROJECTS__LEADER: mlrun
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
-{{- if not .Values.global.infrastructure.aws.s3NonAnonymous }}
-  AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
-  AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
-  AWS_ENDPOINT_URL_S3: {{ include "mlrun-ce.minio.service.url" . }}
-{{- end }}
+  # S3 credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3)
+  # are now loaded from the 's3-credentials' Secret via envFrom secretRef
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   MLRUN_HTTPDB__REAL_PATH: s3://
   MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts

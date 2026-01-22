@@ -8,9 +8,9 @@ dependencies:
 - name: mpi-operator
   repository: https://v3io.github.io/helm-charts/stable
   version: 0.6.0
-- name: minio
-  repository: https://charts.min.io/
-  version: 5.2.0
+- name: seaweedfs
+  repository: https://seaweedfs.github.io/seaweedfs/helm
+  version: 4.0.407
 - name: spark-operator
   repository: https://kubeflow.github.io/spark-operator
   version: 2.1.0
@@ -20,5 +20,5 @@ dependencies:
 - name: strimzi-kafka-operator
   repository: https://strimzi.io/charts/
   version: 0.48.0
-digest: sha256:542955b13f2da791768eebe8e25092a8977fba987259ebe6ad85e4b977a7963b
-generated: "2026-01-14T13:52:54.335415+02:00"
+digest: sha256:f87ec580f73178cfc897d57e26f5d7b049900f1b7ef75bfe198ca327eb2ed06d
+generated: "2026-02-12T23:52:46.490844+02:00"

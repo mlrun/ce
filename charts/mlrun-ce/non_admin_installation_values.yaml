@@ -34,17 +34,8 @@ mpi-operator:
     clusterResources:
       create: false
 
-minio:
-  service:
-    type: NodePort
-    port: 9000
-    nodePort: 30080
-  consoleService:
-    type: NodePort
-    port: 9001
-    nodePort: 30090
-  mode: standalone
-  replicas: 1
+seaweedfs:
+  enabled: true
 
 spark-operator:
   enabled: false

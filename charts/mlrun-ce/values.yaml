@@ -2,7 +2,7 @@
 global:
   # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
   externalHostAddress: localhost
-  registry:
+  registry: &userRegistry
     url: mustprovide
     secretName:
   nuclio:
@@ -20,7 +20,19 @@ global:
       s3NonAnonymous: false
       domainNameCertificate: ~
 
+# =============================================================================
+# S3-compatible storage configuration
+# These credentials are used by MLRun, Jupyter, and Kubeflow Pipelines
+# to access the S3-compatible storage backend (SeaweedFS)
+# =============================================================================
+s3:
+  accessKey: "minio"
+  secretKey: "minio123"
+  bucket: "mlrun"
+
 nuclio:
+  global:
+    registry: *userRegistry
   # coupled with mlrun.nuclio.dashboardName template in mlrun chart
   fullnameOverride: nuclio
   controller:
@@ -71,6 +83,8 @@ nuclio:
 mlrun:
   # set the type of filesystem to use: filesystem, s3
   enabled: true
+  global:
+    registry: *userRegistry
   defaultFunctionPodResources:
     limits:
       cpu: "2"
@@ -128,6 +142,9 @@ mlrun:
     envFrom:
       - configMapRef:
           name: mlrun-common-env
+      - secretRef:
+          name: s3-credentials
+          optional: true
       - configMapRef:
           name: mlrun-pipelines-config
           optional: true
@@ -240,6 +257,9 @@ jupyterNotebook:
     - configMapRef:
         name: jupyter-common-env
         optional: true
+    - secretRef:
+        name: s3-credentials
+        optional: true
   persistence:
     enabled: true
     existingClaim:
@@ -270,33 +290,102 @@ mpi-operator:
   deployment:
     create: true
 
-minio:
+seaweedfs:
   enabled: true
-  rootUser: minio
-  rootPassword: minio123
-  ingress:
-    enabled: false
-  mode: standalone
-  replicas: 1
-  resources:
-    requests:
-      memory: 0.5Gi
-  service:
+  global:
+    # Override parent chart's global.registry (which is a map) with empty string
+    # to prevent "map[secretName:<nil> url:mustprovide]" in image names
+    registry: ""
+    # Override default "001" to "000" for single-node setup (no replication)
+    replicationPlacement: "000"
+
+  # Master server - metadata management
+  master:
+    port: 9333
+    # Storage: use PVC instead of default hostPath
+    data:
+      type: "persistentVolumeClaim"
+      size: "1Gi"
+    logs:
+      type: "emptyDir"
+    resources:
+      requests:
+        memory: 128Mi
+
+  # Volume server - actual data storage
+  volume:
+    port: 8080
+    # Storage: use PVC instead of default hostPath
+    dataDirs:
+      - name: data
+        type: "persistentVolumeClaim"
+        size: "10Gi"
+        maxVolumes: 0
+    logs:
+      type: "emptyDir"
+    resources:
+      requests:
+        memory: 256Mi
+
+  # Filer server - file system interface
+  filer:
+    port: 8888
+    # Storage: use PVC instead of default hostPath
+    data:
+      type: "persistentVolumeClaim"
+      size: "1Gi"
+    logs:
+      type: "emptyDir"
+    # Filer's embedded S3 gateway
+    s3:
+      enabled: true
+      port: 8333
+    resources:
+      requests:
+        memory: 128Mi
+
+  # S3 API gateway - MLRun connects to this endpoint
+  s3:
+    enabled: true  # Default is false
+    port: 8333
+    enableAuth: true  # Default is false
+    # SeaweedFS S3 IAM configuration secret - defines authorized users/credentials
+    # and their permissions for S3 API access (Admin, Read, List, Write, etc.)
+    # Created by templates/seaweedfs/seaweedfs-s3-config.yaml using s3.accessKey/secretKey
+    existingConfigSecret: "seaweedfs-s3-config"
+    resources:
+      requests:
+        memory: 128Mi
+
+  # Admin server - user and policy management UI
+  admin:
+    enabled: true  # Default is false
+    port: 23646
+    secret:
+      adminUser: "minio"
+      adminPassword: "minio123"
+    dataDir: "/data"
+    # Storage: use PVC instead of default emptyDir
+    data:
+      type: "persistentVolumeClaim"
+      size: "1Gi"
+    resources:
+      requests:
+        memory: 64Mi
+
+  # Custom NodePort service for Admin UI external access
+  adminService:
     type: NodePort
-    port: 9000
-    nodePort: 30080
-  consoleService:
-    type: NodePort
-    port: 9001
-    nodePort: 30090
-  persistence:
-    enabled: true
-    size: 1Gi
-  fullnameOverride: minio
-  buckets:
-    - name: mlrun
-      policy: none
-      purge: false
+    port: 23646
+    nodePort: 30093
+    ingress:
+      enabled: false
+      className: ""
+      host: ""
+      path: /
+      pathType: Prefix
+      annotations: {}
+      tls: []
 
 spark-operator:
   enabled: true
@@ -347,12 +436,6 @@ pipelines:
       runAsGroup: 1001
       fsGroup: 1001
       fsGroupChangePolicy: OnRootMismatch
-  minio:
-    enabled: true
-    accessKey: "minio"
-    secretKey: "minio123"
-    endpointPort: "9000"
-    bucket: "mlrun"
   images:
     driver:
       repository: ghcr.io/kubeflow/kfp-driver
@@ -403,9 +486,6 @@ pipelines:
     cacheImage:
       repository: gcr.io/google-containers/busybox
       tag: latest
-    minio:
-      repository: minio/minio
-      tag: "RELEASE.2025-10-15T17-29-55Z"
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
@@ -455,7 +535,6 @@ kube-prometheus-stack:
       nodePort: 30020
   kube-state-metrics:
     fullnameOverride: state-metrics
-
 prometheus-node-exporter:
   fullnameOverride: node-exporter
   hostNetwork: false

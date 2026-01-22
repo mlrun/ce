@@ -1,5 +1,10 @@
-{{- if or (.Values.jupyterNotebook.enabled) (.Values.mlrun.enabled) (.Values.minio.enabled) (.Values.pipelines.enabled) (index .Values "kube-prometheus-stack" "enabled") }}
+{{- if or (.Values.jupyterNotebook.enabled) (.Values.mlrun.enabled) (.Values.seaweedfs.enabled) (.Values.pipelines.enabled) (index .Values "kube-prometheus-stack" "enabled") }}
 You're up and running!
+{{- if and .Values.pipelines.enabled (not .Values.seaweedfs.enabled) }}
+⚠️  WARNING: seaweedfs.enabled must be set to true when using pipelines
+    for storing pipeline artifacts. Pipelines may not work correctly
+    without an S3-compatible storage backend!
+{{- end }}
 
 {{- if .Values.jupyterNotebook.enabled }}
 {{- "\n" }}
@@ -57,39 +62,27 @@ mlrun-api.{{ .Values.global.externalHostAddress }}
 {{- end }}
 {{- end }}
 
-{{- if .Values.minio.enabled }}
-{{- if ne .Values.global.infrastructure.kind "aws" }}
-{{- "\n" }}
-Minio UI is available at:
-{{- if .Values.minio.ingress.enabled }}
-{{ (index .Values.minio.consoleIngress.hosts 0) }}
-{{- else }}
-{{ .Values.global.externalHostAddress }}:{{ .Values.minio.consoleService.nodePort }}
-{{- end }}
--  username: {{ .Values.minio.rootUser }}
--  password: {{ .Values.minio.rootPassword }}
-{{- end }}
-{{- end }}
 
-{{- if .Values.minio.enabled }}
+{{- if .Values.seaweedfs.enabled }}
 {{- if ne .Values.global.infrastructure.kind "aws" }}
+{{- if and .Values.seaweedfs.admin .Values.seaweedfs.admin.enabled }}
 {{- "\n" }}
-Minio API is available at:
-{{- if .Values.minio.ingress.enabled }}
-{{ (index .Values.minio.ingress.hosts 0) }}
+SeaweedFS Admin UI is available at:
+{{- if and .Values.seaweedfs.adminService .Values.seaweedfs.adminService.ingress .Values.seaweedfs.adminService.ingress.enabled }}
+{{ .Values.seaweedfs.adminService.ingress.host }}
 {{- else }}
-{{ .Values.global.externalHostAddress }}:{{ .Values.minio.service.nodePort }}
+{{ .Values.global.externalHostAddress }}:{{ .Values.seaweedfs.adminService.nodePort | default 30093 }}
+{{- end }}
+-  S3 credentials: minio / minio123
 {{- end }}
 {{- end }}
 {{- end }}
 
-{{- if and .Values.pipelines.enabled  .Values.pipelines.ui.enabled -}} }}
+{{- if and .Values.pipelines.enabled .Values.pipelines.ui.enabled }}
 {{- if ne .Values.global.infrastructure.kind "aws" }}
-{{- if not .Values.minio.ingress.enabled }}
 {{- "\n" }}
 Pipelines UI is available at:
 {{ .Values.global.externalHostAddress }}:{{ .Values.pipelines.service.nodePort }}
-{{- end }}
 {{- end }}
 {{- end }}
 

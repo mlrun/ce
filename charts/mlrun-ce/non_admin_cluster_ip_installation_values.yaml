@@ -35,17 +35,8 @@ mpi-operator:
     clusterResources:
       create: false
 
-minio:
-  service:
-    type: ClusterIP
-    port: 9000
-    nodePort: ""
-  consoleService:
-    type: ClusterIP
-    port: 9001
-    nodePort: ""
-  mode: standalone
-  replicas: 1
+seaweedfs:
+  enabled: true
 
 timescaledb:
   service:

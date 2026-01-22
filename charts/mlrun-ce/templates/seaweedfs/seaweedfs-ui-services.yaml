@@ -1,0 +1,35 @@
+{{- if .Values.seaweedfs.enabled }}
+# =============================================================================
+# SeaweedFS Admin UI Service
+# This service exposes the SeaweedFS Admin UI for external access, providing
+# user & policy management functionality similar to MinIO Console IAM
+# =============================================================================
+
+{{- if and .Values.seaweedfs.admin .Values.seaweedfs.admin.enabled .Values.seaweedfs.adminService }}
+---
+# Admin UI Service - User & policy management
+# Similar to MinIO's Identity/Access Management (IAM)
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-admin-ui
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seaweedfs-admin-ui
+spec:
+  type: {{ .Values.seaweedfs.adminService.type | default "NodePort" }}
+  ports:
+    - name: admin-ui
+      port: {{ .Values.seaweedfs.adminService.port | default 23646 }}
+      targetPort: {{ .Values.seaweedfs.admin.port | default 23646 }}
+      {{- if .Values.seaweedfs.adminService.nodePort }}
+      nodePort: {{ .Values.seaweedfs.adminService.nodePort }}
+      {{- end }}
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: seaweedfs
+    app.kubernetes.io/component: admin
+{{- end }}
+
+{{- end }}
