@@ -48,7 +48,7 @@ pipelines:
 kube-prometheus-stack:
   enabled: false
 
-tdengine:
+timescaledb:
   enabled: false
 
 kafka:
