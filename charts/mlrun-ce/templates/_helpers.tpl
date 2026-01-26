@@ -250,22 +250,24 @@ Model monitoring DSN
 {{- end -}}
 
 {{/*
+TimescaleDB helpers
+*/}}
+
+{{/*
 Expand the name of the chart.
 */}}
-{{- define "mlrun-ce.tdengine.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- define "mlrun-ce.timescaledb.name" -}}
+{{- default "timescaledb" .Values.timescaledb.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
-We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
-If release name contains chart name it will be used as a full name.
 */}}
-{{- define "mlrun-ce.tdengine.fullname" -}}
-{{- if .Values.tdengine.fullnameOverride }}
-{{- .Values.tdengine.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- define "mlrun-ce.timescaledb.fullname" -}}
+{{- if .Values.timescaledb.fullnameOverride }}
+{{- .Values.timescaledb.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
-    {{- $name := default .Chart.Name .Values.tdengine.nameOverride }}
+    {{- $name := default "timescaledb" .Values.timescaledb.nameOverride }}
     {{- if contains $name .Release.Name }}
         {{- .Release.Name | trunc 63 | trimSuffix "-" }}
     {{- else }}
@@ -277,16 +279,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "mlrun-ce.tdengine.chart" -}}
+{{- define "mlrun-ce.timescaledb.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
-Common labels
+TimescaleDB Common labels
 */}}
-{{- define "mlrun-ce.tdengine.labels" -}}
-helm.sh/chart: {{ include "mlrun-ce.tdengine.chart" . }}
-{{ include "mlrun-ce.tdengine.selectorLabels" . }}
+{{- define "mlrun-ce.timescaledb.labels" -}}
+helm.sh/chart: {{ include "mlrun-ce.timescaledb.chart" . }}
+{{ include "mlrun-ce.timescaledb.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -294,10 +296,18 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Selector labels
+TimescaleDB Selector labels
 */}}
-{{- define "mlrun-ce.tdengine.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "mlrun-ce.tdengine.name" . }}
+{{- define "mlrun-ce.timescaledb.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "mlrun-ce.timescaledb.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: timescaledb
+{{- end }}
+
+{{/*
+TimescaleDB connection string for MLRun model monitoring
+*/}}
+{{- define "mlrun-ce.timescaledb.connectionString" -}}
+postgresql://{{ .Values.timescaledb.auth.username | urlquery }}:{{ .Values.timescaledb.auth.password | urlquery }}@{{ include "mlrun-ce.timescaledb.fullname" . }}:{{ .Values.timescaledb.service.port }}/{{ .Values.timescaledb.auth.database }}
 {{- end }}
 

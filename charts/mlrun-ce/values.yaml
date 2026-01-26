@@ -458,34 +458,36 @@ prometheus-node-exporter:
   hostRootFsMount:
     enabled: false
 
-tdengine:
+timescaledb:
   enabled: true
-  fullnameOverride: tdengine-tsdb
-  # For more detailes
-  # https://github.com/taosdata/TDengine-Operator/blob/3.0/helm/tdengine/values.yaml
-  replicaCount: 1
+  fullnameOverride: timescaledb
   image:
-    prefix: tdengine/tdengine
-    pullPolicy: Always
-    tag: "3.0.7.1"
+    repository: timescale/timescaledb-ha
+    tag: "pg17.7-ts2.24.0"
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
-    ports:
-      tcp: [6030, 6041, 6042, 6043, 6044, 6046, 6047, 6048, 6049, 6060]
-      udp: [6044, 6045]
-  # Set timezone here, not in taoscfg
-  timezone: "UTC"
+    port: 5432
+  auth:
+    username: postgres
+    password: postgres
+    database: postgres
+  persistence:
+    enabled: true
+    size: "10Gi"
+    storageClass: ""
+    accessMode: "ReadWriteOnce"
+    annotations:
+      helm.sh/resource-policy: "keep"
   resources:
-  storage:
-    className: ""
-    dataSize: "10Gi"
-    logSize: "1Gi"
-  nodeSelectors:
-    taosd:
-  clusterDomainSuffix: ""
-  taoscfg:
-    CLUSTER: "0"
-    TAOS_REPLICA: "1"
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "1Gi"
+      cpu: "1"
+  nodeSelector: {}
+  tolerations: []
 
 kafka:
   global:
