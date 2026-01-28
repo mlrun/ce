@@ -98,11 +98,15 @@ mlrun:
   v3io:
     enabled: false
   api:
+    image:
+      tag: 1.11.0-rc28
     ingress:
       enabled: false
       annotations: {}
     sidecars:
       logCollector:
+        image:
+          tag: 1.11.0-rc28
         enabled: true
     fullnameOverride: mlrun-api
     functionSpecServiceAccountDefault: ~
@@ -149,6 +153,8 @@ mlrun:
       # - name: alerts
 
   ui:
+    image:
+      tag: 1.11.0-rc28
     fullnameOverride: mlrun-ui
     ingress:
       enabled: false
