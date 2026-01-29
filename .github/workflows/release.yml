@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Validate release branch
         run: |
-          if ! [[ "${GITHUB_REF_NAME}" =~ ^[0-9]+\.[0-9]+\.x$ ]]; then
+          if ! [[ "${GITHUB_REF_NAME}" =~ ^([0-9]+\.[0-9]+\.x|development)$ ]]; then
             echo "Refusing to release from non-version branch: ${GITHUB_REF_NAME}"
             exit 1
           fi
