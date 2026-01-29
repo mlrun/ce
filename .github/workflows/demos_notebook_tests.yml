@@ -3,6 +3,9 @@ name: demos_notebook_tests
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read  # Allows reading repository contents (for checkout)
+
 jobs:
   demos-notebook-tests:
     runs-on: ubuntu-latest
