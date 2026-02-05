@@ -54,5 +54,13 @@ spec:
   # Allow egress within same namespace
   - to:
     - podSelector: {}
+  
+  # Allow egress to Kubernetes API server (required for controllers, operators, etc.)
+  # This allows traffic to the API server on standard ports
+  - ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
 {{- end }}
 
