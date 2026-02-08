@@ -278,6 +278,6 @@ Refer to the [**Kubeflow documentation**](https://www.kubeflow.org/docs/started/
 
 This table shows the versions of the main components in the MLRun CE chart:
 
-| MLRun CE   | MLRun  | Nuclio   | Jupyter notebook | MPI Operator | Minio                        | Spark Operator | Pipelines | Kube-Prometheus-Stack | Prometheus | Grafana |
-|------------|--------|----------|------------------|--------------|------------------------------|----------------|-----------|-----------------------|------------|---------|
-| **0.10.0** | 1.10.0 | 1.15.9   |  7.5.0           | 0.2.3        | RELEASE.2024-04-18T19-09-19Z | 2.1.0          | 2.14.3    | 0.82.0                | 3.3.1      | 11.6.1  |
+| MLRun CE   | MLRun  | Nuclio   | Jupyter lab | MPI Operator | Minio                        | Spark Operator | Pipelines | Kube-Prometheus-Stack | Prometheus | Grafana |
+|------------|--------|----------|-------------|--------------|------------------------------|----------------|-----------|-----------------------|------------|---------|
+| **0.10.0** | 1.10.0 | 1.15.9   | 4.5.0       |  0.2.3       | RELEASE.2024-04-18T19-09-19Z | 2.1.0          | 2.14.3    | 0.82.0                | 3.3.1      | 11.6.1  |
