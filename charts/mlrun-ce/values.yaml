@@ -407,7 +407,6 @@ pipelines:
       repository: minio/minio
       tag: "RELEASE.2025-10-15T17-29-55Z"
 
-
 kube-prometheus-stack:
   fullnameOverride: monitoring
   enabled: true
@@ -456,6 +455,7 @@ kube-prometheus-stack:
       nodePort: 30020
   kube-state-metrics:
     fullnameOverride: state-metrics
+
 prometheus-node-exporter:
   fullnameOverride: node-exporter
   hostNetwork: false
@@ -495,37 +495,73 @@ timescaledb:
   nodeSelector: {}
   tolerations: []
 
-kafka:
-  global:
-    security:
-      allowInsecureImages: true
+strimzi-kafka-operator:
   enabled: true
-  fullnameOverride: kafka-stream
-  image:
-    repository: 'bitnamilegacy/kafka'
-  extraConfigYaml:
-    default.replication.factor: "1"
-    offsets.topic.replication.factor: "1"
-    transaction.state.log.replication.factor: "1"
-    transaction.state.log.min.isr: "1"
+  watchAnyNamespace: true
+#  defaultImageRegistry: quay.io
+#  defaultImageRepository: strimzi
+#  defaultImageTag: 0.48.0
 
-  controller:
-    replicaCount: 1
-    resourcesPreset: "medium"
+kafka:
+  enabled: true
+  name: kafka-stream
+
+  # Bootstrap service alias configuration
+  bootstrapAlias:
+    # Create a service alias for simpler Kafka bootstrap server name
+    # When enabled, creates: {name}.{namespace}.svc.cluster.local:9092
+    # instead of the default: {name}-kafka-bootstrap.{namespace}.svc.cluster.local:9092
+    enabled: true
+    # Name for the bootstrap service alias (only used if enabled is true)
+    name: kafka-stream
+
+  replicas: 1
+
   listeners:
-    client:
-      name: CLIENT
-      containerPort: 9092
-      protocol: PLAINTEXT
-    controller:
-      name: CONTROLLER
-      containerPort: 9093
-      protocol: PLAINTEXT
-    interbroker:
-      name: INTERNAL
-      containerPort: 9094
-      protocol: PLAINTEXT
-  advertisedListeners: >-
-    CLIENT://kafka-stream:9092
-    CONTROLLER://kafka-stream-controller-headless:9093,
-    INTERNAL://kafka-stream-controller-headless:9094,
+    - name: client
+      port: 9092
+      type: internal
+      tls: false
+    - name: controller
+      port: 9093
+      type: internal
+      tls: false
+    - name: internal
+      port: 9094
+      type: internal
+      tls: false
+
+  storage:
+    type: persistent-claim
+    size: 8Gi
+    class: ""
+
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+  config:
+    # Replication settings for single-node setup
+    default.replication.factor: 1
+    offsets.topic.replication.factor: 1
+    transaction.state.log.replication.factor: 1
+    transaction.state.log.min.isr: 1
+
+  zookeeper:
+    replicas: 0
+
+  # Kafka RBAC for user namespaces
+  # Enable this when installing in user namespaces (mlrun, mlrun1, etc.)
+  # When enabled, creates: ServiceAccount "kafka-client" + Role/RoleBinding + NetworkPolicy
+  rbac:
+    # Enable RBAC for this namespace to access Kafka
+    enabled: true
+
+    # Operator namespace (where Kafka operator/cluster is running)
+    # Empty means "use the release namespace"
+    # Example: "controller" if that's where you installed the operator
+    operatorNamespace: ""

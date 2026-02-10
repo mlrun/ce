@@ -58,5 +58,12 @@ pipelines:
   priority_class:
     enabled: false
 
+strimzi-kafka-operator:
+  enabled: false
+  
+kafka:
+  rbac:
+    operatorNamespace: controller
+
 kube-prometheus-stack:
   enabled: false

@@ -1,0 +1,90 @@
+{{- if .Values.kafka.rbac.enabled -}}
+{{- $operatorNamespace := .Values.kafka.rbac.operatorNamespace | default .Release.Namespace -}}
+{{- $kafkaName := .Values.kafka.name | default "kafka-stream" -}}
+{{- $currentNamespace := .Release.Namespace -}}
+---
+# ServiceAccount for Kafka client applications
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kafka-client
+  namespace: {{ $currentNamespace }}
+  labels:
+    app.kubernetes.io/name: mlrun-ce
+    app.kubernetes.io/component: kafka-rbac
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+---
+# Role: Allow managing Kafka resources via CRDs in the operator namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $currentNamespace }}-kafka-resource-manager
+  namespace: {{ $operatorNamespace }}
+  labels:
+    app.kubernetes.io/name: mlrun-ce
+    app.kubernetes.io/component: kafka-rbac
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+    user-namespace: {{ $currentNamespace }}
+rules:
+  # Allow creating and managing KafkaTopic CRDs
+  - apiGroups:
+      - kafka.strimzi.io
+    resources:
+      - kafkatopics
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  # Allow checking KafkaTopic status
+  - apiGroups:
+      - kafka.strimzi.io
+    resources:
+      - kafkatopics/status
+    verbs:
+      - get
+      - list
+      - watch
+  # Allow reading KafkaUser CRDs (if using SCRAM auth)
+  - apiGroups:
+      - kafka.strimzi.io
+    resources:
+      - kafkausers
+    verbs:
+      - get
+      - list
+      - watch
+  # Allow reading the Kafka cluster info
+  - apiGroups:
+      - kafka.strimzi.io
+    resources:
+      - kafkas
+    verbs:
+      - get
+      - list
+      - watch
+---
+# RoleBinding: Grant Kafka resource management permissions to ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $currentNamespace }}-kafka-resource-manager
+  namespace: {{ $operatorNamespace }}
+  labels:
+    app.kubernetes.io/name: mlrun-ce
+    app.kubernetes.io/component: kafka-rbac
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+    user-namespace: {{ $currentNamespace }}
+subjects:
+  - kind: ServiceAccount
+    name: kafka-client
+    namespace: {{ $currentNamespace }}
+roleRef:
+  kind: Role
+  name: {{ $currentNamespace }}-kafka-resource-manager
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+

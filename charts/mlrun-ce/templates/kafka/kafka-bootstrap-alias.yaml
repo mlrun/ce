@@ -1,0 +1,24 @@
+{{- if .Values.kafka.bootstrapAlias.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.kafka.bootstrapAlias.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: bootstrap-alias
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: client
+    port: 9092
+    targetPort: 9092
+    protocol: TCP
+  selector:
+    strimzi.io/cluster: {{ .Values.kafka.name }}
+    strimzi.io/kind: Kafka
+    strimzi.io/name: {{ .Values.kafka.name }}-kafka
+{{- end }}
+

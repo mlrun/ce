@@ -51,5 +51,9 @@ kube-prometheus-stack:
 timescaledb:
   enabled: false
 
+strimzi-kafka-operator:
+  enabled: true
+  watchAnyNamespace: true
+  
 kafka:
   enabled: false
