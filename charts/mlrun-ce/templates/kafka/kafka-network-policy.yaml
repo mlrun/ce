@@ -1,13 +1,14 @@
 {{- if .Values.kafka.rbac.enabled -}}
-{{- $operatorNamespace := .Values.kafka.rbac.operatorNamespace | default .Release.Namespace -}}
 {{- $kafkaName := .Values.kafka.name | default "kafka-stream" -}}
 {{- $currentNamespace := .Release.Namespace -}}
 ---
-# NetworkPolicy: Allow egress from this namespace to Kafka namespace
+# NetworkPolicy: Kafka Isolation
+# Purpose: Ensure pods in this namespace can ONLY connect to Kafka in their OWN
+#          namespace, preventing cross-tenant Kafka access in multi-namespace deployments.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-kafka-access
+  name: kafka-isolation
   namespace: {{ $currentNamespace }}
   labels:
     app.kubernetes.io/name: mlrun-ce
@@ -21,11 +22,13 @@ spec:
   - Egress
   
   egress:
-  # Allow egress to Kafka namespace
+  # =============================================================================
+  # Kafka ports (9092-9094): ONLY allowed to Kafka in the SAME namespace
+  # =============================================================================
   - to:
     - namespaceSelector:
         matchLabels:
-          kubernetes.io/metadata.name: {{ $operatorNamespace }}
+          kubernetes.io/metadata.name: {{ $currentNamespace }}
       podSelector:
         matchLabels:
           strimzi.io/cluster: {{ $kafkaName }}
@@ -33,34 +36,36 @@ spec:
     - protocol: TCP
       port: 9092  # client listener
     - protocol: TCP
-      port: 9093  # controller listener
+      port: 9093  # controller listener  
     - protocol: TCP
-      port: 9094  # internal listener
+      port: 9094  # external listener
+
+  # =============================================================================
+  # All other traffic: ALLOWED (no restrictions)
+  # =============================================================================
+  # Allow all egress on non-Kafka ports. This ensures that services like:
+  # - Docker registries (Kaniko builds)
+  # - Kubernetes API server
+  # - DNS
+  # - External APIs
+  # ...continue to work without needing explicit whitelist rules.
   
-  # Allow DNS resolution (required for service discovery)
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-      podSelector:
-        matchLabels:
-          k8s-app: kube-dns
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
-  
-  # Allow egress within same namespace
-  - to:
-    - podSelector: {}
-  
-  # Allow egress to Kubernetes API server (required for controllers, operators, etc.)
-  # This allows traffic to the API server on standard ports
+  # Allow all TCP traffic on ports below Kafka range
   - ports:
     - protocol: TCP
-      port: 443
+      port: 1
+      endPort: 9091
+  
+  # Allow all TCP traffic on ports above Kafka range
+  - ports:
     - protocol: TCP
-      port: 6443
-{{- end }}
+      port: 9095
+      endPort: 65535
+  
+  # Allow all UDP traffic (DNS, etc.)
+  - ports:
+    - protocol: UDP
+      port: 1
+      endPort: 65535
 
+{{- end }}

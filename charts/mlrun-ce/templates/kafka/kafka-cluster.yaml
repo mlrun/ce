@@ -20,6 +20,10 @@ spec:
         port: {{ .port }}
         type: {{ .type }}
         tls: {{ .tls }}
+        {{- if .configuration }}
+        configuration:
+          {{- toYaml .configuration | nindent 10 }}
+        {{- end }}
     {{- end }}
     config:
       {{- toYaml .Values.kafka.config | nindent 6 }}
