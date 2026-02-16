@@ -47,6 +47,11 @@ minio:
   mode: standalone
   replicas: 1
 
+timescaledb:
+  service:
+    type: ClusterIP
+    nodePort: ""
+
 spark-operator:
   enabled: false
 

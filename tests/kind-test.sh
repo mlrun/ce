@@ -78,6 +78,9 @@ nodes:
   - containerPort: 30443
     hostPort: 30443
     protocol: TCP
+  - containerPort: 30110
+    hostPort: 30110
+    protocol: TCP
 EOF
 }
 

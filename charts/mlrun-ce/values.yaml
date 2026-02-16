@@ -472,8 +472,9 @@ timescaledb:
     tag: "pg17.7-ts2.24.0"
     pullPolicy: IfNotPresent
   service:
-    type: ClusterIP
+    type: NodePort
     port: 5432
+    nodePort: 30110
   auth:
     username: postgres
     password: postgres

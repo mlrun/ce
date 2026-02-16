@@ -117,5 +117,15 @@ Prometheus UI is available at:
 {{- end }}
 {{- end }}
 
+{{- if .Values.timescaledb.enabled }}
+{{- if eq .Values.timescaledb.service.type "NodePort" }}
+{{- "\n" }}
+TimescaleDB is available at:
+{{ .Values.global.externalHostAddress }}:{{ .Values.timescaledb.service.nodePort }}
+-  username: {{ .Values.timescaledb.auth.username }}
+-  database: {{ .Values.timescaledb.auth.database }}
+{{- end }}
+{{- end }}
+
 Happy MLOPSing!!! :]
 {{- end }}
