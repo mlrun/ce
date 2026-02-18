@@ -1,0 +1,82 @@
+{{- if and .Values.kafka.enabled .Values.kafka.ingress.enabled }}
+{{- /*
+  This template manages the ingress-nginx tcp-services ConfigMap entry for Kafka.
+  It MERGES with existing ConfigMap data (using Helm lookup), so other TCP service
+  entries are preserved. Multiple TCP services can coexist in the same ConfigMap.
+  
+  IMPORTANT: TCP proxy routing is PORT-BASED ONLY (no hostname/SNI routing).
+  Each Kafka installation must use a unique externalPort cluster-wide.
+  The hostname does NOT provide isolation - it just points to the ingress controller.
+  
+  Behavior:
+  - Clients connect to ingress:9094
+  - Traffic is proxied: ingress:9094 → kafka-bootstrap:9092 (internal listener)
+  - Works for in-cluster clients (hairpin NAT) accessing via ingress hostname
+  
+  NOTE: We intentionally proxy to the INTERNAL listener (9092), NOT the external/nodeport
+  listener (9094). This is correct because:
+  - ingress-nginx TCP proxy is Layer 4 (transparent) - it forwards raw TCP bytes
+  - The internal listener is plaintext, which is what L4 proxy needs
+  - Kafka metadata returns internal DNS names that resolve correctly for in-cluster clients
+  - This matches how the old Bitnami Kafka setup worked for in-cluster traffic
+  
+  LIMITATION FOR EXTERNAL CLIENTS:
+  - Kafka returns broker metadata with internal DNS names
+  - External clients may fail after bootstrap if they cannot resolve internal DNS
+  - For true external access, use NodePort listener with advertisedHost configured
+  - Single-broker setups may work externally since bootstrap = broker
+  
+  Requirements:
+  - ingress-nginx must be installed BEFORE enabling this option
+  - The ingress-nginx controller args must include:
+    --tcp-services-configmap=$(POD_NAMESPACE)/tcp-services
+*/ -}}
+{{- $configMapName := .Values.kafka.ingress.tcpConfigMapName | default "tcp-services" }}
+{{- $ingressNamespace := .Values.kafka.ingress.ingressNamespace | default "ingress-nginx" }}
+{{- $externalPort := .Values.kafka.ingress.externalPort | default 9094 | toString }}
+{{- $kafkaService := printf "%s/%s-kafka-bootstrap:9092" .Release.Namespace .Values.kafka.name }}
+{{- /* Verify ingress namespace exists before proceeding */ -}}
+{{- $ingressNs := lookup "v1" "Namespace" "" $ingressNamespace }}
+{{- if not $ingressNs }}
+{{- fail (printf "kafka.ingress.enabled is true but Helm could not verify that namespace '%s' exists. This may mean the namespace is missing, or that your current RBAC permissions do not allow listing namespaces. Please ensure ingress-nginx is installed, that kafka.ingress.ingressNamespace is set correctly, and that you have sufficient permissions." $ingressNamespace) }}
+{{- end }}
+{{- /* Lookup existing ConfigMap and merge with our entry */ -}}
+{{- $existingCM := lookup "v1" "ConfigMap" $ingressNamespace $configMapName }}
+{{- $existingData := dict }}
+{{- if $existingCM }}
+{{- $existingData = $existingCM.data | default dict }}
+{{- end }}
+{{- /* Prevent silent overrides: fail if port is already used by a different service */ -}}
+{{- if hasKey $existingData $externalPort }}
+{{- $existingTarget := index $existingData $externalPort }}
+{{- if ne $existingTarget $kafkaService }}
+{{- fail (printf "kafka.ingress.externalPort %s is already mapped in ConfigMap %s/%s to '%s' for another service/namespace. The ingress-nginx tcp-services ConfigMap is shared cluster-wide, so a given external port can only be used by one TCP service across all namespaces. Either reuse the existing mapping or choose a different kafka.ingress.externalPort value." $externalPort $ingressNamespace $configMapName $existingTarget) }}
+{{- end }}
+{{- end }}
+{{- /* Merge existing data so other TCP service entries are preserved */ -}}
+{{- $newData := merge (dict $externalPort $kafkaService) $existingData }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $configMapName }}
+  namespace: {{ $ingressNamespace }}
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: ingress-tcp
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    # Using hooks so this ConfigMap is NOT tracked by Helm release ownership.
+    # This prevents Helm from deleting it on uninstall (which would break other TCP services).
+    # NOTE: No hook-delete-policy - we intentionally preserve the ConfigMap to allow
+    # the lookup+merge logic to work correctly across multiple installations.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+data:
+  {{- /* 
+    Format: "externalPort": "namespace/service:port"
+    Merged with existing ConfigMap entries to preserve other TCP services
+  */ -}}
+  {{- range $port, $target := $newData }}
+  "{{ $port }}": "{{ $target }}"
+  {{- end }}
+{{- end }}

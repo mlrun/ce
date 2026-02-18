@@ -595,6 +595,159 @@ kafka:
     # Name for the bootstrap service alias (only used if enabled is true)
     name: kafka-stream
 
+  # ============================================================================
+  # INGRESS TCP PROXY CONFIGURATION
+  # ============================================================================
+  # Creates a ConfigMap entry for ingress-nginx to proxy external Kafka traffic.
+  # This MERGES with existing tcp-services ConfigMap entries, preserving other TCP services.
+  #
+  # This provides similar behavior to the old Bitnami Kafka setup:
+  # - Clients connect to the ingress controller on port 9094
+  # - Traffic is proxied through ingress: ingress:9094 → kafka-bootstrap:9092
+  # - Works from inside pods (with hairpin NAT) accessing via the ingress hostname
+  #
+  # ============================================================================
+  # IMPORTANT LIMITATIONS
+  # ============================================================================
+  #
+  # 1. PORT-BASED ROUTING ONLY (no hostname isolation)
+  #    The ingress-nginx TCP proxy routes by PORT only, not by hostname/SNI.
+  #    The hostname (e.g., kafka.<ns>.<cluster>.domain) is just DNS pointing to
+  #    the ingress controller - it does NOT provide namespace isolation.
+  #    Each Kafka installation MUST use a unique externalPort cluster-wide.
+  #
+  # 2. EXTERNAL CLIENT LIMITATION
+  #    This proxy forwards to the internal Kafka listener (9092). Kafka returns
+  #    broker metadata with INTERNAL DNS names (e.g., kafka-0.kafka-brokers.mlrun).
+  #    - IN-CLUSTER CLIENTS: Work correctly - internal DNS resolves properly
+  #    - EXTERNAL CLIENTS: May fail after bootstrap if they cannot resolve
+  #      internal DNS names. For true external access, consider:
+  #      - Using NodePort listener with advertisedHost configured, OR
+  #      - Configuring Kafka to advertise the ingress hostname/port
+  #    - SINGLE-BROKER SETUPS: External clients may work since bootstrap = broker
+  #
+  # 3. PRIMARY USE CASE
+  #    This feature is primarily designed for in-cluster clients that need to
+  #    access Kafka via the ingress hostname (hairpin NAT scenario), matching
+  #    how the old Bitnami Kafka setup worked.
+  #
+  # NOTE: This works ALONGSIDE the NodePort external listener (both can be enabled).
+  # The ingress TCP proxy forwards to the internal listener (9092), which is correct
+  # for in-cluster clients because the internal listener is plaintext and Kafka
+  # metadata returns addresses that resolve correctly via internal DNS.
+  #
+  # ============================================================================
+  # PREREQUISITES - ingress-nginx must be configured for TCP services
+  # ============================================================================
+  #
+  # This Helm chart ONLY creates the tcp-services ConfigMap entry. You must also
+  # configure ingress-nginx to expose the TCP port. There are three requirements:
+  #
+  # 1. CONTROLLER ARG: Add --tcp-services-configmap argument
+  #    The ingress-nginx controller must be started with:
+  #      --tcp-services-configmap=$(POD_NAMESPACE)/tcp-services
+  #
+  #    If using the ingress-nginx Helm chart, add to values.yaml:
+  #      controller:
+  #        extraArgs:
+  #          tcp-services-configmap: "$(POD_NAMESPACE)/tcp-services"
+  #
+  #    Or patch an existing deployment:
+  #      kubectl patch deployment ingress-nginx-controller -n ingress-nginx \
+  #        --type='json' -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-",
+  #        "value":"--tcp-services-configmap=$(POD_NAMESPACE)/tcp-services"}]'
+  #
+  # 2. CONTAINER PORT: The controller pod must expose port 9094
+  #    If using the ingress-nginx Helm chart, add to values.yaml:
+  #      controller:
+  #        containerPort:
+  #          kafka-tcp: 9094
+  #
+  #    Or patch an existing deployment:
+  #      kubectl patch deployment ingress-nginx-controller -n ingress-nginx \
+  #        --type='json' -p='[{"op":"add","path":"/spec/template/spec/containers/0/ports/-",
+  #        "value":{"containerPort":9094,"name":"kafka-tcp","protocol":"TCP"}}]'
+  #
+  # 3. SERVICE PORT: The ingress-nginx Service must expose port 9094
+  #    If using the ingress-nginx Helm chart, add to values.yaml:
+  #      tcp:
+  #        9094: "<namespace>/kafka-stream-kafka-bootstrap:9092"
+  #    (This also creates the tcp-services ConfigMap entry, making this chart's
+  #     ConfigMap creation redundant but harmless due to merge behavior)
+  #
+  #    Or patch an existing service:
+  #      kubectl patch svc ingress-nginx-controller -n ingress-nginx \
+  #        --type='json' -p='[{"op":"add","path":"/spec/ports/-",
+  #        "value":{"name":"kafka-tcp","port":9094,"targetPort":9094,"protocol":"TCP"}}]'
+  #
+  # ============================================================================
+  # COMPLETE INGRESS-NGINX HELM VALUES EXAMPLE
+  # ============================================================================
+  # If installing ingress-nginx via Helm, use these values for Kafka TCP support:
+  #
+  #   controller:
+  #     extraArgs:
+  #       tcp-services-configmap: "$(POD_NAMESPACE)/tcp-services"
+  #     containerPort:
+  #       kafka-tcp: 9094
+  #   tcp:
+  #     9094: "mlrun/kafka-stream-kafka-bootstrap:9092"
+  #
+  # ============================================================================
+  # VERIFICATION STEPS
+  # ============================================================================
+  #
+  # 1. Verify controller has tcp-services-configmap arg:
+  #    kubectl get deployment ingress-nginx-controller -n ingress-nginx \
+  #      -o jsonpath='{.spec.template.spec.containers[0].args}' | grep tcp-services
+  #
+  # 2. Verify controller pod exposes port 9094:
+  #    kubectl get deployment ingress-nginx-controller -n ingress-nginx \
+  #      -o jsonpath='{.spec.template.spec.containers[0].ports[*].containerPort}'
+  #    # Should include: 9094
+  #
+  # 3. Verify service exposes port 9094:
+  #    kubectl get svc ingress-nginx-controller -n ingress-nginx \
+  #      -o jsonpath='{.spec.ports[*].port}'
+  #    # Should include: 9094
+  #
+  # 4. Verify tcp-services ConfigMap has the Kafka entry:
+  #    kubectl get configmap tcp-services -n ingress-nginx -o yaml
+  #    # Should show: "9094": "<namespace>/kafka-stream-kafka-bootstrap:9092"
+  #
+  # 5. Verify nginx is listening on port 9094:
+  #    POD=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller \
+  #      -o jsonpath='{.items[0].metadata.name}')
+  #    kubectl exec -n ingress-nginx $POD -- cat /etc/nginx/nginx.conf | grep "listen.*9094"
+  #
+  # 6. Test TCP connectivity (from outside the release namespace):
+  #    kubectl run test --image=alpine --rm -it --restart=Never -n ingress-nginx \
+  #      -- sh -c "apk add netcat-openbsd && nc -zv ingress-nginx-controller 9094"
+  #
+  # ============================================================================
+  # PORT UNIQUENESS (TCP proxy routes by PORT, not hostname)
+  # ============================================================================
+  # IMPORTANT: Each externalPort can only be used by ONE Kafka installation cluster-wide.
+  # The ingress-nginx TCP proxy routes traffic based on PORT only - hostnames like
+  # kafka.ns1.cluster.domain and kafka.ns2.cluster.domain do NOT provide isolation.
+  # They are just DNS aliases pointing to the same ingress controller.
+  #
+  # If deploying multiple Kafka instances across namespaces, each must use a unique
+  # externalPort (e.g., 9094, 9095, 9096). The default port 9094 can only serve one namespace.
+  # The chart will fail with an error if you try to use a port already mapped to another service.
+  #
+  # ============================================================================
+  ingress:
+    # Enable ingress TCP proxy (disabled by default)
+    enabled: false
+    # External port exposed by ingress-nginx (must be unique cluster-wide)
+    # If another namespace already uses 9094, choose a different port (e.g., 9095)
+    externalPort: 9094
+    # Namespace where ingress-nginx is installed
+    ingressNamespace: ingress-nginx
+    # Name of the TCP services ConfigMap (default: tcp-services)
+    tcpConfigMapName: tcp-services
+
   replicas: 1
 
   listeners:
@@ -606,10 +759,32 @@ kafka:
       port: 9093
       type: internal
       tls: false
-    - name: internal
+    # External listener for direct NodePort access (not used by ingress TCP proxy).
+    # The ingress TCP proxy (kafka.ingress) routes to the internal 'client' listener (9092),
+    # while this NodePort listener (9094/30094) is for clients connecting directly to nodes.
+    - name: external
       port: 9094
-      type: internal
+      type: nodeport
       tls: false
+      configuration:
+        # NOTE: The bootstrap nodePort (30094) pins only the *bootstrap* service.
+        # Strimzi also creates per-broker NodePort services. For single-replica
+        # deployments (replicas=1), only the bootstrap port is needed for initial
+        # connection. For multi-replica deployments, you may need to either:
+        # - Open additional auto-assigned broker NodePorts, or
+        # - Explicitly configure brokers[].nodePort per broker, or
+        # - Use the ingress TCP proxy option instead (kafka.ingress.enabled)
+        bootstrap:
+          nodePort: 30094
+        # For direct NodePort-based external access, set advertisedHost per broker:
+        # brokers:
+        #   - broker: 0
+        #     advertisedHost: kafka.<namespace>.<system>.lab.iguazeng.com
+        #     nodePort: 30095  # Optional: pin broker's nodePort (must be unique)
+        #
+        # NOTE: When using ingress TCP proxy (kafka.ingress.enabled=true), clients
+        # connect via the ingress endpoint (kafka.<domain>:9094) and do NOT need
+        # advertisedHost configured here. The ingress proxy handles routing.
 
   storage:
     type: persistent-claim
