@@ -606,10 +606,17 @@ kafka:
       port: 9093
       type: internal
       tls: false
-    - name: internal
+    - name: external
       port: 9094
-      type: internal
+      type: nodeport
       tls: false
+      configuration:
+        bootstrap:
+          nodePort: 30094
+        # For external access, set advertisedHost per broker:
+        # brokers:
+        #   - broker: 0
+        #     advertisedHost: kafka.<namespace>.<system>.lab.iguazeng.com
 
   storage:
     type: persistent-claim

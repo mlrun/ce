@@ -35,9 +35,51 @@ jobs:
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Run chart-testing (lint)
-        run: make helm-lint
+      - name: Check version bump (handles rcN numerically)
         if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          TARGET_BRANCH=${{ github.event.repository.default_branch }}
+          OLD_VERSION=$(git show origin/$TARGET_BRANCH:charts/mlrun-ce/Chart.yaml | grep '^version:' | awk '{print $2}')
+          NEW_VERSION=$(grep '^version:' charts/mlrun-ce/Chart.yaml | awk '{print $2}')
+          echo "Old version: $OLD_VERSION"
+          echo "New version: $NEW_VERSION"
+          
+          # Extract base version (before hyphen) and prerelease (after hyphen)
+          OLD_BASE=$(echo "$OLD_VERSION" | cut -d'-' -f1)
+          NEW_BASE=$(echo "$NEW_VERSION" | cut -d'-' -f1)
+          OLD_PRE=$(echo "$OLD_VERSION" | cut -d'-' -f2-)
+          NEW_PRE=$(echo "$NEW_VERSION" | cut -d'-' -f2-)
+          
+          # If base version increased, that's a valid bump
+          if [[ "$NEW_BASE" > "$OLD_BASE" ]]; then
+            echo "✓ Base version bumped: $OLD_BASE -> $NEW_BASE"
+            exit 0
+          fi
+          
+          # If releasing (removing prerelease), that's valid
+          if [[ "$NEW_VERSION" == "$NEW_BASE" && "$OLD_VERSION" != "$OLD_BASE" ]]; then
+            echo "✓ Released: $OLD_VERSION -> $NEW_VERSION"
+            exit 0
+          fi
+          
+          # Extract numeric part from prerelease (rc9 -> 9, rc10 -> 10)
+          OLD_NUM=$(echo "$OLD_PRE" | sed 's/[^0-9]//g')
+          NEW_NUM=$(echo "$NEW_PRE" | sed 's/[^0-9]//g')
+          
+          # Compare prerelease numbers numerically
+          if [[ -n "$NEW_NUM" && -n "$OLD_NUM" && "$NEW_NUM" -gt "$OLD_NUM" ]]; then
+            echo "✓ Prerelease bumped: $OLD_PRE -> $NEW_PRE"
+            exit 0
+          fi
+          
+          echo "✖ Version not bumped! $OLD_VERSION -> $NEW_VERSION"
+          exit 1
+          
+      - name: Run chart-testing (lint)
+        if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          helm lint charts/mlrun-ce
+          ct lint --target-branch ${{ github.event.repository.default_branch }} --check-version-increment=false
         env:
           HELM_LINT_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
 
