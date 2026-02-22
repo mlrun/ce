@@ -1,11 +1,15 @@
 {{- if .Values.pipelines.enabled -}}
 apiVersion: v1
-data:
-  defaultPipelineRoot: ""
 kind: ConfigMap
 metadata:
-  annotations:
   labels:
     application-crd-id: kubeflow-pipelines
   name: kfp-launcher
+data:
+  # Default pipeline root for artifact storage
+  # NOTE: The "minio://" URI scheme is KFP's internal protocol for S3-compatible storage.
+  # It does NOT refer to the MinIO product - it works with ANY S3-compliant storage including SeaweedFS.
+  # This is the official KFP convention as per: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
+  # Format: minio://<bucket>/<path>
+  defaultPipelineRoot: "minio://{{ .Values.s3.bucket }}/v2/artifacts"
 {{- end -}}

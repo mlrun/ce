@@ -404,6 +404,8 @@ spark-operator:
 pipelines:
   enabled: true
   name: pipelines
+  # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
+  logLevel: INFO
   ui:
     enabled: false
   service:
