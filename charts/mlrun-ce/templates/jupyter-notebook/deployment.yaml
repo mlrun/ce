@@ -61,8 +61,8 @@ spec:
           value: {{ $value | quote }}
         {{- end }}
         {{- end }}
-        envFrom:
         {{- if .Values.jupyterNotebook.envFrom }}
+        envFrom:
         {{ toYaml .Values.jupyterNotebook.envFrom | nindent 10 }}
         {{- end }}
         volumeMounts:

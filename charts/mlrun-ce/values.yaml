@@ -1,13 +1,7 @@
-# S3 credentials secret name - single source of truth for MLRun API and Jupyter envFrom
-# Override with --set global.s3CredentialsSecretName=your-secret when using your own pre-created secret.
-s3CredentialsSecretName: &s3CredentialsSecretName "s3-credentials"
-
 # We use global values scope to multiplex the docker-registry details to both mlrun and nuclio
 global:
   # External host/ip to reach the k8s node. This might take various values if k8s is run in a VM or a cloud env
   externalHostAddress: localhost
-  # When set, used by Jupyter, auto-mount, and s3-credentials Secret. For MLRun API, also update envFrom secretRef below.
-  s3CredentialsSecretName: *s3CredentialsSecretName
   registry: &userRegistry
     url: mustprovide
     secretName:
@@ -145,14 +139,11 @@ mlrun:
       size: "8Gi"
       annotations:
         helm.sh/resource-policy: "keep"
-    # S3 credentials secret - uses same default as global.s3CredentialsSecretName (see anchor at top)
-    # When using a custom secret via global.s3CredentialsSecretName, override with a values file that
-    # sets both to the same value (use a YAML anchor for single source of truth)
     envFrom:
       - configMapRef:
           name: mlrun-common-env
       - secretRef:
-          name: *s3CredentialsSecretName
+          name: s3-credentials
           optional: true
       - configMapRef:
           name: mlrun-pipelines-config
@@ -262,13 +253,12 @@ jupyterNotebook:
   # mlrun UI node port
   mlrunUIURL:
   extraEnvKeyValue: {}
-  # S3 credentials secret uses same anchor as MLRun API (see s3CredentialsSecretName at top)
   envFrom:
     - configMapRef:
         name: jupyter-common-env
         optional: true
     - secretRef:
-        name: *s3CredentialsSecretName
+        name: s3-credentials
         optional: true
   persistence:
     enabled: true

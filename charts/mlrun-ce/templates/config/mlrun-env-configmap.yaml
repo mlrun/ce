@@ -12,7 +12,7 @@ data:
   MLRUN_HTTPDB__PROJECTS__LEADER: mlrun
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
   # S3 credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3)
-  # are loaded from the S3 credentials Secret (configured via global.s3CredentialsSecretName, defaults to "s3-credentials")
+  # are loaded from the 's3-credentials' Secret
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   MLRUN_HTTPDB__REAL_PATH: s3://
   MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts
