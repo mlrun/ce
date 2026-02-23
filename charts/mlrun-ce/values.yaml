@@ -139,11 +139,13 @@ mlrun:
       size: "8Gi"
       annotations:
         helm.sh/resource-policy: "keep"
+    # NOTE: If you set global.s3CredentialsSecretName to use your own secret,
+    # update the secretRef name below to match
     envFrom:
       - configMapRef:
           name: mlrun-common-env
       - secretRef:
-          name: s3-credentials
+          name: s3-credentials  # Change this if using global.s3CredentialsSecretName
           optional: true
       - configMapRef:
           name: mlrun-pipelines-config
@@ -256,9 +258,6 @@ jupyterNotebook:
   envFrom:
     - configMapRef:
         name: jupyter-common-env
-        optional: true
-    - secretRef:
-        name: s3-credentials
         optional: true
   persistence:
     enabled: true

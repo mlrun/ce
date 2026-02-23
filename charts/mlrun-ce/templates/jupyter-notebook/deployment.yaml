@@ -61,9 +61,14 @@ spec:
           value: {{ $value | quote }}
         {{- end }}
         {{- end }}
-        {{- if .Values.jupyterNotebook.envFrom }}
         envFrom:
+        {{- if .Values.jupyterNotebook.envFrom }}
         {{ toYaml .Values.jupyterNotebook.envFrom | nindent 10 }}
+        {{- end }}
+        {{- if not .Values.global.infrastructure.aws.s3NonAnonymous }}
+        - secretRef:
+            name: {{ include "mlrun-ce.s3.credentials.secret.name" . }}
+            optional: true
         {{- end }}
         volumeMounts:
         - mountPath: /home/jovyan/

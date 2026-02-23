@@ -191,10 +191,23 @@ Uses SeaweedFS as the storage backend
   {{- if hasKey .Values.mlrun "storageAutoMountParams" -}}
     {{ .Values.mlrun.storageAutoMountParams }}
   {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
-    "aws_access_key={{ include "mlrun-ce.s3.accessKey" . }},aws_secret_key={{ include "mlrun-ce.s3.secretKey" . }},endpoint_url={{ include "mlrun-ce.s3.service.url" . }}"
+    "secret_name={{ include "mlrun-ce.s3.credentials.secret.name" . }},endpoint_url={{ include "mlrun-ce.s3.service.url" . }}"
   {{- else -}}
     "non_anonymous=True"
   {{- end -}}
+{{- end -}}
+
+
+{{/*
+S3 credentials secret name
+If global.s3CredentialsSecretName is provided, use it; otherwise default to "s3-credentials"
+*/}}
+{{- define "mlrun-ce.s3.credentials.secret.name" -}}
+{{- if .Values.global.s3CredentialsSecretName -}}
+{{- .Values.global.s3CredentialsSecretName -}}
+{{- else -}}
+s3-credentials
+{{- end -}}
 {{- end -}}
 
 
