@@ -188,7 +188,7 @@ Can be overriden if params are explicitly specified
 Uses SeaweedFS as the storage backend
 */}}
 {{- define "mlrun.storage.auto.mount.params" -}}
-  {{- if hasKey .Values.mlrun "storageAutoMountParams" -}}
+  {{- if .Values.mlrun.storageAutoMountParams -}}
     {{ .Values.mlrun.storageAutoMountParams }}
   {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
     "secret_name=s3-credentials,endpoint_url={{ include "mlrun-ce.s3.service.url" . }}"
