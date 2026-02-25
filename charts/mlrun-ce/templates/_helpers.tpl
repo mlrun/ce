@@ -287,19 +287,6 @@ Pipelines labels
 {{- end -}}
 
 {{/*
-Model monitoring DSN
-*/}}
-{{- define "mlrun-ce.mlrun.modelMonitoring.DSN" -}}
-{{- if .Values.mlrun.modelMonitoring.dsn -}}
-{{ .Values.mlrun.modelMonitoring.dsn }}
-{{- else -}}
-{{- if eq "mysql" .Values.mlrun.httpDB.dbType -}}
-{{ .Values.mlrun.httpDB.dsn }}_model_monitoring
-{{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
 TimescaleDB helpers
 */}}
 
