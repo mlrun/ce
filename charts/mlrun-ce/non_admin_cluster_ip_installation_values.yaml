@@ -44,7 +44,29 @@ timescaledb:
     nodePort: ""
 
 spark-operator:
-  enabled: false
+  enabled: true
+  fullnameOverride: spark-operator
+  controller:
+    replicas: 1
+    rbac:
+      create: false
+    serviceAccount:
+      create: true
+    leaderElection:
+      enable: true
+  webhook:
+    enable: false
+  spark:
+    jobNamespaces:
+      - mlrun
+    serviceAccount:
+      create: true
+      name: sparkapp
+    rbac:
+      create: true
+
+spark:
+  enabled: true
 
 pipelines:
   service:

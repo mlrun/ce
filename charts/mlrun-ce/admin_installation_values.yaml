@@ -40,6 +40,26 @@ seaweedfs:
   enabled: false
 
 spark-operator:
+  enabled: true
+  fullnameOverride: spark-operator
+  controller:
+    replicas: 0           # No running pods in admin
+    rbac:
+      create: true        # Creates ClusterRole (shared by all user namespaces)
+    serviceAccount:
+      create: true
+  webhook:
+    enable: true
+    replicas: 1
+  spark:
+    jobNamespaces:
+      - ""              # All namespaces (no namespaceSelector on webhook)
+    serviceAccount:
+      create: false       # No sparkapp SA in admin
+    rbac:
+      create: false
+
+spark:
   enabled: false
 
 pipelines:

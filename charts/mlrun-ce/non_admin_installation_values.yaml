@@ -38,7 +38,29 @@ seaweedfs:
   enabled: true
 
 spark-operator:
-  enabled: false
+  enabled: true
+  fullnameOverride: spark-operator
+  controller:
+    replicas: 1           # Controller runs in user namespace
+    rbac:
+      create: false       # ClusterRole already exists from admin
+    serviceAccount:
+      create: true
+    leaderElection:
+      enable: true
+  webhook:
+    enable: false
+  spark:
+    jobNamespaces:
+      - mlrun             # Override with actual namespace at install time
+    serviceAccount:
+      create: true
+      name: sparkapp
+    rbac:
+      create: true        # Creates sparkapp Role + RoleBinding
+
+spark:
+  enabled: true
 
 pipelines:
   service:
