@@ -17,8 +17,8 @@ data:
   MLRUN_HTTPDB__REAL_PATH: s3://
   MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts
   MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{project}/FeatureStore/{name}/{kind}
-  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__USER_SPACE: s3://{{ $bucket_name }}/projects/{project}/model-endpoints/{kind}
-  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__MONITORING_APPLICATION: s3://{{ $bucket_name }}/users/pipelines/{project}/monitoring-apps/
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__USER_SPACE: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__MONITORING_APPLICATION: s3://{{ $bucket_name }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
   MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL: ""
   MLRUN_CE__MODE: {{ .Values.mlrun.ce.mode }}
   MLRUN_CE__VERSION: {{ .Chart.Version }}
