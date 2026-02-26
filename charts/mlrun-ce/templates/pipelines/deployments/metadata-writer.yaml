@@ -28,8 +28,11 @@ spec:
     spec:
       containers:
       - env:
-        - name: METADATA_GRPC_SERVICE_SERVICE_HOST
-          value: metadata-grpc
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
         - name: NAMESPACE_TO_WATCH
           valueFrom:
             fieldRef:
