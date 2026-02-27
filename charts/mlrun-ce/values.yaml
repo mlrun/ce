@@ -93,6 +93,9 @@ mlrun:
       cpu: "25m"
       memory: "1Mi"
   storage: filesystem
+  # Storage auto-mount configuration for SeaweedFS S3-compatible storage
+  # This allows MLRun SDK to automatically mount storage without user-provided params
+  storageAutoMountType: s3
   storageAutoMountParams: ~
   secrets:
     s3:
