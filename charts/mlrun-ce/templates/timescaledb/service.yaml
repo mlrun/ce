@@ -12,6 +12,9 @@ spec:
       port: {{ .Values.timescaledb.service.port }}
       targetPort: postgresql
       protocol: TCP
+{{- if (and (eq .Values.timescaledb.service.type "NodePort") (not (empty .Values.timescaledb.service.nodePort))) }}
+      nodePort: {{ .Values.timescaledb.service.nodePort }}
+{{- end }}
   selector:
     {{- include "mlrun-ce.timescaledb.selectorLabels" . | nindent 4 }}
 {{- end }}

@@ -1,13 +1,13 @@
 {{- if .Values.pipelines.enabled -}}
 apiVersion: v1
 data:
-  minioServiceHost: {{ include "mlrun-ce.minio-pipeline.service.url" . }}
-  minioServicePort: "{{ .Values.pipelines.minio.endpointPort }}"
+  objectStoreServiceHost: {{ include "mlrun-ce.s3.service.host" . }}
+  objectStoreServicePort: {{ include "mlrun-ce.s3.service.port" . | quote }}
   ConMaxLifeTime: 120s
   appName: pipeline
   appVersion: {{ .Values.pipelines.images.apiServer.tag }}
   autoUpdatePipelineDefaultVersion: "false"
-  bucketName: "{{ .Values.pipelines.minio.bucket }}"
+  bucketName: "{{ include "mlrun-ce.s3.bucket" . }}"
   cacheDb: cachedb
   cacheImage: {{ .Values.pipelines.images.cacheImage.repository }}:{{ .Values.pipelines.images.cacheImage.tag }}
   cacheNodeRestrictions: "false"

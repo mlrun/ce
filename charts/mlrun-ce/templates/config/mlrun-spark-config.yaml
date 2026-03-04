@@ -1,4 +1,4 @@
-{{- if index .Values "spark-operator" "enabled" -}}
+{{- if .Values.spark.enabled -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:

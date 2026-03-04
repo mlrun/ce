@@ -1,0 +1,61 @@
+{{- if .Values.seaweedfs.enabled }}
+# =============================================================================
+# SeaweedFS Admin UI Ingress
+# This ingress exposes the Admin UI for external access via ingress controller
+# =============================================================================
+
+{{- if and .Values.seaweedfs.admin .Values.seaweedfs.admin.enabled .Values.seaweedfs.adminService .Values.seaweedfs.adminService.ingress .Values.seaweedfs.adminService.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-seaweedfs-admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seaweedfs-admin-ui
+  {{- with .Values.seaweedfs.adminService.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.seaweedfs.adminService.ingress.ingressClassName | default .Values.seaweedfs.adminService.ingress.className | default "nginx" }}
+  rules:
+    {{- $ingress := .Values.seaweedfs.adminService.ingress }}
+    {{- $defaultHost := printf "seaweedfs-adminservice.%s.%s" $.Release.Namespace ($.Values.global.externalHostAddress | default "localhost") }}
+    {{- /* Support both standard K8s format (hosts[0].host) and simple format (host) */ -}}
+    {{- $host := $defaultHost }}
+    {{- if and $ingress.hosts (index $ingress.hosts 0) }}
+      {{- $host = (index $ingress.hosts 0).host | default $defaultHost }}
+    {{- else if $ingress.host }}
+      {{- $host = $ingress.host }}
+    {{- end }}
+    - host: {{ $host }}
+      http:
+        paths:
+          {{- if and $ingress.hosts (index $ingress.hosts 0) (index $ingress.hosts 0).paths }}
+          {{- range (index $ingress.hosts 0).paths }}
+          - path: {{ .path | default "/" }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: seaweedfs-admin-ui
+                port:
+                  number: {{ $.Values.seaweedfs.adminService.port | default 23646 }}
+          {{- end }}
+          {{- else }}
+          - path: {{ $ingress.path | default "/" }}
+            pathType: {{ $ingress.pathType | default "Prefix" }}
+            backend:
+              service:
+                name: seaweedfs-admin-ui
+                port:
+                  number: {{ $.Values.seaweedfs.adminService.port | default 23646 }}
+          {{- end }}
+  {{- if $ingress.tls }}
+  tls:
+    {{- toYaml $ingress.tls | nindent 4 }}
+  {{- end }}
+{{- end }}
+
+{{- end }}

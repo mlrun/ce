@@ -34,20 +34,33 @@ mpi-operator:
     clusterResources:
       create: false
 
-minio:
-  service:
-    type: NodePort
-    port: 9000
-    nodePort: 30080
-  consoleService:
-    type: NodePort
-    port: 9001
-    nodePort: 30090
-  mode: standalone
-  replicas: 1
+seaweedfs:
+  enabled: true
 
 spark-operator:
-  enabled: false
+  enabled: true
+  fullnameOverride: spark-operator
+  controller:
+    replicas: 1           # Controller runs in user namespace
+    rbac:
+      create: false       # ClusterRole already exists from admin
+    serviceAccount:
+      create: true
+    leaderElection:
+      enable: true
+  webhook:
+    enable: false
+  spark:
+    jobNamespaces:
+      - mlrun             # Override with actual namespace at install time
+    serviceAccount:
+      create: true
+      name: sparkapp
+    rbac:
+      create: true        # Creates sparkapp Role + RoleBinding
+
+spark:
+  enabled: true
 
 pipelines:
   service:
@@ -57,6 +70,13 @@ pipelines:
     enabled: false
   priority_class:
     enabled: false
+
+strimzi-kafka-operator:
+  enabled: false
+  
+kafka:
+  rbac:
+    operatorNamespace: controller
 
 kube-prometheus-stack:
   enabled: false

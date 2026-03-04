@@ -11,22 +11,20 @@ data:
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ include "mlrun.storage.auto.mount.params" . }}
   MLRUN_HTTPDB__PROJECTS__LEADER: mlrun
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
-{{- if not .Values.global.infrastructure.aws.s3NonAnonymous }}
-  AWS_SECRET_ACCESS_KEY: {{ .Values.minio.rootPassword }}
-  AWS_ACCESS_KEY_ID: {{ .Values.minio.rootUser }}
-  AWS_ENDPOINT_URL_S3: {{ include "mlrun-ce.minio.service.url" . }}
-{{- end }}
+  # S3 credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3)
+  # are loaded from the 's3-credentials' Secret
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   MLRUN_HTTPDB__REAL_PATH: s3://
   MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts
   MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{project}/FeatureStore/{name}/{kind}
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__USER_SPACE: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__MONITORING_APPLICATION: s3://{{ $bucket_name }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
   MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL: ""
   MLRUN_CE__MODE: {{ .Values.mlrun.ce.mode }}
   MLRUN_CE__VERSION: {{ .Chart.Version }}
   MLRUN_DEFAULT_TENSORBOARD_LOGS_PATH: /home/jovyan/data/tensorboard/{{ `{{project}} `}}
   MLRUN_FEATURE_STORE__DEFAULT_TARGETS: parquet
   MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
-  MLRUN_MODEL_ENDPOINT_MONITORING__ENDPOINT_STORE_CONNECTION: "{{ template "mlrun-ce.mlrun.modelMonitoring.DSN" . }}"
   MLRUN_GRAFANA_URL: http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort" }}
   MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__CPU: "{{ .Values.mlrun.defaultFunctionPodResources.limits.cpu | default "" }}"
   MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__MEMORY: "{{ .Values.mlrun.defaultFunctionPodResources.limits.memory | default "" }}"

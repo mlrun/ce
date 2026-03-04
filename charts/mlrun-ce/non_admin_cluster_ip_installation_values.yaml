@@ -35,20 +35,38 @@ mpi-operator:
     clusterResources:
       create: false
 
-minio:
+seaweedfs:
+  enabled: true
+
+timescaledb:
   service:
     type: ClusterIP
-    port: 9000
     nodePort: ""
-  consoleService:
-    type: ClusterIP
-    port: 9001
-    nodePort: ""
-  mode: standalone
-  replicas: 1
 
 spark-operator:
-  enabled: false
+  enabled: true
+  fullnameOverride: spark-operator
+  controller:
+    replicas: 1
+    rbac:
+      create: false
+    serviceAccount:
+      create: true
+    leaderElection:
+      enable: true
+  webhook:
+    enable: false
+  spark:
+    jobNamespaces:
+      - mlrun
+    serviceAccount:
+      create: true
+      name: sparkapp
+    rbac:
+      create: true
+
+spark:
+  enabled: true
 
 pipelines:
   service:
@@ -59,11 +77,12 @@ pipelines:
   priority_class:
     enabled: false
 
+strimzi-kafka-operator:
+  enabled: false
+  
+kafka:
+  rbac:
+    operatorNamespace: controller
+
 kube-prometheus-stack:
-  prometheus-node-exporter:
-    fullnameOverride: node-exporter
-    hostNetwork: false
-    service:
-      port: 9100
-    hostRootFsMount:
-      enabled: false
+  enabled: false

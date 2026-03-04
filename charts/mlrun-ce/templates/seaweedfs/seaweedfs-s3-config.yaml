@@ -1,0 +1,33 @@
+{{- if .Values.seaweedfs.enabled }}
+{{- if .Values.seaweedfs.s3.enableAuth }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: seaweedfs-s3-config
+  labels:
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  seaweedfs_s3_config: |
+    {
+      "identities": [
+        {
+          "name": "admin",
+          "credentials": [
+            {
+              "accessKey": "{{ include "mlrun-ce.s3.accessKey" . }}",
+              "secretKey": "{{ include "mlrun-ce.s3.secretKey" . }}"
+            }
+          ],
+          "actions": [
+            "Admin",
+            "Read",
+            "List",
+            "Tagging",
+            "Write"
+          ]
+        }
+      ]
+    }
+{{- end }}
+{{- end }}

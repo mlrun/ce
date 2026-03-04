@@ -61,9 +61,12 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: pipeline-install-config
-                  key: minioServiceHost
+                  key: objectStoreServiceHost
             - name: OBJECTSTORECONFIG_PORT
-              value: "9000"
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: objectStoreServicePort
             - name: OBJECTSTORECONFIG_SECURE
               value: "false"
             - name: OBJECTSTORECONFIG_BUCKETNAME

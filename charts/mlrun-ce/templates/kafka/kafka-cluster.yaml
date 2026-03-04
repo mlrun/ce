@@ -1,0 +1,37 @@
+{{- if .Values.kafka.enabled }}
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: {{ .Values.kafka.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: cluster
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+  annotations:
+    # Delay Kafka CR creation until after CRDs are installed
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+spec:
+  kafka:
+    listeners:
+    {{- range .Values.kafka.listeners }}
+      - name: {{ .name }}
+        port: {{ .port }}
+        type: {{ .type }}
+        tls: {{ .tls }}
+        {{- if .configuration }}
+        configuration:
+          {{- toYaml .configuration | nindent 10 }}
+        {{- end }}
+    {{- end }}
+    config:
+      {{- toYaml .Values.kafka.config | nindent 6 }}
+  {{- if gt (.Values.kafka.zookeeper.replicas | int) 0 }}
+  zookeeper:
+    replicas: {{ .Values.kafka.zookeeper.replicas }}
+    storage:
+      type: persistent-claim
+      size: 8Gi
+  {{- end }}
+{{- end }}
