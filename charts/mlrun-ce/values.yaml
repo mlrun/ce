@@ -181,8 +181,6 @@ mlrun:
     service:
       type: NodePort
       nodePort: 30060
-      port: 80
-      targetPort: 8090
   db:
     name: db
     fullnameOverride: mlrun-db
