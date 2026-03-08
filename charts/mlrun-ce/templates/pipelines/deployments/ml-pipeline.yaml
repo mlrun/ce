@@ -30,13 +30,18 @@ spec:
     spec:
       containers:
         - env:
+            # Logging configuration
             - name: PUBLISH_LOGS
               value: "true"
             - name: LOG_LEVEL
-              value: "info"
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: LOG_LEVEL
             - name: PIPELINE_LOG_LEVEL
               value: "1"
 
+            # Pipeline configuration
             - name: AUTO_UPDATE_PIPELINE_DEFAULT_VERSION
               valueFrom:
                 configMapKeyRef:
@@ -47,6 +52,8 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: metadata.namespace
+
+            # Object store configuration (SeaweedFS S3 gateway)
             - name: OBJECTSTORECONFIG_ACCESSKEY
               valueFrom:
                 secretKeyRef:
@@ -74,6 +81,7 @@ spec:
                 configMapKeyRef:
                   name: pipeline-install-config
                   key: bucketName
+            # Database configuration
             - name: DBCONFIG_CONMAXLIFETIME
               valueFrom:
                 configMapKeyRef:
@@ -106,6 +114,8 @@ spec:
                 configMapKeyRef:
                   name: pipeline-install-config
                   key: mysqlPort
+
+            # Driver and launcher images for V2 pipelines
             - name: V2_DRIVER_IMAGE
               value: "{{ .Values.pipelines.images.driver.repository }}:{{ .Values.pipelines.images.driver.tag }}"
             - name: V2_LAUNCHER_IMAGE

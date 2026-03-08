@@ -3,3 +3,4 @@ charts/mlrun-ce/charts/*
 .DS_Store
 **/.DS_Store
 *.DS_Store
+**/__pycache__

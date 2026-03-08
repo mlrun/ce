@@ -93,6 +93,9 @@ mlrun:
       cpu: "25m"
       memory: "1Mi"
   storage: filesystem
+  # Storage auto-mount configuration for SeaweedFS S3-compatible storage
+  # This allows MLRun SDK to automatically mount storage without user-provided params
+  storageAutoMountType: s3
   storageAutoMountParams: ~
   secrets:
     s3:
@@ -404,6 +407,8 @@ spark-operator:
 pipelines:
   enabled: true
   name: pipelines
+  # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
+  logLevel: INFO
   ui:
     enabled: false
   service:
@@ -439,10 +444,10 @@ pipelines:
   images:
     driver:
       repository: ghcr.io/kubeflow/kfp-driver
-      tag: 2.14.3
+      tag: 2.15.0
     launcher:
       repository: ghcr.io/kubeflow/kfp-launcher
-      tag: 2.14.3
+      tag: 2.15.0
     argoexec:
       repository: gcr.io/iguazio/argoexec
       tag: v3.4.17-license-compliance
@@ -451,32 +456,32 @@ pipelines:
       tag: v3.4.17-license-compliance
     apiServer:
       repository: ghcr.io/kubeflow/kfp-api-server
-      tag: 2.14.3
+      tag: 2.15.0
     persistenceagent:
       repository: ghcr.io/kubeflow/kfp-persistence-agent
-      tag: 2.14.3
+      tag: 2.15.0
     scheduledworkflow:
       repository: ghcr.io/kubeflow/kfp-scheduled-workflow-controller
-      tag: 2.14.3
+      tag: 2.15.0
     ui:
       repository: ghcr.io/kubeflow/kfp-frontend
-      tag: 2.14.3
+      tag: 2.15.0
     viewerCrdController:
       repository: ghcr.io/kubeflow/kfp-viewer-crd-controller
-      tag: 2.14.3
+      tag: 2.15.0
     visualizationServer:
       repository: ghcr.io/kubeflow/kfp-visualization-server
-      tag: 2.14.3
+      tag: 2.15.0
     metadata:
       container:
         repository: gcr.io/tfx-oss-public/ml_metadata_store_server
         tag: 1.16.0
     metadataEnvoy:
       repository: ghcr.io/kubeflow/kfp-metadata-envoy
-      tag: 2.14.3
+      tag: 2.15.0
     metadataWriter:
       repository: ghcr.io/kubeflow/kfp-metadata-writer
-      tag: 2.14.3
+      tag: 2.15.0
     mysql:
       # MySQL 8.0.26 because >= 8.0.27 has deprecated the default_authentication_plugin option
       # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
