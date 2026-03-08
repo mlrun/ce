@@ -650,7 +650,8 @@ kafka:
     # Empty means "use the release namespace"
     # Example: "controller" if that's where you installed the operator
     operatorNamespace: ""
-
+  egress:
+    enabled: false
 # Spark configuration for multi-NS deployments
 # Controls CE-level spark resources (mlrun-spark-config ConfigMap)
 # In single-NS mode, both spark.enabled and spark-operator.enabled are true

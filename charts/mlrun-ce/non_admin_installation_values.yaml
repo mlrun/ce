@@ -77,6 +77,8 @@ strimzi-kafka-operator:
 kafka:
   rbac:
     operatorNamespace: controller
+  egress:
+    enabled: true
 
 kube-prometheus-stack:
   enabled: false
