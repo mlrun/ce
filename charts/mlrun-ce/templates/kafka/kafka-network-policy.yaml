@@ -1,4 +1,4 @@
-{{- if .Values.kafka.rbac.enabled -}}
+{{- if .Values.kafka.egress.enabled -}}
 {{- $kafkaName := .Values.kafka.name | default "kafka-stream" -}}
 {{- $currentNamespace := .Release.Namespace -}}
 ---
@@ -12,11 +12,15 @@ metadata:
   namespace: {{ $currentNamespace }}
   labels:
     app.kubernetes.io/name: mlrun-ce
-    app.kubernetes.io/component: kafka-rbac
+    app.kubernetes.io/component: kafka-network-policy
     app.kubernetes.io/managed-by: {{ .Release.Name }}
 spec:
-  # Apply to all pods in this namespace
-  podSelector: {}
+  # Apply to Kafka pods in this namespace
+  podSelector:
+    matchLabels:
+      strimzi.io/cluster: {{ $kafkaName }}
+      strimzi.io/kind: Kafka
+      strimzi.io/name: {{ $kafkaName }}-kafka
   
   policyTypes:
   - Egress
