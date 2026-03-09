@@ -24,6 +24,10 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.timescaledb.securityContext }}
+      securityContext:
+        {{- toYaml .Values.timescaledb.securityContext | nindent 8 }}
+      {{- end }}
       containers:
         - name: timescaledb
           image: "{{ .Values.timescaledb.image.repository }}:{{ .Values.timescaledb.image.tag }}"
