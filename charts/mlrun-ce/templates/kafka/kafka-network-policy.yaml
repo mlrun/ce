@@ -12,7 +12,7 @@ metadata:
   namespace: {{ $currentNamespace }}
   labels:
     app.kubernetes.io/name: mlrun-ce
-    app.kubernetes.io/component: kafka-rbac
+    app.kubernetes.io/component: kafka-network-policy
     app.kubernetes.io/managed-by: {{ .Release.Name }}
 spec:
   # Apply to Kafka pods in this namespace
