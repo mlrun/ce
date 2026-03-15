@@ -191,7 +191,7 @@ Uses SeaweedFS as the storage backend
   {{- if .Values.mlrun.storageAutoMountParams -}}
     {{ .Values.mlrun.storageAutoMountParams }}
   {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
-    "secret_name=s3-credentials,endpoint_url={{ include "mlrun-ce.s3.service.url" . }}"
+    "secret_name=s3-credentials"
   {{- else -}}
     "non_anonymous=True"
   {{- end -}}
