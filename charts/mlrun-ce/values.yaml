@@ -405,6 +405,7 @@ spark-operator:
       name: sparkapp
 
 pipelines:
+  archiveLogs: false
   enabled: true
   name: pipelines
   # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
