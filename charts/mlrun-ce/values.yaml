@@ -418,6 +418,8 @@ pipelines:
   logLevel: INFO
   ui:
     enabled: false
+  metadata:
+    enabled: false
   service:
     type: NodePort
     nodePort: 30100
