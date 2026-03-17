@@ -7,7 +7,7 @@ metadata:
 data:
   # S3 credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3)
   # are loaded from the 's3-credentials' Secret
-  MLRUN_STORAGE__AUTO_MOUNT_TYPE: {{ .Values.mlrun.storageAutoMountType | default "s3" }}
+  MLRUN_STORAGE__AUTO_MOUNT_TYPE: {{ .Values.mlrun.storageAutoMountType | default "secret_env" }}
   S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous  | toString | title | quote | default "\"True\"" }}
   MLRUN_CE__MODE: {{ .Values.jupyterNotebook.ce.mode | default "full" }}
   MLRUN_CE__VERSION: {{ .Chart.Version }}
