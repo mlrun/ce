@@ -165,6 +165,31 @@ spec:
               memory: 500Mi
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
+      {{- if .Values.seaweedfs.enabled }}
+      initContainers:
+        - name: wait-for-seaweedfs
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until wget -q -S -O /dev/null http://${SEAWEEDFS_HOST}:${SEAWEEDFS_PORT}/ 2>&1 | grep -q "HTTP/"; do
+                echo "Waiting for SeaweedFS S3 to be ready..."
+                sleep 5
+              done
+              echo "SeaweedFS S3 is ready."
+          env:
+            - name: SEAWEEDFS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: objectStoreServiceHost
+            - name: SEAWEEDFS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: objectStoreServicePort
+      {{- end }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
