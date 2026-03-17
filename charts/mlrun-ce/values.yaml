@@ -26,8 +26,8 @@ global:
 # to access the S3-compatible storage backend (SeaweedFS)
 # =============================================================================
 s3:
-  accessKey: "minio"
-  secretKey: "minio123"
+  accessKey: "seaweed"
+  secretKey: "seaweed123"
   bucket: "mlrun"
 
 nuclio:
@@ -365,8 +365,8 @@ seaweedfs:
     enabled: true  # Default is false
     port: 23646
     secret:
-      adminUser: "minio"
-      adminPassword: "minio123"
+      adminUser: "seaweed"
+      adminPassword: "seaweed123"
     dataDir: "/data"
     # Storage: use PVC instead of default emptyDir
     data:
