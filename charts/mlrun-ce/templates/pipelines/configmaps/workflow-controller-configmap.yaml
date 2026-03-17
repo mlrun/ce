@@ -7,7 +7,7 @@ data:
     port: 9090
     ignoreErrors: false
   artifactRepository: |
-    archiveLogs: true
+    archiveLogs: {{ .Values.pipelines.archiveLogs }}
     s3:
       endpoint: "{{ include "mlrun-ce.s3.service.host" . }}:{{ include "mlrun-ce.s3.service.port" . }}"
       bucket: "{{ include "mlrun-ce.s3.bucket" . }}"

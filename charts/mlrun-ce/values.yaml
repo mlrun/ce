@@ -95,7 +95,7 @@ mlrun:
   storage: filesystem
   # Storage auto-mount configuration for SeaweedFS S3-compatible storage
   # This allows MLRun SDK to automatically mount storage without user-provided params
-  storageAutoMountType: s3
+  storageAutoMountType: secret_env
   storageAutoMountParams: ~
   secrets:
     s3:
@@ -405,6 +405,7 @@ spark-operator:
       name: sparkapp
 
 pipelines:
+  archiveLogs: false
   enabled: true
   name: pipelines
   # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
