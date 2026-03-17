@@ -37,6 +37,10 @@ mpi-operator:
 
 seaweedfs:
   enabled: true
+  s3Service:
+    type: ClusterIP
+    port: 8333
+    nodePort: ""
 
 timescaledb:
   service:

@@ -390,6 +390,12 @@ seaweedfs:
       annotations: {}
       tls: []
 
+  # Custom NodePort service for S3 API external access
+  s3Service:
+    type: NodePort
+    port: 8333
+    nodePort: 30094
+
 spark-operator:
   enabled: true
   fullnameOverride: spark-operator

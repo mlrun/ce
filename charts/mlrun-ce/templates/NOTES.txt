@@ -65,6 +65,13 @@ mlrun-api.{{ .Values.global.externalHostAddress }}
 
 {{- if .Values.seaweedfs.enabled }}
 {{- if ne .Values.global.infrastructure.kind "aws" }}
+{{- if and .Values.seaweedfs.s3 .Values.seaweedfs.s3.enabled .Values.seaweedfs.s3Service }}
+{{- if eq (.Values.seaweedfs.s3Service.type | default "NodePort") "NodePort" }}
+{{- "\n" }}
+SeaweedFS S3 API is available at:
+{{ .Values.global.externalHostAddress }}:{{ .Values.seaweedfs.s3Service.nodePort | default 30094 }}
+{{- end }}
+{{- end }}
 {{- if and .Values.seaweedfs.admin .Values.seaweedfs.admin.enabled }}
 {{- "\n" }}
 SeaweedFS Admin UI is available at:
@@ -73,8 +80,8 @@ SeaweedFS Admin UI is available at:
 {{- else }}
 {{ .Values.global.externalHostAddress }}:{{ .Values.seaweedfs.adminService.nodePort | default 30093 }}
 {{- end }}
--  S3 credentials: minio / minio123
 {{- end }}
+-  S3 credentials: minio / minio123
 {{- end }}
 {{- end }}
 
