@@ -37,6 +37,10 @@ mpi-operator:
 
 seaweedfs:
   enabled: true
+  adminService:
+    type: ClusterIP
+    port: 23646
+    nodePort: ""
   s3Service:
     type: ClusterIP
     port: 8333

@@ -301,6 +301,10 @@ seaweedfs:
     registry: ""
     # Override default "001" to "000" for single-node setup (no replication)
     replicationPlacement: "000"
+    # Disabled by default. Only needed if SeaweedFS master/volume pods need to
+    # delete other pods during data migration (e.g., multi-node rebalancing).
+    # Enabling this creates a ClusterRole, which conflicts in multi-NS deployments.
+    createClusterRole: false
 
   # Master server - metadata management
   master:
