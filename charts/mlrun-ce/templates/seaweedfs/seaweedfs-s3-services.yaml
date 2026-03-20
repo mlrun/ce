@@ -1,0 +1,33 @@
+{{- if .Values.seaweedfs.enabled }}
+# =============================================================================
+# SeaweedFS S3 API Service
+# This service exposes the SeaweedFS S3 API for external access, providing
+# S3-compatible storage access for MLRun, Jupyter, and other clients
+# =============================================================================
+
+{{- if and .Values.seaweedfs.s3 .Values.seaweedfs.s3.enabled .Values.seaweedfs.s3Service }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-s3-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seaweedfs-s3-api
+spec:
+  type: {{ .Values.seaweedfs.s3Service.type | default "NodePort" }}
+  ports:
+    - name: s3-api
+      port: {{ .Values.seaweedfs.s3Service.port | default 8333 }}
+      targetPort: {{ .Values.seaweedfs.s3.port | default 8333 }}
+      {{- if and (eq (.Values.seaweedfs.s3Service.type | default "NodePort") "NodePort") .Values.seaweedfs.s3Service.nodePort }}
+      nodePort: {{ .Values.seaweedfs.s3Service.nodePort }}
+      {{- end }}
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: seaweedfs
+    app.kubernetes.io/component: s3
+{{- end }}
+
+{{- end }}

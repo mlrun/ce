@@ -165,7 +165,7 @@ spec:
               memory: 500Mi
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
-      {{ if .Values.seaweedfs.enabled }}
+      {{- if .Values.seaweedfs.enabled }}
       # Add an init container to wait for the SeaweedFS S3 gateway to be ready before starting the ml-pipeline-api-server
       # Use /status endpoint to check if the S3 gateway is ready, as it returns 200 OK when ready.
       # Same as the Liveness and Readiness probes used in the SeaweedFS S3 deployment.
@@ -192,7 +192,7 @@ spec:
                 configMapKeyRef:
                   name: pipeline-install-config
                   key: objectStoreServicePort
-      {{ end }}
+      {{- end }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler

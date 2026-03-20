@@ -33,8 +33,8 @@ global:
 storage:
   mode: seaweedfs-s3
   s3:
-    accessKey: "minio"
-    secretKey: "minio123"
+    accessKey: "seaweed"
+    secretKey: "seaweed123"
     bucket: "mlrun"
   azure:
     containerName: ""
@@ -316,6 +316,10 @@ seaweedfs:
     registry: ""
     # Override default "001" to "000" for single-node setup (no replication)
     replicationPlacement: "000"
+    # Disabled by default. Only needed if SeaweedFS master/volume pods need to
+    # delete other pods during data migration (e.g., multi-node rebalancing).
+    # Enabling this creates a ClusterRole, which conflicts in multi-NS deployments.
+    createClusterRole: false
 
   # Master server - metadata management
   master:
@@ -380,8 +384,8 @@ seaweedfs:
     enabled: true  # Default is false
     port: 23646
     secret:
-      adminUser: "minio"
-      adminPassword: "minio123"
+      adminUser: "seaweed"
+      adminPassword: "seaweed123"
     dataDir: "/data"
     # Storage: use PVC instead of default emptyDir
     data:
@@ -405,6 +409,12 @@ seaweedfs:
       annotations: {}
       tls: []
 
+  # Custom NodePort service for S3 API external access
+  s3Service:
+    type: NodePort
+    port: 8333
+    nodePort: 30094
+
 spark-operator:
   enabled: true
   fullnameOverride: spark-operator
@@ -426,6 +436,8 @@ pipelines:
   # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
   logLevel: INFO
   ui:
+    enabled: false
+  metadata:
     enabled: false
   service:
     type: NodePort
