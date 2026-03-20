@@ -11,7 +11,7 @@ data:
                 "name": "AWS_ACCESS_KEY_ID",
                 "valueFrom": {
                   "secretKeyRef": {
-                    "name": "mlpipeline-minio-artifact",
+                    "name": "mlpipeline-seaweedfs-artifact",
                     "key": "accesskey"
                   }
                 }
@@ -20,7 +20,7 @@ data:
                 "name": "AWS_SECRET_ACCESS_KEY",
                 "valueFrom": {
                   "secretKeyRef": {
-                    "name": "mlpipeline-minio-artifact",
+                    "name": "mlpipeline-seaweedfs-artifact",
                     "key": "secretkey"
                   }
                 }

@@ -1,5 +1,7 @@
 {{ if .Values.mlrun.enabled}}
 {{- $bucket_name := .Values.global.infrastructure.aws.bucketName | default "mlrun" }}
+{{- $azure_container := .Values.storage.azure.containerName | default "" }}
+{{- $is_azure := eq .Values.storage.mode "azure-blob" }}
 
 apiVersion: v1
 kind: ConfigMap
@@ -11,20 +13,29 @@ data:
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ include "mlrun.storage.auto.mount.params" . }}
   MLRUN_HTTPDB__PROJECTS__LEADER: mlrun
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
-  # S3 credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ENDPOINT_URL_S3)
-  # are loaded from the 's3-credentials' Secret
+  # Storage credentials are loaded from the 'storage-credentials' Secret
+  # (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_ENDPOINT_URL_S3 for seaweedfs-s3, or AZURE_STORAGE_* for azure-blob)
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
+  {{- if $is_azure }}
+  MLRUN_HTTPDB__REAL_PATH: az://
+  MLRUN_ARTIFACT_PATH: az://{{ $azure_container }}/projects/{{ `{{run.project}}` }}/artifacts
+  MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT: az://{{ $azure_container }}/projects/{project}/FeatureStore/{name}/{kind}
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__USER_SPACE: az://{{ $azure_container }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__MONITORING_APPLICATION: az://{{ $azure_container }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__DEFAULT: az://{{ $azure_container }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+  {{- else }}
   MLRUN_HTTPDB__REAL_PATH: s3://
   MLRUN_ARTIFACT_PATH: s3://{{ $bucket_name }}/projects/{{ `{{run.project}}` }}/artifacts
   MLRUN_FEATURE_STORE__DATA_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{project}/FeatureStore/{name}/{kind}
   MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__USER_SPACE: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
   MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__MONITORING_APPLICATION: s3://{{ $bucket_name }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
+  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+  {{- end }}
   MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL: ""
   MLRUN_CE__MODE: {{ .Values.mlrun.ce.mode }}
   MLRUN_CE__VERSION: {{ .Chart.Version }}
   MLRUN_DEFAULT_TENSORBOARD_LOGS_PATH: /home/jovyan/data/tensorboard/{{ `{{project}} `}}
   MLRUN_FEATURE_STORE__DEFAULT_TARGETS: parquet
-  MLRUN_MODEL_ENDPOINT_MONITORING__STORE_PREFIXES__DEFAULT: s3://{{ $bucket_name }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
   MLRUN_GRAFANA_URL: http://{{ .Values.global.externalHostAddress }}:{{ index .Values "kube-prometheus-stack" "grafana" "service" "nodePort" }}
   MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__CPU: "{{ .Values.mlrun.defaultFunctionPodResources.limits.cpu | default "" }}"
   MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__MEMORY: "{{ .Values.mlrun.defaultFunctionPodResources.limits.memory | default "" }}"

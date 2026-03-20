@@ -43,12 +43,12 @@ spec:
           valueFrom:
             secretKeyRef:
               key: accesskey
-              name: mlpipeline-minio-artifact
+              name: mlpipeline-seaweedfs-artifact
         - name: MINIO_SECRET_KEY
           valueFrom:
             secretKeyRef:
               key: secretkey
-              name: mlpipeline-minio-artifact
+              name: mlpipeline-seaweedfs-artifact
         - name: ALLOW_CUSTOM_VISUALIZATIONS
           value: "true"
         image: {{ .Values.pipelines.images.ui.repository }}:{{ .Values.pipelines.images.ui.tag }}

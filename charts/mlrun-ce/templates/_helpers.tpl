@@ -154,21 +154,21 @@ S3 Service Port - returns the port for pipeline config
 S3 Access Key - uses top-level s3.accessKey for all components (MLRun, Jupyter, Pipelines)
 */}}
 {{- define "mlrun-ce.s3.accessKey" -}}
-{{- .Values.s3.accessKey -}}
+{{- .Values.storage.s3.accessKey -}}
 {{- end -}}
 
 {{/*
 S3 Secret Key - uses top-level s3.secretKey for all components (MLRun, Jupyter, Pipelines)
 */}}
 {{- define "mlrun-ce.s3.secretKey" -}}
-{{- .Values.s3.secretKey -}}
+{{- .Values.storage.s3.secretKey -}}
 {{- end -}}
 
 {{/*
 S3 Bucket - uses top-level s3.bucket for all components
 */}}
 {{- define "mlrun-ce.s3.bucket" -}}
-{{- .Values.s3.bucket -}}
+{{- .Values.storage.s3.bucket -}}
 {{- end -}}
 
 {{/*
@@ -191,7 +191,7 @@ Uses SeaweedFS as the storage backend
   {{- if .Values.mlrun.storageAutoMountParams -}}
     {{ .Values.mlrun.storageAutoMountParams }}
   {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
-    "secret_name=s3-credentials"
+    "secret_name=storage-credentials"
   {{- else -}}
     "non_anonymous=True"
   {{- end -}}
