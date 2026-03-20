@@ -23,6 +23,5 @@ dependencies:
     condition: kube-prometheus-stack.enabled
   - name: strimzi-kafka-operator
     repository: "https://strimzi.io/charts/"
-
     version: "0.48.0"
     condition: strimzi-kafka-operator.enabled
