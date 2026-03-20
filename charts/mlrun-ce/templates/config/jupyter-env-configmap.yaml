@@ -1,6 +1,6 @@
 {{ if .Values.jupyterNotebook.enabled}}
 {{- $bucket_name := .Values.global.infrastructure.aws.bucketName | default "mlrun" }}
-{{- $azure_container := .Values.storage.azure.containerName | default "" }}
+{{- $azure_container := .Values.storage.azure.containerName | default "mlrun" }}
 {{- $is_azure := eq .Values.storage.mode "azure-blob" }}
 apiVersion: v1
 kind: ConfigMap
