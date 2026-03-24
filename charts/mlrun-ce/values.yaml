@@ -28,10 +28,10 @@ global:
 
 # storage.mode selects which backend credentials are injected into the 'storage-credentials' Secret.
 # Options:
-#   seaweedfs-s3 (default) - uses storage.s3.accessKey/secretKey/bucket with SeaweedFS endpoint
-#   azure-blob             - uses storage.azure.* fields
+#   s3 (default) - uses storage.s3.accessKey/secretKey/bucket with SeaweedFS endpoint
+#   azure-blob   - uses storage.azure.* fields
 storage:
-  mode: seaweedfs-s3
+  mode: s3
   s3:
     accessKey: "seaweed"
     secretKey: "seaweed123"

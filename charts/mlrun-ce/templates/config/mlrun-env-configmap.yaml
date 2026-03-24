@@ -14,7 +14,7 @@ data:
   MLRUN_HTTPDB__PROJECTS__LEADER: mlrun
   MLRUN_HTTPDB__PROJECTS__FOLLOWERS: nuclio
   # Storage credentials are loaded from the 'storage-credentials' Secret
-  # (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_ENDPOINT_URL_S3 for seaweedfs-s3, or AZURE_STORAGE_* for azure-blob)
+  # (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_ENDPOINT_URL_S3 for s3, or AZURE_STORAGE_* for azure-blob)
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
   {{- if $is_azure }}
   MLRUN_HTTPDB__REAL_PATH: az://

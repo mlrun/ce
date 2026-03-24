@@ -8,7 +8,7 @@ metadata:
   name: jupyter-common-env
 data:
   # Storage credentials are loaded from the 'storage-credentials' Secret
-  # (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_ENDPOINT_URL_S3 for seaweedfs-s3, or AZURE_STORAGE_* for azure-blob)
+  # (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_ENDPOINT_URL_S3 for s3, or AZURE_STORAGE_* for azure-blob)
   MLRUN_STORAGE__AUTO_MOUNT_TYPE: {{ .Values.mlrun.storageAutoMountType | default "secret_env" }}
   S3_NON_ANONYMOUS: {{ .Values.global.infrastructure.aws.s3NonAnonymous  | toString | title | quote | default "\"True\"" }}
   MLRUN_CE__MODE: {{ .Values.jupyterNotebook.ce.mode | default "full" }}
