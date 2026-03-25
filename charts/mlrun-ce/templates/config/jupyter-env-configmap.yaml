@@ -1,7 +1,4 @@
 {{ if .Values.jupyterNotebook.enabled}}
-{{- $bucket_name := .Values.global.infrastructure.aws.bucketName | default "mlrun" }}
-{{- $azure_container := .Values.storage.azure.containerName | default "mlrun" }}
-{{- $is_azure := eq .Values.storage.mode "azure-blob" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,11 +11,7 @@ data:
   MLRUN_CE__MODE: {{ .Values.jupyterNotebook.ce.mode | default "full" }}
   MLRUN_CE__VERSION: {{ .Chart.Version }}
   MLRUN_FUNCTION__SPEC__SERVICE_ACCOUNT__DEFAULT: {{ .Values.mlrun.api.functionSpecServiceAccountDefault | default "" | quote }}
-  {{- if $is_azure }}
-  MLRUN_HTTPDB__REAL_PATH: az://
-  {{- else }}
-  MLRUN_HTTPDB__REAL_PATH: s3://
-  {{- end }}
+  MLRUN_HTTPDB__REAL_PATH: {{ include "mlrun-ce.httpdb.realPath" . | quote }}
   MLRUN_STORAGE__AUTO_MOUNT_PARAMS: {{ include "mlrun.storage.auto.mount.params" . }}
   MLRUN_FEATURE_STORE__DATA_PREFIXES__NOSQL: ""
   MLRUN_FEATURE_STORE__DEFAULT_TARGETS: parquet
