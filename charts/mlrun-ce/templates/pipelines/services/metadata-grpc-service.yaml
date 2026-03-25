@@ -1,4 +1,4 @@
-{{- if .Values.pipelines.enabled -}}
+{{- if and .Values.pipelines.enabled .Values.pipelines.metadata.enabled -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -6,7 +6,7 @@ metadata:
   labels:
     app: metadata
     application-crd-id: kubeflow-pipelines
-  name: metadata-grpc
+  name: metadata-grpc-service
 spec:
   ports:
   - name: grpc-api

@@ -556,4 +556,4 @@ This table shows the versions of the main components in the MLRun CE chart:
 
 | MLRun CE   | MLRun  | Nuclio | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack | OpenTelemetry Operator |
 |------------|--------|--------|---------|--------------|-----------|----------------|-----------|-----------------------|------------------------|
-| **0.11.0** | 1.11.0 | 1.15.9 | 4.5.0   | 0.2.3        | 4.0.407   | 2.1.0          | 2.14.3    | 72.1.1                | 0.78.1                 |
+| **0.11.0** | 1.11.0 | 1.15.9 | 4.5.0   | 0.2.3        | 4.0.407   | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |

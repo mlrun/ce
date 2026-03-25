@@ -26,8 +26,8 @@ global:
 # to access the S3-compatible storage backend (SeaweedFS)
 # =============================================================================
 s3:
-  accessKey: "minio"
-  secretKey: "minio123"
+  accessKey: "seaweed"
+  secretKey: "seaweed123"
   bucket: "mlrun"
 
 nuclio:
@@ -93,6 +93,9 @@ mlrun:
       cpu: "25m"
       memory: "1Mi"
   storage: filesystem
+  # Storage auto-mount configuration for SeaweedFS S3-compatible storage
+  # This allows MLRun SDK to automatically mount storage without user-provided params
+  storageAutoMountType: secret_env
   storageAutoMountParams: ~
   secrets:
     s3:
@@ -298,6 +301,10 @@ seaweedfs:
     registry: ""
     # Override default "001" to "000" for single-node setup (no replication)
     replicationPlacement: "000"
+    # Disabled by default. Only needed if SeaweedFS master/volume pods need to
+    # delete other pods during data migration (e.g., multi-node rebalancing).
+    # Enabling this creates a ClusterRole, which conflicts in multi-NS deployments.
+    createClusterRole: false
 
   # Master server - metadata management
   master:
@@ -362,8 +369,8 @@ seaweedfs:
     enabled: true  # Default is false
     port: 23646
     secret:
-      adminUser: "minio"
-      adminPassword: "minio123"
+      adminUser: "seaweed"
+      adminPassword: "seaweed123"
     dataDir: "/data"
     # Storage: use PVC instead of default emptyDir
     data:
@@ -387,6 +394,12 @@ seaweedfs:
       annotations: {}
       tls: []
 
+  # Custom NodePort service for S3 API external access
+  s3Service:
+    type: NodePort
+    port: 8333
+    nodePort: 30094
+
 spark-operator:
   enabled: true
   fullnameOverride: spark-operator
@@ -402,9 +415,14 @@ spark-operator:
       name: sparkapp
 
 pipelines:
+  archiveLogs: false
   enabled: true
   name: pipelines
+  # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
+  logLevel: INFO
   ui:
+    enabled: false
+  metadata:
     enabled: false
   service:
     type: NodePort
@@ -439,10 +457,10 @@ pipelines:
   images:
     driver:
       repository: ghcr.io/kubeflow/kfp-driver
-      tag: 2.14.3
+      tag: 2.15.0
     launcher:
       repository: ghcr.io/kubeflow/kfp-launcher
-      tag: 2.14.3
+      tag: 2.15.0
     argoexec:
       repository: gcr.io/iguazio/argoexec
       tag: v3.4.17-license-compliance
@@ -451,32 +469,35 @@ pipelines:
       tag: v3.4.17-license-compliance
     apiServer:
       repository: ghcr.io/kubeflow/kfp-api-server
-      tag: 2.14.3
+      tag: 2.15.0
+      busybox:
+        repository: busybox
+        tag: "1.36"
     persistenceagent:
       repository: ghcr.io/kubeflow/kfp-persistence-agent
-      tag: 2.14.3
+      tag: 2.15.0
     scheduledworkflow:
       repository: ghcr.io/kubeflow/kfp-scheduled-workflow-controller
-      tag: 2.14.3
+      tag: 2.15.0
     ui:
       repository: ghcr.io/kubeflow/kfp-frontend
-      tag: 2.14.3
+      tag: 2.15.0
     viewerCrdController:
       repository: ghcr.io/kubeflow/kfp-viewer-crd-controller
-      tag: 2.14.3
+      tag: 2.15.0
     visualizationServer:
       repository: ghcr.io/kubeflow/kfp-visualization-server
-      tag: 2.14.3
+      tag: 2.15.0
     metadata:
       container:
         repository: gcr.io/tfx-oss-public/ml_metadata_store_server
         tag: 1.16.0
     metadataEnvoy:
       repository: ghcr.io/kubeflow/kfp-metadata-envoy
-      tag: 2.14.3
+      tag: 2.15.0
     metadataWriter:
       repository: ghcr.io/kubeflow/kfp-metadata-writer
-      tag: 2.14.3
+      tag: 2.15.0
     mysql:
       # MySQL 8.0.26 because >= 8.0.27 has deprecated the default_authentication_plugin option
       # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
@@ -579,7 +600,7 @@ kube-prometheus-stack:
             - action: replace
               target_label: metrics_source
               replacement: otel_collector
-        
+
         # Job for direct application scraping (non-OTEL)
         # Only scrapes pods with prometheus.io/scrape-mode: "direct" or "both"
         # Excludes OTEL sidecar port (8889)
@@ -671,6 +692,11 @@ timescaledb:
       cpu: "1"
   nodeSelector: {}
   tolerations: []
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
 
 strimzi-kafka-operator:
   enabled: true
@@ -733,7 +759,7 @@ kafka:
 
   # Kafka RBAC for user namespaces
   # Enable this when installing in user namespaces (mlrun, mlrun1, etc.)
-  # When enabled, creates: ServiceAccount "kafka-client" + Role/RoleBinding + NetworkPolicy
+  # When enabled, creates: ServiceAccount "kafka-client" + Role/RoleBinding
   rbac:
     # Enable RBAC for this namespace to access Kafka
     enabled: true
@@ -742,6 +768,17 @@ kafka:
     # Empty means "use the release namespace"
     # Example: "controller" if that's where you installed the operator
     operatorNamespace: ""
+
+  # NetworkPolicy for Kafka isolation in multi-NS deployments
+  egress:
+    enabled: false
+# Spark configuration for multi-NS deployments
+# Controls CE-level spark resources (mlrun-spark-config ConfigMap)
+# In single-NS mode, both spark.enabled and spark-operator.enabled are true
+# In multi-NS admin mode, spark.enabled is false (no ConfigMap needed)
+# In multi-NS user mode, spark.enabled is true (ConfigMap needed for MLRun)
+spark:
+  enabled: true
 
 # =============================================================================
 # OpenTelemetry Operator configuration
@@ -792,7 +829,7 @@ opentelemetry:
     enabled: false
     key: "opentelemetry.io/inject"
     value: "enabled"
-  
+
   # OpenTelemetry Collector configuration (sidecar mode)
   collector:
     enabled: false

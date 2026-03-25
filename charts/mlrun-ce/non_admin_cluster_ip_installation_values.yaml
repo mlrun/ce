@@ -37,6 +37,14 @@ mpi-operator:
 
 seaweedfs:
   enabled: true
+  adminService:
+    type: ClusterIP
+    port: 23646
+    nodePort: ""
+  s3Service:
+    type: ClusterIP
+    port: 8333
+    nodePort: ""
 
 timescaledb:
   service:
@@ -44,7 +52,29 @@ timescaledb:
     nodePort: ""
 
 spark-operator:
-  enabled: false
+  enabled: true
+  fullnameOverride: spark-operator
+  controller:
+    replicas: 1
+    rbac:
+      create: false
+    serviceAccount:
+      create: true
+    leaderElection:
+      enable: true
+  webhook:
+    enable: false
+  spark:
+    jobNamespaces:
+      - mlrun
+    serviceAccount:
+      create: true
+      name: sparkapp
+    rbac:
+      create: true
+
+spark:
+  enabled: true
 
 pipelines:
   service:
@@ -61,6 +91,8 @@ strimzi-kafka-operator:
 kafka:
   rbac:
     operatorNamespace: controller
+  egress:
+    enabled: true
 
 kube-prometheus-stack:
   enabled: false

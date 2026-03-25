@@ -30,13 +30,18 @@ spec:
     spec:
       containers:
         - env:
+            # Logging configuration
             - name: PUBLISH_LOGS
               value: "true"
             - name: LOG_LEVEL
-              value: "info"
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: LOG_LEVEL
             - name: PIPELINE_LOG_LEVEL
               value: "1"
 
+            # Pipeline configuration
             - name: AUTO_UPDATE_PIPELINE_DEFAULT_VERSION
               valueFrom:
                 configMapKeyRef:
@@ -47,6 +52,8 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: metadata.namespace
+
+            # Object store configuration (SeaweedFS S3 gateway)
             - name: OBJECTSTORECONFIG_ACCESSKEY
               valueFrom:
                 secretKeyRef:
@@ -74,6 +81,7 @@ spec:
                 configMapKeyRef:
                   name: pipeline-install-config
                   key: bucketName
+            # Database configuration
             - name: DBCONFIG_CONMAXLIFETIME
               valueFrom:
                 configMapKeyRef:
@@ -106,6 +114,8 @@ spec:
                 configMapKeyRef:
                   name: pipeline-install-config
                   key: mysqlPort
+
+            # Driver and launcher images for V2 pipelines
             - name: V2_DRIVER_IMAGE
               value: "{{ .Values.pipelines.images.driver.repository }}:{{ .Values.pipelines.images.driver.tag }}"
             - name: V2_LAUNCHER_IMAGE
@@ -155,6 +165,34 @@ spec:
               memory: 500Mi
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
+      {{- if .Values.seaweedfs.enabled }}
+      # Add an init container to wait for the SeaweedFS S3 gateway to be ready before starting the ml-pipeline-api-server
+      # Use /status endpoint to check if the S3 gateway is ready, as it returns 200 OK when ready.
+      # Same as the Liveness and Readiness probes used in the SeaweedFS S3 deployment.
+      initContainers:
+        - name: wait-for-seaweedfs
+          image: {{ .Values.pipelines.images.apiServer.busybox.repository }}:{{ .Values.pipelines.images.apiServer.busybox.tag }}
+          command:
+            - sh
+            - -c
+            - |
+              until wget -q -S -O /dev/null http://${SEAWEEDFS_HOST}:${SEAWEEDFS_PORT}/status 2>&1 | grep -q "HTTP/"; do
+                echo "Waiting for SeaweedFS S3 to be ready..."
+                sleep 5
+              done
+              echo "SeaweedFS S3 is ready."
+          env:
+            - name: SEAWEEDFS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: objectStoreServiceHost
+            - name: SEAWEEDFS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: objectStoreServicePort
+      {{- end }}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler

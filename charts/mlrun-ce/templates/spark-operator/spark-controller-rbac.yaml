@@ -1,0 +1,68 @@
+{{- $sparkOp := index .Values "spark-operator" -}}
+{{- $rbacCreate := true -}}
+{{- if hasKey $sparkOp "controller" -}}
+  {{- if hasKey $sparkOp.controller "rbac" -}}
+    {{- $rbacCreate = $sparkOp.controller.rbac.create -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $sparkOp.enabled (not $rbacCreate) -}}
+{{- /*
+  This template renders only in user multi-NS mode:
+  - spark-operator subchart is enabled (controller Deployment runs here)
+  - controller.rbac.create is false (ClusterRole already exists from admin namespace)
+
+  It creates:
+  1. RoleBinding: controller SA → shared ClusterRole (namespace-scoped access)
+  2. Role + RoleBinding: leader election leases (coordination.k8s.io)
+*/ -}}
+---
+# RoleBinding: Grant controller SA access to the shared ClusterRole (namespace-scoped)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-operator-controller
+  labels:
+    app.kubernetes.io/name: mlrun-ce
+    app.kubernetes.io/component: spark-controller-rbac
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+subjects:
+  - kind: ServiceAccount
+    name: spark-operator-controller
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: spark-operator-controller
+  apiGroup: rbac.authorization.k8s.io
+---
+# Role: Leader election leases
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spark-operator-controller-leases
+  labels:
+    app.kubernetes.io/name: mlrun-ce
+    app.kubernetes.io/component: spark-controller-rbac
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "get", "update"]
+---
+# RoleBinding: Grant controller SA access to leader election leases
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-operator-controller-leases
+  labels:
+    app.kubernetes.io/name: mlrun-ce
+    app.kubernetes.io/component: spark-controller-rbac
+    app.kubernetes.io/managed-by: {{ .Release.Name }}
+subjects:
+  - kind: ServiceAccount
+    name: spark-operator-controller
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: spark-operator-controller-leases
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

@@ -1,4 +1,4 @@
-{{- if .Values.pipelines.enabled -}}
+{{- if and .Values.pipelines.enabled .Values.pipelines.metadata.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,8 +28,11 @@ spec:
     spec:
       containers:
       - env:
-        - name: METADATA_GRPC_SERVICE_SERVICE_HOST
-          value: metadata-grpc
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
         - name: NAMESPACE_TO_WATCH
           valueFrom:
             fieldRef:

@@ -12,6 +12,7 @@ data:
   cacheImage: {{ .Values.pipelines.images.cacheImage.repository }}:{{ .Values.pipelines.images.cacheImage.tag }}
   cacheNodeRestrictions: "false"
   cronScheduleTimezone: UTC
+  LOG_LEVEL: {{ .Values.pipelines.logLevel | default "INFO" }}
   mysqlHost: mysql
   mysqlPort: "3306"
   defaultPipelineRoot: ""
