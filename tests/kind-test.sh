@@ -93,6 +93,7 @@ setup_helm_repos() {
     helm repo add spark-operator https://kubeflow.github.io/spark-operator 2>/dev/null || true
     helm repo add kube-prometheus-stack https://prometheus-community.github.io/helm-charts 2>/dev/null || true
     helm repo add kafka https://charts.bitnami.com/bitnami 2>/dev/null || true
+    helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts 2>/dev/null || true
     helm repo update
 }
 
@@ -219,6 +220,53 @@ verify_installation() {
         kubectl exec -n "${NAMESPACE}" "${tsdb_pod}" -- psql -U postgres -c "SELECT extversion FROM pg_extension WHERE extname='timescaledb';" 2>/dev/null || log_warn "Could not query TimescaleDB version"
     else
         log_warn "TimescaleDB pod not found"
+    fi
+
+    # Verify OpenTelemetry CRDs and resources
+    echo ""
+    log_info "Verifying OpenTelemetry..."
+
+    # Check if OpenTelemetry Operator is installed (CRDs exist)
+    if kubectl get crd opentelemetrycollectors.opentelemetry.io &>/dev/null; then
+        log_info "OpenTelemetryCollector CRD exists"
+
+        # Check for collector CR
+        local collector
+        collector=$(kubectl get opentelemetrycollectors -n "${NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [[ -n "${collector}" ]]; then
+            log_info "OpenTelemetryCollector CR found: ${collector}"
+            kubectl get opentelemetrycollectors -n "${NAMESPACE}" "${collector}" -o yaml 2>/dev/null | grep -E "mode:|status:" | head -5 || true
+        else
+            log_warn "No OpenTelemetryCollector CR found in namespace ${NAMESPACE}"
+        fi
+    else
+        log_warn "OpenTelemetryCollector CRD not found - operator may not be installed"
+    fi
+
+    if kubectl get crd instrumentations.opentelemetry.io &>/dev/null; then
+        log_info "Instrumentation CRD exists"
+
+        # Check for instrumentation CR
+        local instrumentation
+        instrumentation=$(kubectl get instrumentations -n "${NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [[ -n "${instrumentation}" ]]; then
+            log_info "Instrumentation CR found: ${instrumentation}"
+        else
+            log_warn "No Instrumentation CR found in namespace ${NAMESPACE}"
+        fi
+    else
+        log_warn "Instrumentation CRD not found - operator may not be installed"
+    fi
+
+    # Check if Jupyter pod has OTEL sidecar annotations
+    echo ""
+    log_info "Checking Jupyter deployment for OTEL annotations..."
+    local jupyter_annotations
+    jupyter_annotations=$(kubectl get deployment -n "${NAMESPACE}" -l app.kubernetes.io/component=jupyter-notebook -o jsonpath='{.items[0].spec.template.metadata.annotations}' 2>/dev/null || echo "")
+    if echo "${jupyter_annotations}" | grep -q "sidecar.opentelemetry.io/inject"; then
+        log_info "Jupyter has OTEL sidecar injection annotation"
+    else
+        log_warn "Jupyter does not have OTEL sidecar injection annotation"
     fi
 }
 

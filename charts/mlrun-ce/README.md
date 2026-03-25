@@ -14,6 +14,7 @@ The Open source MLRun ce chart includes the following stack:
 * Spark Operator - https://github.com/GoogleCloudPlatform/spark-on-k8s-operator
 * Pipelines - https://github.com/kubeflow/pipelines
 * Prometheus stack - https://github.com/prometheus-community/helm-charts
+* OpenTelemetry Operator - https://github.com/open-telemetry/opentelemetry-operator (observability)
 
 ## Prerequisites
 
@@ -36,6 +37,7 @@ kubectl create namespace mlrun
 Add the mlrun ce helm chart repo
 ```bash
 helm repo add mlrun https://mlrun.github.io/ce
+helm repo update
 ```
 
 To work with the open source MLRun stack, you must an accessible docker-registry. The registry's URL and credentials
@@ -64,6 +66,97 @@ helm --namespace mlrun \
     mlrun/mlrun-ce
 ```
 
+### Complete Installation with OpenTelemetry (From Scratch)
+
+This section provides a complete step-by-step guide to install MLRun CE with full OpenTelemetry observability enabled.
+
+> **Note:** OpenTelemetry is **disabled by default**. Follow these steps to enable it.
+
+#### Step 1: Create the namespace
+
+```bash
+kubectl create namespace mlrun
+```
+
+#### Step 2: Add the Helm repository
+
+```bash
+helm repo add mlrun https://mlrun.github.io/ce
+helm repo update
+```
+
+#### Step 3: Create the docker registry secret
+
+```bash
+kubectl --namespace mlrun create secret docker-registry registry-credentials \
+    --docker-username <registry-username> \
+    --docker-password <login-password> \
+    --docker-server <server URL, e.g. https://index.docker.io/v1/> \
+    --docker-email <user-email>
+```
+
+#### Step 4: Install MLRun CE with OpenTelemetry Enabled
+
+```bash
+helm --namespace mlrun \
+    install my-mlrun \
+    --wait \
+    --timeout 15m \
+    --set global.registry.url=<registry URL e.g. index.docker.io/iguazio> \
+    --set global.registry.secretName=registry-credentials \
+    --set opentelemetry-operator.enabled=true \
+    --set opentelemetry.namespaceLabel.enabled=true \
+    --set opentelemetry.collector.enabled=true \
+    --set opentelemetry.collector.scrapeMode=otel \
+    --set opentelemetry.instrumentation.enabled=true \
+    mlrun/mlrun-ce
+```
+
+> **Important:** When enabling OpenTelemetry, set `opentelemetry.collector.scrapeMode=otel` to collect metrics 
+> via the OTEL sidecar and prevent duplicate metrics. The default is `direct` (for when OTEL is disabled).
+
+The installation will:
+- Deploy the OpenTelemetry Operator
+- Create an OpenTelemetryCollector CR (sidecar mode)
+- Create an Instrumentation CR for Python auto-instrumentation
+- Label the namespace with `opentelemetry.io/inject=enabled`
+- Configure Prometheus to scrape OTEL sidecar metrics (port 8889)
+
+#### Step 5: Verify OpenTelemetry Installation
+
+Check that the OpenTelemetry resources are created:
+
+```bash
+# Check the namespace label
+kubectl get namespace mlrun --show-labels | grep opentelemetry
+
+# Check the OpenTelemetry Collector CR
+kubectl -n mlrun get opentelemetrycollectors
+
+# Check the Instrumentation CR
+kubectl -n mlrun get instrumentations
+
+# Check that the OTEL operator is running
+kubectl -n mlrun get pods | grep opentelemetry
+```
+
+#### Step 6: Verify Jupyter has OTEL Sidecar Annotations
+
+```bash
+kubectl -n mlrun get deployment -l app.kubernetes.io/component=jupyter-notebook \
+    -o jsonpath='{.items[0].spec.template.metadata.annotations}' | jq .
+```
+
+You should see annotations like:
+```json
+{
+  "instrumentation.opentelemetry.io/inject-python": "my-mlrun-otel-instrumentation",
+  "prometheus.io/port": "8889",
+  "prometheus.io/scrape": "true",
+  "sidecar.opentelemetry.io/inject": "my-mlrun-otel-collector"
+}
+```
+
 ### Installing MLRun-ce on minikube
 
 The Open source MLRun ce uses node ports for simplicity. If your kubernetes cluster is running inside a VM, 
@@ -88,6 +181,185 @@ following values:
 
 Additional configurable values are documented in the `values.yaml`, and the `values.yaml` of all sub charts. 
 Override those [in the normal methods](https://helm.sh/docs/chart_template_guide/values_files/).
+
+### Configuring OpenTelemetry (Observability)
+
+MLRun CE includes the OpenTelemetry Operator for collecting metrics and traces from your ML workloads. 
+The operator runs in **sidecar mode**, automatically injecting collector containers into annotated pods.
+
+> **Note:** OpenTelemetry is **disabled by default**. See below for how to enable it.
+
+#### Namespace Labeling
+
+The OpenTelemetry Operator **only monitors namespaces** with the label `opentelemetry.io/inject=enabled`.
+This is automatically applied to the MLRun namespace when OpenTelemetry is enabled.
+
+When enabling OpenTelemetry, the namespace is labeled automatically:
+```yaml
+# Automatically added to your namespace when opentelemetry.namespaceLabel.enabled=true
+labels:
+  opentelemetry.io/inject: "enabled"
+```
+
+For custom namespaces that need OpenTelemetry instrumentation, add the label manually:
+```bash
+kubectl label namespace <your-namespace> opentelemetry.io/inject=enabled
+```
+
+> **Note:** The controller namespace (where the operator runs) does **NOT** need this label,
+> as only the operator itself runs there - no workloads require instrumentation.
+
+#### Default Configuration
+
+By default, OpenTelemetry is **disabled**. When enabled, it provides:
+- Namespace labeling for OTEL operator webhook targeting
+- Sidecar collector injection for instrumented pods
+- Python auto-instrumentation for Jupyter notebooks
+- Prometheus metrics export on port 8889
+
+#### Enabling OpenTelemetry
+
+To install **with** OpenTelemetry enabled:
+
+```bash
+helm --namespace mlrun install my-mlrun \
+    --set global.registry.url=<registry-url> \
+    --set global.registry.secretName=registry-credentials \
+    --set opentelemetry-operator.enabled=true \
+    --set opentelemetry.namespaceLabel.enabled=true \
+    --set opentelemetry.collector.enabled=true \
+    --set opentelemetry.collector.scrapeMode=otel \
+    --set opentelemetry.instrumentation.enabled=true \
+    mlrun/mlrun-ce
+```
+
+To **enable** OpenTelemetry on an existing installation:
+
+```bash
+helm --namespace mlrun upgrade my-mlrun \
+    --set opentelemetry-operator.enabled=true \
+    --set opentelemetry.namespaceLabel.enabled=true \
+    --set opentelemetry.collector.enabled=true \
+    --set opentelemetry.collector.scrapeMode=otel \
+    --set opentelemetry.instrumentation.enabled=true \
+    mlrun/mlrun-ce
+```
+
+To **disable** OpenTelemetry (default):
+
+```bash
+helm --namespace mlrun upgrade my-mlrun \
+    --set opentelemetry-operator.enabled=false \
+    --set opentelemetry.collector.enabled=false \
+    --set opentelemetry.instrumentation.enabled=false \
+    --set opentelemetry.namespaceLabel.enabled=false \
+    --set opentelemetry.collector.scrapeMode=direct \
+    mlrun/mlrun-ce
+```
+
+#### Custom Resource Limits
+
+Configure collector sidecar resources:
+
+```bash
+helm --namespace mlrun install my-mlrun \
+    --set opentelemetry.collector.resources.requests.cpu=100m \
+    --set opentelemetry.collector.resources.requests.memory=128Mi \
+    --set opentelemetry.collector.resources.limits.cpu=500m \
+    --set opentelemetry.collector.resources.limits.memory=512Mi \
+    mlrun/mlrun-ce
+```
+
+#### Enabling Java Auto-Instrumentation
+
+To enable Java auto-instrumentation (disabled by default):
+
+```bash
+helm --namespace mlrun install my-mlrun \
+    --set opentelemetry.instrumentation.java.enabled=true \
+    mlrun/mlrun-ce
+```
+
+#### Adding OpenTelemetry to Custom Workloads
+
+To instrument your own deployments with the OTEL sidecar and Python auto-instrumentation:
+
+1. Ensure your namespace has the OpenTelemetry label:
+   ```bash
+   kubectl label namespace <your-namespace> opentelemetry.io/inject=enabled
+   ```
+
+2. Add these annotations to your pod spec:
+   ```yaml
+   metadata:
+     annotations:
+       sidecar.opentelemetry.io/inject: "<release-name>-otel-collector"
+       instrumentation.opentelemetry.io/inject-python: "<release-name>-otel-instrumentation"
+       prometheus.io/scrape: "true"
+       prometheus.io/scrape-mode: "otel"
+       prometheus.io/port: "8889"
+   ```
+
+#### Preventing Prometheus/OTEL Metric Overlap
+
+To prevent duplicate metrics when using both Prometheus direct scraping and OpenTelemetry, 
+MLRun CE uses a **scrape-mode** annotation system:
+
+| Scrape Mode | Description | Use Case |
+|-------------|-------------|----------|
+| `direct` | Direct Prometheus scraping only | **Default** - When OTEL is disabled |
+| `otel` | Metrics collected via OTEL sidecar only | **Recommended when OTEL enabled** |
+| `both` | Both OTEL and direct scraping | Debugging/transition only |
+
+> **Note:** The default scrape mode is `direct`. When enabling OpenTelemetry, you must set 
+> `--set opentelemetry.collector.scrapeMode=otel` to collect metrics via the OTEL sidecar.
+
+**How it works:**
+- OTEL-collected metrics have the `mlrun_otel_` prefix and `metrics_source=otel_collector` label
+- Direct-scraped metrics have `metrics_source=direct_scrape` label
+- Prometheus scrape configs filter based on `prometheus.io/scrape-mode` annotation
+
+**Configure scrape mode when enabling OTEL:**
+```bash
+helm --namespace mlrun install my-mlrun \
+    --set opentelemetry-operator.enabled=true \
+    --set opentelemetry.collector.enabled=true \
+    --set opentelemetry.collector.scrapeMode=otel \
+    --set opentelemetry.instrumentation.enabled=true \
+    mlrun/mlrun-ce
+```
+
+**Query metrics by source in Prometheus:**
+```promql
+# OTEL-collected metrics only
+{metrics_source="otel_collector"}
+
+# Direct-scraped metrics only  
+{metrics_source="direct_scrape"}
+
+# OTEL metrics use prefix
+mlrun_otel_http_server_duration_seconds_bucket{...}
+```
+
+#### Split Installation (Admin/Non-Admin)
+
+For multi-tenant clusters, install the operator CRDs at the cluster level and collectors in user namespaces:
+
+**Controller namespace (admin):**
+```bash
+# Operator only - no namespace label needed (no instrumented workloads here)
+helm --namespace controller install mlrun-controller \
+    -f admin_installation_values.yaml \
+    mlrun/mlrun-ce
+```
+
+**User namespace (non-admin):**
+```bash
+# Collector CRs + namespace label applied automatically
+helm --namespace mlrun install my-mlrun \
+    -f non_admin_installation_values.yaml \
+    mlrun/mlrun-ce
+```
 
 ### Working with ECR
 
@@ -282,6 +554,6 @@ Refer to the [**Kubeflow documentation**](https://www.kubeflow.org/docs/started/
 
 This table shows the versions of the main components in the MLRun CE chart:
 
-| MLRun CE   | MLRun  | Nuclio | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack |
-|------------|--------|--------|---------|--------------|-----------|----------------|-----------|-----------------------|
-| **0.11.0** | 1.11.0 | 1.15.9 | 4.5.0   | 0.2.3        | 4.0.407   | 2.1.0          | 2.14.3    | 72.1.1                |
+| MLRun CE   | MLRun  | Nuclio | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack | OpenTelemetry Operator |
+|------------|--------|--------|---------|--------------|-----------|----------------|-----------|-----------------------|------------------------|
+| **0.11.0** | 1.11.0 | 1.15.9 | 4.5.0   | 0.2.3        | 4.0.407   | 2.1.0          | 2.14.3    | 72.1.1                | 0.78.1                 |

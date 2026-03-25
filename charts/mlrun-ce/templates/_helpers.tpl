@@ -348,3 +348,71 @@ TimescaleDB connection string for MLRun model monitoring
 postgresql://{{ .Values.timescaledb.auth.username | urlquery }}:{{ .Values.timescaledb.auth.password | urlquery }}@{{ include "mlrun-ce.timescaledb.fullname" . }}:{{ .Values.timescaledb.service.port }}/{{ .Values.timescaledb.auth.database }}
 {{- end }}
 
+{{/*
+=============================================================================
+OpenTelemetry helpers
+=============================================================================
+*/}}
+
+{{/*
+OpenTelemetry Collector name
+*/}}
+{{- define "mlrun-ce.otel.collector.name" -}}
+{{- default "otel-collector" .Values.opentelemetry.collector.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+OpenTelemetry Collector fullname
+*/}}
+{{- define "mlrun-ce.otel.collector.fullname" -}}
+{{- if .Values.opentelemetry.collector.fullnameOverride }}
+{{- .Values.opentelemetry.collector.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default "otel-collector" .Values.opentelemetry.collector.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+OpenTelemetry Instrumentation name
+*/}}
+{{- define "mlrun-ce.otel.instrumentation.name" -}}
+{{- default "otel-instrumentation" .Values.opentelemetry.instrumentation.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+OpenTelemetry Instrumentation fullname
+*/}}
+{{- define "mlrun-ce.otel.instrumentation.fullname" -}}
+{{- if .Values.opentelemetry.instrumentation.fullnameOverride }}
+{{- .Values.opentelemetry.instrumentation.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default "otel-instrumentation" .Values.opentelemetry.instrumentation.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+OpenTelemetry common labels
+*/}}
+{{- define "mlrun-ce.otel.labels" -}}
+{{ include "mlrun-ce.common.labels" . }}
+{{ include "mlrun-ce.otel.selectorLabels" . }}
+{{- end }}
+
+{{/*
+OpenTelemetry selector labels
+*/}}
+{{- define "mlrun-ce.otel.selectorLabels" -}}
+{{ include "mlrun-ce.common.selectorLabels" . }}
+app.kubernetes.io/component: opentelemetry
+{{- end }}
+

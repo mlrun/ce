@@ -533,6 +533,103 @@ kube-prometheus-stack:
     service:
       type: NodePort
       nodePort: 30020
+    prometheusSpec:
+      # Additional scrape configs for OpenTelemetry collector sidecars
+      # This creates clear separation between direct scraping and OTEL-collected metrics
+      additionalScrapeConfigs:
+        # Job for scraping OTEL collector sidecars (metrics on port 8889)
+        # Only scrapes pods with prometheus.io/scrape-mode: "otel" or "both"
+        - job_name: 'otel-collector-sidecars'
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            # Only scrape pods with OTEL sidecar (port 8889)
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+              action: keep
+              regex: "8889"
+            # Only scrape if scrape-mode is "otel" or "both" (or legacy scrape=true with port 8889)
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape_mode]
+              action: keep
+              regex: (otel|both|)
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: true
+            # Set metrics path
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+              action: replace
+              target_label: __metrics_path__
+              regex: (.+)
+            # Set target address with port
+            - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+              action: replace
+              regex: ([^:]+)(?::\d+)?;(\d+)
+              replacement: $1:$2
+              target_label: __address__
+            # Add kubernetes labels
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - source_labels: [__meta_kubernetes_namespace]
+              action: replace
+              target_label: kubernetes_namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              action: replace
+              target_label: kubernetes_pod_name
+          # Add metric relabeling to identify OTEL-sourced metrics
+          metric_relabel_configs:
+            - action: replace
+              target_label: metrics_source
+              replacement: otel_collector
+        
+        # Job for direct application scraping (non-OTEL)
+        # Only scrapes pods with prometheus.io/scrape-mode: "direct" or "both"
+        # Excludes OTEL sidecar port (8889)
+        - job_name: 'kubernetes-pods-direct'
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            # Only scrape pods with prometheus.io/scrape=true
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: keep
+              regex: true
+            # Exclude OTEL sidecar port (8889) - those are handled by otel-collector-sidecars job
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+              action: drop
+              regex: "8889"
+            # Only scrape if scrape-mode is "direct" or "both" or not set (default to direct)
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape_mode]
+              action: keep
+              regex: (direct|both|)
+            # Set metrics path
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+              action: replace
+              target_label: __metrics_path__
+              regex: (.+)
+              replacement: $1
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+              action: replace
+              target_label: __metrics_path__
+              regex: ()
+              replacement: /metrics
+            # Set target address with port
+            - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+              action: replace
+              regex: ([^:]+)(?::\d+)?;(\d+)
+              replacement: $1:$2
+              target_label: __address__
+            # Add kubernetes labels
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - source_labels: [__meta_kubernetes_namespace]
+              action: replace
+              target_label: kubernetes_namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              action: replace
+              target_label: kubernetes_pod_name
+          # Add metric relabeling to identify direct-scraped metrics
+          metric_relabel_configs:
+            - action: replace
+              target_label: metrics_source
+              replacement: direct_scrape
   kube-state-metrics:
     fullnameOverride: state-metrics
 prometheus-node-exporter:
@@ -645,3 +742,127 @@ kafka:
     # Empty means "use the release namespace"
     # Example: "controller" if that's where you installed the operator
     operatorNamespace: ""
+
+# =============================================================================
+# OpenTelemetry Operator configuration
+# Installs the OpenTelemetry Operator for managing collectors and instrumentation
+# =============================================================================
+opentelemetry-operator:
+  enabled: false
+  # Admission webhooks configuration
+  admissionWebhooks:
+    certManager:
+      enabled: false
+    autoGenerateCert:
+      enabled: true
+    # Only apply webhooks to namespaces with the opentelemetry label
+    # This ensures the operator only monitors labeled namespaces
+    namespaceSelector:
+      matchLabels:
+        opentelemetry.io/inject: "enabled"
+  manager:
+    # Collector image used by the operator when creating collectors
+    collectorImage:
+      repository: otel/opentelemetry-collector-contrib
+      tag: 0.115.0
+    # Auto-instrumentation images
+    autoInstrumentationImage:
+      python:
+        repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python
+        tag: 0.50b0
+      java:
+        repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+        tag: 2.10.0
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+# =============================================================================
+# OpenTelemetry Collector and Instrumentation CRs
+# These are managed separately from the operator for admin/non-admin split
+# =============================================================================
+opentelemetry:
+  # Namespace label for enabling OpenTelemetry monitoring
+  # The namespace must have this label for the operator to inject sidecars
+  namespaceLabel:
+    enabled: false
+    key: "opentelemetry.io/inject"
+    value: "enabled"
+  
+  # OpenTelemetry Collector configuration (sidecar mode)
+  collector:
+    enabled: false
+    nameOverride: ""
+    fullnameOverride: ""
+    # Sidecar mode - collector runs as a sidecar in instrumented pods
+    mode: sidecar
+    # Collector sidecar container resources
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    # Prometheus exporter port for metrics
+    prometheus:
+      port: 8889
+      # Metric prefix added to all OTEL-collected metrics
+      # Helps distinguish OTEL metrics from directly-scraped metrics
+      namespace: mlrun_otel
+    # OTLP receiver configuration
+    otlp:
+      grpcPort: 4317
+      httpPort: 4318
+    # Prometheus scrape mode for OTEL-instrumented pods
+    # Options:
+    #   - "direct": Direct Prometheus scraping only (default when OTEL disabled)
+    #   - "otel": Metrics collected via OTEL sidecar only (recommended when OTEL enabled)
+    #   - "both": Both OTEL sidecar and direct scraping (for debugging/transition)
+    # When enabling OTEL, set this to "otel" to prevent duplicate metrics
+    scrapeMode: "direct"
+
+  # Instrumentation configuration for auto-instrumentation
+  instrumentation:
+    enabled: false
+    nameOverride: ""
+    fullnameOverride: ""
+    # Propagators for distributed tracing context
+    propagators:
+      - tracecontext
+      - baggage
+    # Sampler configuration
+    sampler:
+      type: parentbased_traceidratio
+      argument: "1"
+    # Python auto-instrumentation
+    python:
+      enabled: true
+      image:
+        repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python
+        tag: 0.50b0
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+    # Java auto-instrumentation (disabled by default, enable if needed)
+    java:
+      enabled: false
+      image:
+        repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+        tag: 2.10.0
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+

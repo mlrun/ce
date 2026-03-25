@@ -1,0 +1,489 @@
+#!/usr/bin/env bash
+# Copyright 2025 Iguazio
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Helm template tests for MLRun CE chart
+# Validates that templates render correctly with various configurations
+
+set -o nounset
+set -o pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHART_DIR="${SCRIPT_DIR}/../charts/mlrun-ce"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+TESTS_PASSED=0
+TESTS_FAILED=0
+
+log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_test() { echo -e "${GREEN}[TEST]${NC} $1"; }
+log_pass() { echo -e "${GREEN}[PASS]${NC} $1"; ((TESTS_PASSED++)) || true; }
+log_fail() { echo -e "${RED}[FAIL]${NC} $1"; ((TESTS_FAILED++)) || true; }
+
+# Render a specific template and return the output
+render_template() {
+    local template="$1"
+    shift
+    helm template test "${CHART_DIR}" \
+        --skip-schema-validation \
+        --show-only "${template}" \
+        "$@" 2>/dev/null
+}
+
+# Render all templates and return the output
+render_all() {
+    helm template test "${CHART_DIR}" \
+        --skip-schema-validation \
+        "$@" 2>/dev/null
+}
+
+# Check if output contains a string
+assert_contains() {
+    local output="$1"
+    local expected="$2"
+    local test_name="$3"
+
+    if echo "$output" | grep -q "$expected"; then
+        log_pass "$test_name"
+        return 0
+    else
+        log_fail "$test_name - expected to find: $expected"
+        return 1
+    fi
+}
+
+# Check if output does NOT contain a string
+assert_not_contains() {
+    local output="$1"
+    local not_expected="$2"
+    local test_name="$3"
+
+    if echo "$output" | grep -q "$not_expected"; then
+        log_fail "$test_name - should not contain: $not_expected"
+        return 1
+    else
+        log_pass "$test_name"
+        return 0
+    fi
+}
+
+# Check if template renders (non-empty output)
+assert_renders() {
+    local output="$1"
+    local test_name="$2"
+
+    if [[ -n "$output" ]]; then
+        log_pass "$test_name"
+        return 0
+    else
+        log_fail "$test_name - template produced no output"
+        return 1
+    fi
+}
+
+# Check if template does NOT render (empty output or error)
+assert_not_renders() {
+    local template="$1"
+    local test_name="$2"
+    shift 2
+
+    local output
+    output=$(render_template "$template" "$@" 2>&1) || true
+
+    if [[ -z "$output" ]] || echo "$output" | grep -q "could not find template"; then
+        log_pass "$test_name"
+        return 0
+    else
+        log_fail "$test_name - template should not render"
+        return 1
+    fi
+}
+
+# ============================================================================
+# OpenTelemetry Tests
+# ============================================================================
+
+test_otel_collector_default() {
+    log_test "OpenTelemetry Collector - Enabled"
+
+    local output
+    output=$(render_template "templates/opentelemetry/collector.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true)
+
+    assert_renders "$output" "Collector CR renders"
+    assert_contains "$output" "kind: OpenTelemetryCollector" "Has correct kind"
+    assert_contains "$output" "mode: sidecar" "Uses sidecar mode"
+    assert_contains "$output" "prometheus:" "Has Prometheus exporter"
+    assert_contains "$output" "endpoint: 0.0.0.0:8889" "Prometheus on port 8889"
+    assert_contains "$output" "otlp:" "Has OTLP receiver"
+    assert_contains "$output" "helm.sh/hook: post-install,post-upgrade" "Has Helm hooks"
+}
+
+test_otel_collector_disabled() {
+    log_test "OpenTelemetry Collector - Disabled (default)"
+
+    assert_not_renders "templates/opentelemetry/collector.yaml" \
+        "Collector CR does not render when disabled (default)"
+}
+
+test_otel_collector_resources() {
+    log_test "OpenTelemetry Collector - Custom resources"
+
+    local output
+    output=$(render_template "templates/opentelemetry/collector.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true \
+        --set opentelemetry.collector.resources.requests.cpu=100m \
+        --set opentelemetry.collector.resources.requests.memory=128Mi \
+        --set opentelemetry.collector.resources.limits.cpu=500m \
+        --set opentelemetry.collector.resources.limits.memory=512Mi)
+
+    assert_contains "$output" "cpu: 100m" "Custom CPU request"
+    assert_contains "$output" "memory: 128Mi" "Custom memory request"
+    assert_contains "$output" "cpu: 500m" "Custom CPU limit"
+    assert_contains "$output" "memory: 512Mi" "Custom memory limit"
+}
+
+test_otel_instrumentation_default() {
+    log_test "OpenTelemetry Instrumentation - Enabled"
+
+    local output
+    output=$(render_template "templates/opentelemetry/instrumentation.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.instrumentation.enabled=true)
+
+    assert_renders "$output" "Instrumentation CR renders"
+    assert_contains "$output" "kind: Instrumentation" "Has correct kind"
+    assert_contains "$output" "tracecontext" "Has tracecontext propagator"
+    assert_contains "$output" "baggage" "Has baggage propagator"
+    assert_contains "$output" "parentbased_traceidratio" "Has sampler type"
+    assert_contains "$output" "python:" "Has Python instrumentation"
+    assert_contains "$output" "autoinstrumentation-python" "Uses Python auto-instrumentation image"
+}
+
+test_otel_instrumentation_disabled() {
+    log_test "OpenTelemetry Instrumentation - Disabled (default)"
+
+    assert_not_renders "templates/opentelemetry/instrumentation.yaml" \
+        "Instrumentation CR does not render when disabled (default)"
+}
+
+test_otel_instrumentation_java_enabled() {
+    log_test "OpenTelemetry Instrumentation - Java enabled"
+
+    local output
+    output=$(render_template "templates/opentelemetry/instrumentation.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.instrumentation.enabled=true \
+        --set opentelemetry.instrumentation.java.enabled=true)
+
+    assert_contains "$output" "java:" "Has Java instrumentation section"
+    assert_contains "$output" "autoinstrumentation-java" "Uses Java auto-instrumentation image"
+}
+
+test_otel_rbac_default() {
+    log_test "OpenTelemetry RBAC - Enabled"
+
+    local output
+    output=$(render_template "templates/opentelemetry/rbac.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true)
+
+    assert_renders "$output" "RBAC renders"
+    assert_contains "$output" "kind: ServiceAccount" "Has ServiceAccount"
+    assert_contains "$output" "kind: Role" "Has Role"
+    assert_contains "$output" "kind: RoleBinding" "Has RoleBinding"
+    assert_contains "$output" "name: otel-collector" "Has correct name"
+}
+
+test_otel_rbac_disabled() {
+    log_test "OpenTelemetry RBAC - Disabled (default)"
+
+    assert_not_renders "templates/opentelemetry/rbac.yaml" \
+        "RBAC does not render when OTEL disabled (default)"
+}
+
+test_jupyter_otel_annotations() {
+    log_test "Jupyter Deployment - OTEL annotations when enabled"
+
+    local output
+    output=$(render_template "templates/jupyter-notebook/deployment.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true \
+        --set opentelemetry.instrumentation.enabled=true)
+
+    assert_contains "$output" "sidecar.opentelemetry.io/inject:" "Has sidecar injection annotation"
+    assert_contains "$output" "instrumentation.opentelemetry.io/inject-python:" "Has Python instrumentation annotation"
+    assert_contains "$output" 'prometheus.io/scrape: "true"' "Has Prometheus scrape annotation"
+    assert_contains "$output" 'prometheus.io/scrape-mode:' "Has Prometheus scrape-mode annotation"
+    assert_contains "$output" 'prometheus.io/port: "8889"' "Has Prometheus port annotation"
+}
+
+test_jupyter_no_otel_annotations_when_disabled() {
+    log_test "Jupyter Deployment - No OTEL annotations when disabled (default)"
+
+    local output
+    output=$(render_template "templates/jupyter-notebook/deployment.yaml" \
+        --set global.registry.url=test.io)
+
+    assert_not_contains "$output" "sidecar.opentelemetry.io/inject:" "No sidecar injection when disabled (default)"
+    assert_not_contains "$output" "instrumentation.opentelemetry.io/inject-python:" "No instrumentation when disabled (default)"
+}
+
+# ============================================================================
+# Admin/Non-Admin Installation Tests
+# ============================================================================
+
+test_admin_values_otel() {
+    log_test "Admin installation - OTEL operator enabled, CRs disabled"
+
+    # Collector should not render
+    assert_not_renders "templates/opentelemetry/collector.yaml" \
+        "Collector CR not rendered with admin values" \
+        -f "${CHART_DIR}/admin_installation_values.yaml"
+
+    # Instrumentation should not render
+    assert_not_renders "templates/opentelemetry/instrumentation.yaml" \
+        "Instrumentation CR not rendered with admin values" \
+        -f "${CHART_DIR}/admin_installation_values.yaml"
+}
+
+test_non_admin_values_otel() {
+    log_test "Non-admin installation - OTEL CRs enabled"
+
+    local output
+    output=$(render_template "templates/opentelemetry/collector.yaml" \
+        --set global.registry.url=test.io \
+        -f "${CHART_DIR}/non_admin_installation_values.yaml")
+
+    assert_renders "$output" "Collector CR renders with non-admin values"
+
+    output=$(render_template "templates/opentelemetry/instrumentation.yaml" \
+        --set global.registry.url=test.io \
+        -f "${CHART_DIR}/non_admin_installation_values.yaml")
+
+    assert_renders "$output" "Instrumentation CR renders with non-admin values"
+}
+
+test_namespace_label_enabled() {
+    log_test "Namespace Label - Enabled"
+
+    local output
+    output=$(render_template "templates/opentelemetry/namespace-label.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.namespaceLabel.enabled=true \
+        --set opentelemetry.collector.enabled=true)
+
+    assert_renders "$output" "Namespace label renders"
+    assert_contains "$output" "kind: Namespace" "Has correct kind"
+    assert_contains "$output" "opentelemetry.io/inject" "Has OTEL inject label key"
+    assert_contains "$output" '"enabled"' "Has OTEL inject label value"
+}
+
+test_namespace_label_disabled() {
+    log_test "Namespace Label - Disabled (default)"
+
+    assert_not_renders "templates/opentelemetry/namespace-label.yaml" \
+        "Namespace label not rendered when disabled (default)"
+}
+
+test_admin_namespace_label_disabled() {
+    log_test "Admin installation - Namespace label disabled"
+
+    assert_not_renders "templates/opentelemetry/namespace-label.yaml" \
+        "Namespace label not rendered with admin values" \
+        -f "${CHART_DIR}/admin_installation_values.yaml"
+}
+
+test_non_admin_namespace_label_enabled() {
+    log_test "Non-admin installation - Namespace label enabled"
+
+    local output
+    output=$(render_template "templates/opentelemetry/namespace-label.yaml" \
+        --set global.registry.url=test.io \
+        -f "${CHART_DIR}/non_admin_installation_values.yaml")
+
+    assert_renders "$output" "Namespace label renders with non-admin values"
+    assert_contains "$output" "opentelemetry.io/inject" "Has OTEL inject label"
+}
+
+test_otel_operator_namespace_selector() {
+    log_test "OTEL Operator - Namespace selector configured"
+
+    local output
+    output=$(render_all \
+        --set global.registry.url=test.io \
+        --set opentelemetry-operator.enabled=true)
+
+    # Check if the operator webhook has namespace selector configured
+    # The selector should be in the MutatingWebhookConfiguration
+    if echo "$output" | grep -A5 "namespaceSelector:" | grep -q "opentelemetry.io/inject"; then
+        log_pass "Has namespace selector in webhook configuration"
+    else
+        log_fail "Namespace selector not found in webhook configuration"
+    fi
+}
+
+# ============================================================================
+# Prometheus Integration Tests
+# ============================================================================
+
+test_prometheus_otel_scrape_config() {
+    log_test "Prometheus - OTEL scrape configuration"
+
+    local output
+    output=$(render_all --set global.registry.url=test.io)
+
+    # The scrape config is in a Secret as base64, extract and decode it
+    local secret_data
+    secret_data=$(echo "$output" | grep "additional-scrape-configs.yaml:" | head -1 | sed 's/.*: "//' | sed 's/"$//' || true)
+
+    if [[ -n "$secret_data" ]]; then
+        local decoded
+        decoded=$(echo "$secret_data" | base64 -d 2>/dev/null || true)
+
+        if echo "$decoded" | grep -q "otel-collector-sidecars"; then
+            log_pass "Has OTEL collector scrape job"
+        else
+            log_fail "Has OTEL collector scrape job - not found in decoded config"
+        fi
+
+        if echo "$decoded" | grep -q "prometheus_io_port"; then
+            log_pass "Has pod annotation relabeling"
+        else
+            log_fail "Has pod annotation relabeling - not found in decoded config"
+        fi
+    else
+        log_fail "Prometheus scrape config secret not found"
+    fi
+}
+
+# ============================================================================
+# Full Chart Render Test
+# ============================================================================
+
+test_full_chart_renders() {
+    log_test "Full chart renders without errors"
+
+    local output
+    output=$(render_all --set global.registry.url=test.io 2>&1)
+
+    if [[ $? -eq 0 ]] && [[ -n "$output" ]]; then
+        log_pass "Full chart renders successfully"
+    else
+        log_fail "Full chart failed to render"
+    fi
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+
+main() {
+    log_info "Running Helm template tests for MLRun CE"
+    log_info "Chart directory: ${CHART_DIR}"
+    echo ""
+
+    # Ensure dependencies are up to date
+    log_info "Updating Helm dependencies..."
+    helm dependency update "${CHART_DIR}" > /dev/null 2>&1
+
+    echo ""
+    echo "========================================"
+    echo "OpenTelemetry Collector Tests"
+    echo "========================================"
+    test_otel_collector_default
+    test_otel_collector_disabled
+    test_otel_collector_resources
+
+    echo ""
+    echo "========================================"
+    echo "OpenTelemetry Instrumentation Tests"
+    echo "========================================"
+    test_otel_instrumentation_default
+    test_otel_instrumentation_disabled
+    test_otel_instrumentation_java_enabled
+
+    echo ""
+    echo "========================================"
+    echo "OpenTelemetry RBAC Tests"
+    echo "========================================"
+    test_otel_rbac_default
+    test_otel_rbac_disabled
+
+    echo ""
+    echo "========================================"
+    echo "Jupyter OTEL Integration Tests"
+    echo "========================================"
+    test_jupyter_otel_annotations
+    test_jupyter_no_otel_annotations_when_disabled
+
+    echo ""
+    echo "========================================"
+    echo "Admin/Non-Admin Installation Tests"
+    echo "========================================"
+    test_admin_values_otel
+    test_non_admin_values_otel
+
+    echo ""
+    echo "========================================"
+    echo "Namespace Label Tests"
+    echo "========================================"
+    test_namespace_label_enabled
+    test_namespace_label_disabled
+    test_admin_namespace_label_disabled
+    test_non_admin_namespace_label_enabled
+    test_otel_operator_namespace_selector
+
+    echo ""
+    echo "========================================"
+    echo "Prometheus Integration Tests"
+    echo "========================================"
+    test_prometheus_otel_scrape_config
+
+    echo ""
+    echo "========================================"
+    echo "Full Chart Tests"
+    echo "========================================"
+    test_full_chart_renders
+
+    echo ""
+    echo "========================================"
+    echo "Test Summary"
+    echo "========================================"
+    echo -e "Passed: ${GREEN}${TESTS_PASSED}${NC}"
+    echo -e "Failed: ${RED}${TESTS_FAILED}${NC}"
+
+    if [[ ${TESTS_FAILED} -gt 0 ]]; then
+        log_error "Some tests failed!"
+        exit 1
+    else
+        log_info "All tests passed!"
+        exit 0
+    fi
+}
+
+main "$@"
+
+
+
+

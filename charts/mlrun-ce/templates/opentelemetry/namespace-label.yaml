@@ -1,0 +1,15 @@
+{{- if and (or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled) .Values.opentelemetry.namespaceLabel.enabled -}}
+# Label the namespace for OpenTelemetry operator webhook injection
+# The operator will only inject sidecars into namespaces with this label
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+{{ include "mlrun-ce.otel.labels" . | indent 4 }}
+    {{ .Values.opentelemetry.namespaceLabel.key }}: {{ .Values.opentelemetry.namespaceLabel.value | quote }}
+  annotations:
+    # This resource only patches the existing namespace with the required label
+    # It does not create the namespace (namespace should already exist)
+    helm.sh/resource-policy: keep
+{{- end -}}
