@@ -1,0 +1,82 @@
+{{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+---
+# Job to wait for OpenTelemetry CRDs to be available and then create the CRs
+# This solves the race condition between the operator starting and CR creation
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-otel-cr-creator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+  annotations:
+    # Run as a post-install and post-upgrade hook
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.otel.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ .Release.Name }}-otel-cr-creator
+      containers:
+        - name: cr-creator
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              echo "Waiting for OpenTelemetry CRDs to be available..."
+              
+              # Wait for the OpenTelemetryCollector CRD
+              {{- if .Values.opentelemetry.collector.enabled }}
+              echo "Waiting for OpenTelemetryCollector CRD..."
+              until kubectl get crd opentelemetrycollectors.opentelemetry.io &>/dev/null; do
+                echo "Waiting for opentelemetrycollectors.opentelemetry.io CRD..."
+                sleep 5
+              done
+              echo "OpenTelemetryCollector CRD is available!"
+              {{- end }}
+              
+              # Wait for the Instrumentation CRD
+              {{- if .Values.opentelemetry.instrumentation.enabled }}
+              echo "Waiting for Instrumentation CRD..."
+              until kubectl get crd instrumentations.opentelemetry.io &>/dev/null; do
+                echo "Waiting for instrumentations.opentelemetry.io CRD..."
+                sleep 5
+              done
+              echo "Instrumentation CRD is available!"
+              {{- end }}
+              
+              # Wait a bit more for the operator to be fully ready
+              echo "Waiting for operator webhook to be ready..."
+              sleep 10
+              
+              {{- if .Values.opentelemetry.collector.enabled }}
+              # Create or update the OpenTelemetryCollector CR
+              echo "Creating/updating OpenTelemetryCollector CR..."
+              cat <<'EOF' | kubectl apply -f -
+              {{- include "mlrun-ce.otel.collector.manifest" . | nindent 14 }}
+              EOF
+              echo "OpenTelemetryCollector CR created/updated!"
+              {{- end }}
+              
+              {{- if .Values.opentelemetry.instrumentation.enabled }}
+              # Create or update the Instrumentation CR
+              echo "Creating/updating Instrumentation CR..."
+              cat <<'EOF' | kubectl apply -f -
+              {{- include "mlrun-ce.otel.instrumentation.manifest" . | nindent 14 }}
+              EOF
+              echo "Instrumentation CR created/updated!"
+              {{- end }}
+              
+              echo "All OpenTelemetry CRs have been created successfully!"
+{{- end }}
+

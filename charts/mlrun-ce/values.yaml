@@ -800,8 +800,8 @@ opentelemetry-operator:
   manager:
     # Collector image used by the operator when creating collectors
     collectorImage:
-      repository: otel/opentelemetry-collector-contrib
-      tag: 0.115.0
+      repository: otel/opentelemetry-collector
+      tag: 0.116.0
     # Auto-instrumentation images
     autoInstrumentationImage:
       python:
@@ -810,6 +810,8 @@ opentelemetry-operator:
       java:
         repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
         tag: 2.10.0
+    # Feature gates as string (comma-separated)
+    featureGates: ""
     resources:
       requests:
         cpu: 50m
@@ -830,12 +832,14 @@ opentelemetry:
     key: "opentelemetry.io/inject"
     value: "enabled"
 
-  # OpenTelemetry Collector configuration (sidecar mode)
+  # OpenTelemetry Collector configuration (SIDECAR mode)
+  # In sidecar mode, the collector is injected into pods via webhook
+  # Not as a standalone deployment
   collector:
     enabled: false
     nameOverride: ""
     fullnameOverride: ""
-    # Sidecar mode - collector runs as a sidecar in instrumented pods
+    # SIDECAR mode - collector is injected into pods by the operator
     mode: sidecar
     # Collector sidecar container resources
     resources:

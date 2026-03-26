@@ -1,86 +1,14 @@
-{{- if .Values.opentelemetry.instrumentation.enabled }}
-apiVersion: opentelemetry.io/v1alpha1
-kind: Instrumentation
-metadata:
-  name: {{ include "mlrun-ce.otel.instrumentation.fullname" . }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
-  annotations:
-    # Delay instrumentation CR creation until after CRDs are installed by the operator
-    helm.sh/hook: post-install,post-upgrade
-    helm.sh/hook-weight: "10"
-spec:
-  # Propagators for distributed tracing context
-  propagators:
-    {{- toYaml .Values.opentelemetry.instrumentation.propagators | nindent 4 }}
+{{/*
+Instrumentation CR is created by the crd-readiness-job.yaml via a Helm post-install/post-upgrade hook.
+This solves the race condition between the OpenTelemetry Operator starting up and registering its CRDs,
+and Helm trying to create this CR.
 
-  # Sampler configuration
-  sampler:
-    type: {{ .Values.opentelemetry.instrumentation.sampler.type }}
-    argument: {{ .Values.opentelemetry.instrumentation.sampler.argument | quote }}
+The actual CR manifest is defined in _helpers.tpl as "mlrun-ce.otel.instrumentation.manifest" and is applied
+by the job after it confirms the CRD is available.
 
-  # Environment variables injected into instrumented pods
-  env:
-    # Service name will be auto-detected from pod metadata
-    - name: OTEL_SERVICE_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.labels['app.kubernetes.io/name']
-    # Resource attributes for better observability
-    - name: OTEL_RESOURCE_ATTRIBUTES
-      value: >-
-        k8s.namespace.name=$(OTEL_RESOURCE_ATTRIBUTES_NAMESPACE),
-        k8s.pod.name=$(OTEL_RESOURCE_ATTRIBUTES_POD_NAME),
-        k8s.container.name=$(OTEL_RESOURCE_ATTRIBUTES_CONTAINER_NAME),
-        service.namespace=$(OTEL_RESOURCE_ATTRIBUTES_NAMESPACE)
-    - name: OTEL_RESOURCE_ATTRIBUTES_NAMESPACE
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.namespace
-    - name: OTEL_RESOURCE_ATTRIBUTES_POD_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.name
-    - name: OTEL_RESOURCE_ATTRIBUTES_CONTAINER_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.name
-    # Export metrics via OTLP to the sidecar collector
-    - name: OTEL_METRICS_EXPORTER
-      value: otlp
-    - name: OTEL_TRACES_EXPORTER
-      value: otlp
-    - name: OTEL_LOGS_EXPORTER
-      value: none
-
-  # Python auto-instrumentation configuration
-  {{- if .Values.opentelemetry.instrumentation.python.enabled }}
-  python:
-    image: {{ .Values.opentelemetry.instrumentation.python.image.repository }}:{{ .Values.opentelemetry.instrumentation.python.image.tag }}
-    resourceRequirements:
-      {{- toYaml .Values.opentelemetry.instrumentation.python.resources | nindent 6 }}
-    env:
-      # Python-specific OTEL configuration
-      - name: OTEL_PYTHON_LOG_CORRELATION
-        value: "true"
-      - name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED
-        value: "false"
-      # Disable specific instrumentations that might cause issues
-      - name: OTEL_PYTHON_DISABLED_INSTRUMENTATIONS
-        value: ""
-  {{- end }}
-
-  # Java auto-instrumentation configuration
-  {{- if .Values.opentelemetry.instrumentation.java.enabled }}
-  java:
-    image: {{ .Values.opentelemetry.instrumentation.java.image.repository }}:{{ .Values.opentelemetry.instrumentation.java.image.tag }}
-    resourceRequirements:
-      {{- toYaml .Values.opentelemetry.instrumentation.java.resources | nindent 6 }}
-    env:
-      # Java-specific OTEL configuration
-      - name: OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED
-        value: "true"
-  {{- end }}
-{{- end }}
+To see the CR configuration, check:
+- templates/_helpers.tpl: defines the manifest
+- templates/opentelemetry/crd-readiness-job.yaml: creates the CR
+- values.yaml: opentelemetry.instrumentation.* settings
+*/}}
 

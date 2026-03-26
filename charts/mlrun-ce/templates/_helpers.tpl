@@ -416,3 +416,161 @@ OpenTelemetry selector labels
 app.kubernetes.io/component: opentelemetry
 {{- end }}
 
+{{/*
+OpenTelemetryCollector CR manifest for use in the CRD readiness job
+*/}}
+{{- define "mlrun-ce.otel.collector.manifest" -}}
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: {{ include "mlrun-ce.otel.collector.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+spec:
+  mode: {{ .Values.opentelemetry.collector.mode }}
+  upgradeStrategy: automatic
+  managementState: managed
+  resources:
+    {{- toYaml .Values.opentelemetry.collector.resources | nindent 4 }}
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "{{ .Values.opentelemetry.collector.prometheus.port }}"
+    prometheus.io/path: "/metrics"
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.otlp.grpcPort }}
+          http:
+            endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.otlp.httpPort }}
+    processors:
+      batch:
+        send_batch_size: 10000
+        timeout: 10s
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      resourcedetection:
+        detectors:
+          - env
+          - system
+        timeout: 5s
+        override: false
+    exporters:
+      prometheus:
+        endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.prometheus.port }}
+        namespace: {{ .Values.opentelemetry.collector.prometheus.namespace }}
+        const_labels:
+          collector_mode: sidecar
+          metrics_source: otel_collector
+        resource_to_telemetry_conversion:
+          enabled: true
+      debug:
+        verbosity: basic
+        sampling_initial: 5
+        sampling_thereafter: 200
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    service:
+      extensions:
+        - health_check
+      pipelines:
+        metrics:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            - resourcedetection
+            - batch
+          exporters:
+            - prometheus
+            - debug
+        traces:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            - resourcedetection
+            - batch
+          exporters:
+            - debug
+      telemetry:
+        logs:
+          level: info
+        metrics:
+          address: 0.0.0.0:8888
+{{- end }}
+
+{{/*
+Instrumentation CR manifest for use in the CRD readiness job
+*/}}
+{{- define "mlrun-ce.otel.instrumentation.manifest" -}}
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: {{ include "mlrun-ce.otel.instrumentation.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+spec:
+  propagators:
+    {{- toYaml .Values.opentelemetry.instrumentation.propagators | nindent 4 }}
+  sampler:
+    type: {{ .Values.opentelemetry.instrumentation.sampler.type }}
+    argument: {{ .Values.opentelemetry.instrumentation.sampler.argument | quote }}
+  env:
+    - name: OTEL_SERVICE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.labels['app.kubernetes.io/name']
+    - name: OTEL_RESOURCE_ATTRIBUTES
+      value: >-
+        k8s.namespace.name=$(OTEL_RESOURCE_ATTRIBUTES_NAMESPACE),
+        k8s.pod.name=$(OTEL_RESOURCE_ATTRIBUTES_POD_NAME),
+        k8s.container.name=$(OTEL_RESOURCE_ATTRIBUTES_CONTAINER_NAME),
+        service.namespace=$(OTEL_RESOURCE_ATTRIBUTES_NAMESPACE)
+    - name: OTEL_RESOURCE_ATTRIBUTES_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: OTEL_RESOURCE_ATTRIBUTES_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: OTEL_RESOURCE_ATTRIBUTES_CONTAINER_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: OTEL_METRICS_EXPORTER
+      value: otlp
+    - name: OTEL_TRACES_EXPORTER
+      value: otlp
+    - name: OTEL_LOGS_EXPORTER
+      value: none
+  {{- if .Values.opentelemetry.instrumentation.python.enabled }}
+  python:
+    image: {{ .Values.opentelemetry.instrumentation.python.image.repository }}:{{ .Values.opentelemetry.instrumentation.python.image.tag }}
+    resourceRequirements:
+      {{- toYaml .Values.opentelemetry.instrumentation.python.resources | nindent 6 }}
+    env:
+      - name: OTEL_PYTHON_LOG_CORRELATION
+        value: "true"
+      - name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED
+        value: "false"
+      - name: OTEL_PYTHON_DISABLED_INSTRUMENTATIONS
+        value: ""
+  {{- end }}
+  {{- if .Values.opentelemetry.instrumentation.java.enabled }}
+  java:
+    image: {{ .Values.opentelemetry.instrumentation.java.image.repository }}:{{ .Values.opentelemetry.instrumentation.java.image.tag }}
+    resourceRequirements:
+      {{- toYaml .Values.opentelemetry.instrumentation.java.resources | nindent 6 }}
+    env:
+      - name: OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED
+        value: "true"
+  {{- end }}
+{{- end }}

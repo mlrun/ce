@@ -1,102 +1,14 @@
-{{- if .Values.opentelemetry.collector.enabled }}
-apiVersion: opentelemetry.io/v1beta1
-kind: OpenTelemetryCollector
-metadata:
-  name: {{ include "mlrun-ce.otel.collector.fullname" . }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
-  annotations:
-    # Delay collector CR creation until after CRDs are installed by the operator
-    helm.sh/hook: post-install,post-upgrade
-    helm.sh/hook-weight: "10"
-spec:
-  mode: {{ .Values.opentelemetry.collector.mode }}
-  resources:
-    {{- toYaml .Values.opentelemetry.collector.resources | nindent 4 }}
-  # Pod annotations for Prometheus scraping
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "{{ .Values.opentelemetry.collector.prometheus.port }}"
-    prometheus.io/path: "/metrics"
-  config:
-    receivers:
-      otlp:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.otlp.grpcPort }}
-          http:
-            endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.otlp.httpPort }}
+{{/*
+OpenTelemetryCollector CR is created by the crd-readiness-job.yaml via a Helm post-install/post-upgrade hook.
+This solves the race condition between the OpenTelemetry Operator starting up and registering its CRDs,
+and Helm trying to create this CR.
 
-    processors:
-      # Batch processor for efficient metric export
-      batch:
-        send_batch_size: 10000
-        timeout: 10s
-      # Memory limiter to prevent OOM
-      memory_limiter:
-        check_interval: 1s
-        limit_percentage: 80
-        spike_limit_percentage: 25
-      # Resource detection for Kubernetes metadata
-      resourcedetection:
-        detectors:
-          - env
-          - system
-        timeout: 5s
-        override: false
+The actual CR manifest is defined in _helpers.tpl as "mlrun-ce.otel.collector.manifest" and is applied
+by the job after it confirms the CRD is available.
 
-    exporters:
-      # Prometheus exporter for metrics - scraped by Prometheus
-      prometheus:
-        endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.prometheus.port }}
-        # Metric namespace prefix helps distinguish OTEL-collected metrics
-        # from directly-scraped metrics in Prometheus queries
-        namespace: {{ .Values.opentelemetry.collector.prometheus.namespace }}
-        const_labels:
-          collector_mode: sidecar
-          metrics_source: otel_collector
-        resource_to_telemetry_conversion:
-          enabled: true
-      # Debug exporter for troubleshooting (logs to stdout)
-      debug:
-        verbosity: basic
-        sampling_initial: 5
-        sampling_thereafter: 200
-
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
-
-    service:
-      extensions:
-        - health_check
-      pipelines:
-        # Metrics pipeline: OTLP -> processing -> Prometheus export
-        metrics:
-          receivers:
-            - otlp
-          processors:
-            - memory_limiter
-            - resourcedetection
-            - batch
-          exporters:
-            - prometheus
-            - debug
-        # Traces pipeline: OTLP -> processing -> debug (no trace backend configured yet)
-        traces:
-          receivers:
-            - otlp
-          processors:
-            - memory_limiter
-            - resourcedetection
-            - batch
-          exporters:
-            - debug
-      telemetry:
-        logs:
-          level: info
-        metrics:
-          address: 0.0.0.0:8888
-{{- end }}
+To see the CR configuration, check:
+- templates/_helpers.tpl: defines the manifest
+- templates/opentelemetry/crd-readiness-job.yaml: creates the CR
+- values.yaml: opentelemetry.collector.* settings
+*/}}
 

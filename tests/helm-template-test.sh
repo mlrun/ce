@@ -122,34 +122,40 @@ assert_not_renders() {
 # ============================================================================
 
 test_otel_collector_default() {
-    log_test "OpenTelemetry Collector - Enabled"
+    log_test "OpenTelemetry Collector - Enabled (via CRD Readiness Job)"
 
     local output
-    output=$(render_template "templates/opentelemetry/collector.yaml" \
+    # The collector CR is now created by the crd-readiness-job, not directly
+    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.collector.enabled=true)
 
-    assert_renders "$output" "Collector CR renders"
-    assert_contains "$output" "kind: OpenTelemetryCollector" "Has correct kind"
+    assert_renders "$output" "CRD Readiness Job renders"
+    assert_contains "$output" "kind: Job" "Has correct kind"
+    assert_contains "$output" "kind: OpenTelemetryCollector" "Job contains OpenTelemetryCollector CR"
     assert_contains "$output" "mode: sidecar" "Uses sidecar mode"
     assert_contains "$output" "prometheus:" "Has Prometheus exporter"
     assert_contains "$output" "endpoint: 0.0.0.0:8889" "Prometheus on port 8889"
     assert_contains "$output" "otlp:" "Has OTLP receiver"
-    assert_contains "$output" "helm.sh/hook: post-install,post-upgrade" "Has Helm hooks"
+    assert_contains "$output" "helm.sh/hook" "Has Helm hooks"
+    assert_contains "$output" "post-install,post-upgrade" "Has correct hook triggers"
+    assert_contains "$output" "upgradeStrategy: automatic" "Has upgradeStrategy"
+    assert_contains "$output" "managementState: managed" "Has managementState"
 }
 
 test_otel_collector_disabled() {
     log_test "OpenTelemetry Collector - Disabled (default)"
 
-    assert_not_renders "templates/opentelemetry/collector.yaml" \
-        "Collector CR does not render when disabled (default)"
+    # When disabled, the crd-readiness-job should not render
+    assert_not_renders "templates/opentelemetry/crd-readiness-job.yaml" \
+        "CRD Readiness Job does not render when collector disabled (default)"
 }
 
 test_otel_collector_resources() {
     log_test "OpenTelemetry Collector - Custom resources"
 
     local output
-    output=$(render_template "templates/opentelemetry/collector.yaml" \
+    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.collector.enabled=true \
         --set opentelemetry.collector.resources.requests.cpu=100m \
@@ -164,15 +170,15 @@ test_otel_collector_resources() {
 }
 
 test_otel_instrumentation_default() {
-    log_test "OpenTelemetry Instrumentation - Enabled"
+    log_test "OpenTelemetry Instrumentation - Enabled (via CRD Readiness Job)"
 
     local output
-    output=$(render_template "templates/opentelemetry/instrumentation.yaml" \
+    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.instrumentation.enabled=true)
 
-    assert_renders "$output" "Instrumentation CR renders"
-    assert_contains "$output" "kind: Instrumentation" "Has correct kind"
+    assert_renders "$output" "CRD Readiness Job renders for Instrumentation"
+    assert_contains "$output" "kind: Instrumentation" "Job contains Instrumentation CR"
     assert_contains "$output" "tracecontext" "Has tracecontext propagator"
     assert_contains "$output" "baggage" "Has baggage propagator"
     assert_contains "$output" "parentbased_traceidratio" "Has sampler type"
@@ -183,15 +189,16 @@ test_otel_instrumentation_default() {
 test_otel_instrumentation_disabled() {
     log_test "OpenTelemetry Instrumentation - Disabled (default)"
 
-    assert_not_renders "templates/opentelemetry/instrumentation.yaml" \
-        "Instrumentation CR does not render when disabled (default)"
+    # When both collector and instrumentation are disabled, the job should not render
+    assert_not_renders "templates/opentelemetry/crd-readiness-job.yaml" \
+        "CRD Readiness Job does not render when instrumentation disabled (default)"
 }
 
 test_otel_instrumentation_java_enabled() {
     log_test "OpenTelemetry Instrumentation - Java enabled"
 
     local output
-    output=$(render_template "templates/opentelemetry/instrumentation.yaml" \
+    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.instrumentation.enabled=true \
         --set opentelemetry.instrumentation.java.enabled=true)
@@ -213,6 +220,8 @@ test_otel_rbac_default() {
     assert_contains "$output" "kind: Role" "Has Role"
     assert_contains "$output" "kind: RoleBinding" "Has RoleBinding"
     assert_contains "$output" "name: otel-collector" "Has correct name"
+    assert_contains "$output" "kind: ClusterRole" "Has ClusterRole for CRD access"
+    assert_contains "$output" "otel-cr-creator" "Has CR creator ServiceAccount"
 }
 
 test_otel_rbac_disabled() {
@@ -256,14 +265,9 @@ test_jupyter_no_otel_annotations_when_disabled() {
 test_admin_values_otel() {
     log_test "Admin installation - OTEL operator enabled, CRs disabled"
 
-    # Collector should not render
-    assert_not_renders "templates/opentelemetry/collector.yaml" \
-        "Collector CR not rendered with admin values" \
-        -f "${CHART_DIR}/admin_installation_values.yaml"
-
-    # Instrumentation should not render
-    assert_not_renders "templates/opentelemetry/instrumentation.yaml" \
-        "Instrumentation CR not rendered with admin values" \
+    # CRD readiness job should not render when CRs are disabled
+    assert_not_renders "templates/opentelemetry/crd-readiness-job.yaml" \
+        "CRD Readiness Job not rendered with admin values" \
         -f "${CHART_DIR}/admin_installation_values.yaml"
 }
 
@@ -271,17 +275,13 @@ test_non_admin_values_otel() {
     log_test "Non-admin installation - OTEL CRs enabled"
 
     local output
-    output=$(render_template "templates/opentelemetry/collector.yaml" \
+    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
         --set global.registry.url=test.io \
         -f "${CHART_DIR}/non_admin_installation_values.yaml")
 
-    assert_renders "$output" "Collector CR renders with non-admin values"
-
-    output=$(render_template "templates/opentelemetry/instrumentation.yaml" \
-        --set global.registry.url=test.io \
-        -f "${CHART_DIR}/non_admin_installation_values.yaml")
-
-    assert_renders "$output" "Instrumentation CR renders with non-admin values"
+    assert_renders "$output" "CRD Readiness Job renders with non-admin values"
+    assert_contains "$output" "kind: OpenTelemetryCollector" "Has Collector CR"
+    assert_contains "$output" "kind: Instrumentation" "Has Instrumentation CR"
 }
 
 test_namespace_label_enabled() {
@@ -293,10 +293,11 @@ test_namespace_label_enabled() {
         --set opentelemetry.namespaceLabel.enabled=true \
         --set opentelemetry.collector.enabled=true)
 
-    assert_renders "$output" "Namespace label renders"
-    assert_contains "$output" "kind: Namespace" "Has correct kind"
+    assert_renders "$output" "Namespace label job renders"
+    assert_contains "$output" "kind: Job" "Has correct kind (Job)"
+    assert_contains "$output" "helm.sh/hook" "Has post-install hook annotation"
+    assert_contains "$output" "kubectl label namespace" "Has kubectl label command"
     assert_contains "$output" "opentelemetry.io/inject" "Has OTEL inject label key"
-    assert_contains "$output" '"enabled"' "Has OTEL inject label value"
 }
 
 test_namespace_label_disabled() {
@@ -322,7 +323,7 @@ test_non_admin_namespace_label_enabled() {
         --set global.registry.url=test.io \
         -f "${CHART_DIR}/non_admin_installation_values.yaml")
 
-    assert_renders "$output" "Namespace label renders with non-admin values"
+    assert_renders "$output" "Namespace label job renders with non-admin values"
     assert_contains "$output" "opentelemetry.io/inject" "Has OTEL inject label"
 }
 
