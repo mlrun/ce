@@ -23,12 +23,27 @@ global:
 # =============================================================================
 # S3-compatible storage configuration
 # These credentials are used by MLRun, Jupyter, and Kubeflow Pipelines
-# to access the S3-compatible storage backend (SeaweedFS)
+# to access the storage backend.
 # =============================================================================
-s3:
-  accessKey: "seaweed"
-  secretKey: "seaweed123"
-  bucket: "mlrun"
+
+# storage.mode selects which backend credentials are injected into the 'storage-credentials' Secret.
+# Options:
+#   s3 (default) - uses storage.s3.accessKey/secretKey/bucket with SeaweedFS endpoint
+#   azure-blob   - uses storage.azure.* fields
+storage:
+  mode: s3
+  s3:
+    accessKey: "seaweed"
+    secretKey: "seaweed123"
+    bucket: "mlrun"
+  azure:
+    containerName: ""
+    connectionString: ""
+    accountName: ""
+    accountKey: ""
+    sasToken: ""
+    clientSecret: ""
+    tenantId: ""
 
 nuclio:
   global:
@@ -146,7 +161,7 @@ mlrun:
       - configMapRef:
           name: mlrun-common-env
       - secretRef:
-          name: s3-credentials
+          name: storage-credentials
           optional: true
       - configMapRef:
           name: mlrun-pipelines-config
@@ -261,7 +276,7 @@ jupyterNotebook:
         name: jupyter-common-env
         optional: true
     - secretRef:
-        name: s3-credentials
+        name: storage-credentials
         optional: true
   persistence:
     enabled: true
