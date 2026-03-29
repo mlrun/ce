@@ -151,24 +151,24 @@ S3 Service Port - returns the port for pipeline config
 {{- end -}}
 
 {{/*
-S3 Access Key - uses top-level s3.accessKey for all components (MLRun, Jupyter, Pipelines)
+S3 Access Key - uses top-level s3.storage.accessKey for all components (MLRun, Jupyter, Pipelines)
 */}}
 {{- define "mlrun-ce.s3.accessKey" -}}
-{{- .Values.s3.accessKey -}}
+{{- .Values.storage.s3.accessKey -}}
 {{- end -}}
 
 {{/*
-S3 Secret Key - uses top-level s3.secretKey for all components (MLRun, Jupyter, Pipelines)
+S3 Secret Key - uses top-level s3.storage.secretKey for all components (MLRun, Jupyter, Pipelines)
 */}}
 {{- define "mlrun-ce.s3.secretKey" -}}
-{{- .Values.s3.secretKey -}}
+{{- .Values.storage.s3.secretKey -}}
 {{- end -}}
 
 {{/*
-S3 Bucket - uses top-level s3.bucket for all components
+S3 Bucket - uses top-level s3.storage.bucket for all components
 */}}
 {{- define "mlrun-ce.s3.bucket" -}}
-{{- .Values.s3.bucket -}}
+{{- .Values.storage.s3.bucket -}}
 {{- end -}}
 
 {{/*
@@ -182,6 +182,71 @@ Legacy Minio Service URL - kept for backward compatibility
 {{- end -}}
 
 {{/*
+=============================================================================
+Storage Path Helpers
+Handles both S3 and Azure Blob storage backends
+=============================================================================
+*/}}
+
+{{- define "mlrun-ce.httpdb.realPath" -}}
+{{- if eq .Values.storage.mode "azure-blob" -}}
+az://
+{{- else -}}
+s3://
+{{- end -}}
+{{- end -}}
+
+{{- define "mlrun-ce.artifactPath" -}}
+{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $container := .Values.storage.azure.containerName | default "" -}}
+{{- if eq .Values.storage.mode "azure-blob" -}}
+az://{{ $container }}/projects/{{ `{{run.project}}` }}/artifacts
+{{- else -}}
+s3://{{ $bucket }}/projects/{{ `{{run.project}}` }}/artifacts
+{{- end -}}
+{{- end -}}
+
+{{- define "mlrun-ce.featureStore.dataPrefix" -}}
+{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $container := .Values.storage.azure.containerName | default "" -}}
+{{- if eq .Values.storage.mode "azure-blob" -}}
+az://{{ $container }}/projects/{project}/FeatureStore/{name}/{kind}
+{{- else -}}
+s3://{{ $bucket }}/projects/{project}/FeatureStore/{name}/{kind}
+{{- end -}}
+{{- end -}}
+
+{{- define "mlrun-ce.model-endpoint.monitoring.userSpace" -}}
+{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $container := .Values.storage.azure.containerName | default "" -}}
+{{- if eq .Values.storage.mode "azure-blob" -}}
+az://{{ $container }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+{{- else -}}
+s3://{{ $bucket }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+{{- end -}}
+{{- end -}}
+
+{{- define "mlrun-ce.model-endpoint.monitoring.application" -}}
+{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $container := .Values.storage.azure.containerName | default "" -}}
+{{- if eq .Values.storage.mode "azure-blob" -}}
+az://{{ $container }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
+{{- else -}}
+s3://{{ $bucket }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
+{{- end -}}
+{{- end -}}
+
+{{- define "mlrun-ce.model-endpoint.monitoring.default" -}}
+{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $container := .Values.storage.azure.containerName | default "" -}}
+{{- if eq .Values.storage.mode "azure-blob" -}}
+az://{{ $container }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+{{- else -}}
+s3://{{ $bucket }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
+{{- end -}}
+{{- end -}}
+
+{{/*
 MLRun storage auto mount params
 Global toggle is for fast toggling between on-prem/standalone and s3 cases
 Can be overriden if params are explicitly specified
@@ -191,7 +256,7 @@ Uses SeaweedFS as the storage backend
   {{- if .Values.mlrun.storageAutoMountParams -}}
     {{ .Values.mlrun.storageAutoMountParams }}
   {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
-    "secret_name=s3-credentials"
+    "secret_name=storage-credentials"
   {{- else -}}
     "non_anonymous=True"
   {{- end -}}

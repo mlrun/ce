@@ -13,10 +13,10 @@ data:
       bucket: "{{ include "mlrun-ce.s3.bucket" . }}"
       insecure: true
       accessKeySecret:
-        name: mlpipeline-minio-artifact
+        name: mlpipeline-seaweedfs-artifact
         key: accesskey
       secretKeySecret:
-        name: mlpipeline-minio-artifact
+        name: mlpipeline-seaweedfs-artifact
         key: secretkey
   executor: |
     imagePullPolicy: IfNotPresent
