@@ -371,6 +371,47 @@ entries:
     - https://github.com/mlrun/ce/releases/download/mlrun-ce-0.11.0-rc1/mlrun-ce-0.11.0-rc1.tgz
     version: 0.11.0-rc1
   - apiVersion: v1
+    created: "2026-03-29T07:23:21.138550207Z"
+    dependencies:
+    - name: nuclio
+      repository: https://nuclio.github.io/nuclio/charts
+      version: 0.21.9
+    - condition: mlrun.enabled
+      name: mlrun
+      repository: https://v3io.github.io/helm-charts/stable
+      version: 0.11.18
+    - name: mpi-operator
+      repository: https://v3io.github.io/helm-charts/stable
+      version: 0.6.0
+    - condition: seaweedfs.enabled
+      name: seaweedfs
+      repository: https://seaweedfs.github.io/seaweedfs/helm
+      version: 4.0.407
+    - condition: spark-operator.enabled
+      name: spark-operator
+      repository: https://kubeflow.github.io/spark-operator
+      version: 2.1.0
+    - condition: kube-prometheus-stack.enabled
+      name: kube-prometheus-stack
+      repository: https://prometheus-community.github.io/helm-charts
+      version: 72.1.1
+    - condition: strimzi-kafka-operator.enabled
+      name: strimzi-kafka-operator
+      repository: https://strimzi.io/charts/
+      version: 0.48.0
+    description: MLRun Open Source Stack
+    digest: 0ded733b60c5368b9fac9fd32193b079a33cbb1d370a298d8b441947ec4ee5d9
+    home: https://iguazio.com
+    icon: https://www.iguazio.com/wp-content/uploads/2019/10/Iguazio-Logo.png
+    maintainers:
+    - email: mlrun@iguazio.com
+      name: MLRun
+      url: https://www.mlrun.org/
+    name: mlrun-ce
+    urls:
+    - https://github.com/mlrun/ce/releases/download/mlrun-ce-0.11.0-rc.28/mlrun-ce-0.11.0-rc.28.tgz
+    version: 0.11.0-rc.28
+  - apiVersion: v1
     created: "2026-03-19T12:30:53.128809399Z"
     dependencies:
     - name: nuclio
@@ -7134,4 +7175,4 @@ entries:
     urls:
     - https://github.com/mlrun/ce/releases/download/mlrun-ce-0.0.1/mlrun-ce-0.0.1.tgz
     version: 0.0.1
-generated: "2026-03-19T12:30:53.129524584Z"
+generated: "2026-03-29T07:23:21.139139607Z"
