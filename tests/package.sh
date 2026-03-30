@@ -25,6 +25,42 @@ echo "Installing chart dependencies"
 cd "$dirname"/../charts/mlrun-ce
 helm dependency update
 
+# Patch opentelemetry-operator sub-chart schema: the upstream chart has
+# "examples": "" (string) for featureGates, but JSON Schema requires an array.
+# Helm v4 enforces metaschema validation strictly and rejects the install otherwise.
+echo "Patching opentelemetry-operator schema (featureGates.examples string -> array)..."
+python3 - <<'PYEOF'
+import json, tarfile, os, shutil, tempfile
+
+tgz = "charts/opentelemetry-operator-0.78.1.tgz"
+if not os.path.exists(tgz):
+    print(f"  {tgz} not found, skipping patch")
+    exit(0)
+
+with tempfile.TemporaryDirectory() as tmp:
+    with tarfile.open(tgz, "r:gz") as t:
+        t.extractall(tmp)
+    schema_path = os.path.join(tmp, "opentelemetry-operator", "values.schema.json")
+    with open(schema_path) as f:
+        schema = json.load(f)
+    fg = schema["properties"]["manager"]["properties"]["featureGates"]
+    if isinstance(fg.get("examples"), str):
+        fg["examples"] = [fg["examples"]]
+        with open(schema_path, "w") as f:
+            json.dump(schema, f, indent=2)
+        print("  Patched featureGates.examples")
+    else:
+        print("  Already correct, no patch needed")
+    # Repack without macOS metadata
+    env = os.environ.copy()
+    env["COPYFILE_DISABLE"] = "1"
+    import subprocess
+    subprocess.run(
+        ["tar", "czf", os.path.abspath(tgz), "opentelemetry-operator"],
+        cwd=tmp, env=env, check=True
+    )
+PYEOF
+
 # Create MLRun CE tarball
 helm package .
 exit 0

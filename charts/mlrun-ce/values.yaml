@@ -574,33 +574,25 @@ kube-prometheus-stack:
       # This creates clear separation between direct scraping and OTEL-collected metrics
       additionalScrapeConfigs:
         # Job for scraping OTEL collector sidecars (metrics on port 8889)
-        # Only scrapes pods with prometheus.io/scrape-mode: "otel" or "both"
+        # Discovers any pod with sidecar.opentelemetry.io/inject annotation — no per-function
+        # Prometheus annotations required. Port 8889 is the standard OTel prometheus exporter port.
         - job_name: 'otel-collector-sidecars'
           kubernetes_sd_configs:
             - role: pod
           relabel_configs:
-            # Only scrape pods with OTEL sidecar (port 8889)
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+            # Only scrape pods that have the OTel sidecar injected
+            - source_labels: [__meta_kubernetes_pod_annotation_sidecar_opentelemetry_io_inject]
               action: keep
-              regex: "8889"
-            # Only scrape if scrape-mode is "otel" or "both" (or legacy scrape=true with port 8889)
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape_mode]
-              action: keep
-              regex: (otel|both|)
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-              action: keep
-              regex: true
-            # Set metrics path
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+              regex: .+
+            # Use port 8889 (OTel prometheus exporter) regardless of what the pod exposes
+            - source_labels: [__address__]
               action: replace
-              target_label: __metrics_path__
-              regex: (.+)
-            # Set target address with port
-            - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
-              action: replace
-              regex: ([^:]+)(?::\d+)?;(\d+)
-              replacement: $1:$2
+              regex: ([^:]+)(?::\d+)?
+              replacement: $1:8889
               target_label: __address__
+            # Metrics path is always /metrics for the OTel prometheus exporter
+            - target_label: __metrics_path__
+              replacement: /metrics
             # Add kubernetes labels
             - action: labelmap
               regex: __meta_kubernetes_pod_label_(.+)
@@ -815,9 +807,11 @@ opentelemetry-operator:
   manager:
     # Collector image used by the operator when creating collectors
     collectorImage:
-      repository: otel/opentelemetry-collector
-      tag: 0.116.0
-    # Auto-instrumentation images
+      # Using contrib distribution pinned to 0.108.0 — versions 0.109+ use a dynamically linked
+      # binary in a distroless image that lacks /lib64/ld-linux-x86-64.so.2 and fails to exec.
+      repository: otel/opentelemetry-collector-contrib
+      tag: 0.108.0
+    # Auto-instrumentation images (all fields required by the sub-chart schema)
     autoInstrumentationImage:
       python:
         repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python
@@ -825,6 +819,18 @@ opentelemetry-operator:
       java:
         repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
         tag: 2.10.0
+      nodejs:
+        repository: ""
+        tag: ""
+      dotnet:
+        repository: ""
+        tag: ""
+      go:
+        repository: ""
+        tag: ""
+      apacheHttpd:
+        repository: ""
+        tag: ""
     # Feature gates as string (comma-separated)
     featureGates: ""
     resources:

@@ -496,12 +496,9 @@ spec:
   mode: {{ .Values.opentelemetry.collector.mode }}
   upgradeStrategy: automatic
   managementState: managed
+  image: {{ (index .Values "opentelemetry-operator").manager.collectorImage.repository }}:{{ (index .Values "opentelemetry-operator").manager.collectorImage.tag }}
   resources:
     {{- toYaml .Values.opentelemetry.collector.resources | nindent 4 }}
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "{{ .Values.opentelemetry.collector.prometheus.port }}"
-    prometheus.io/path: "/metrics"
   config:
     receivers:
       otlp:
