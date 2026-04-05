@@ -133,7 +133,7 @@ test_otel_collector_default() {
     assert_renders "$output" "CRD Readiness Job renders"
     assert_contains "$output" "kind: Job" "Has correct kind"
     assert_contains "$output" "kind: OpenTelemetryCollector" "Job contains OpenTelemetryCollector CR"
-    assert_contains "$output" "mode: sidecar" "Uses sidecar mode"
+    assert_contains "$output" "mode: deployment" "Uses deployment mode"
     assert_contains "$output" "prometheus:" "Has Prometheus exporter"
     assert_contains "$output" "endpoint: 0.0.0.0:8889" "Prometheus on port 8889"
     assert_contains "$output" "otlp:" "Has OTLP receiver"
@@ -231,8 +231,8 @@ test_otel_rbac_disabled() {
         "RBAC does not render when OTEL disabled (default)"
 }
 
-test_jupyter_otel_annotations() {
-    log_test "Jupyter Deployment - OTEL annotations when enabled"
+test_jupyter_otel_labels() {
+    log_test "Jupyter Deployment - OTel label applied when enabled"
 
     local output
     output=$(render_template "templates/jupyter-notebook/deployment.yaml" \
@@ -240,22 +240,19 @@ test_jupyter_otel_annotations() {
         --set opentelemetry.collector.enabled=true \
         --set opentelemetry.instrumentation.enabled=true)
 
-    assert_contains "$output" "sidecar.opentelemetry.io/inject:" "Has sidecar injection annotation"
-    assert_contains "$output" "instrumentation.opentelemetry.io/inject-python:" "Has Python instrumentation annotation"
-    assert_contains "$output" 'prometheus.io/scrape: "true"' "Has Prometheus scrape annotation"
-    assert_contains "$output" 'prometheus.io/scrape-mode:' "Has Prometheus scrape-mode annotation"
-    assert_contains "$output" 'prometheus.io/port: "8889"' "Has Prometheus port annotation"
+    assert_contains "$output" 'mlrun.io/otel: "true"' "Has OTel pod label"
+    assert_not_contains "$output" "sidecar.opentelemetry.io/inject:" "No sidecar annotation (deployment mode)"
+    assert_not_contains "$output" "prometheus.io/scrape:" "No per-pod Prometheus annotation (collector scrapes)"
 }
 
-test_jupyter_no_otel_annotations_when_disabled() {
-    log_test "Jupyter Deployment - No OTEL annotations when disabled (default)"
+test_jupyter_no_otel_label_when_disabled() {
+    log_test "Jupyter Deployment - No OTel label when disabled (default)"
 
     local output
     output=$(render_template "templates/jupyter-notebook/deployment.yaml" \
         --set global.registry.url=test.io)
 
-    assert_not_contains "$output" "sidecar.opentelemetry.io/inject:" "No sidecar injection when disabled (default)"
-    assert_not_contains "$output" "instrumentation.opentelemetry.io/inject-python:" "No instrumentation when disabled (default)"
+    assert_not_contains "$output" 'mlrun.io/otel' "No OTel label when disabled (default)"
 }
 
 # ============================================================================
@@ -298,6 +295,20 @@ test_namespace_label_enabled() {
     assert_contains "$output" "helm.sh/hook" "Has post-install hook annotation"
     assert_contains "$output" "kubectl label namespace" "Has kubectl label command"
     assert_contains "$output" "opentelemetry.io/inject" "Has OTEL inject label key"
+}
+
+test_namespace_label_with_instrumentation_annotation() {
+    log_test "Namespace Label - Instrumentation annotation added when instrumentation enabled"
+
+    local output
+    output=$(render_template "templates/opentelemetry/namespace-label.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.namespaceLabel.enabled=true \
+        --set opentelemetry.collector.enabled=true \
+        --set opentelemetry.instrumentation.enabled=true)
+
+    assert_contains "$output" "kubectl annotate namespace" "Has kubectl annotate command"
+    assert_contains "$output" "instrumentation.opentelemetry.io/inject-python" "Has Python instrumentation namespace annotation"
 }
 
 test_namespace_label_disabled() {
@@ -362,16 +373,16 @@ test_prometheus_otel_scrape_config() {
         local decoded
         decoded=$(echo "$secret_data" | base64 -d 2>/dev/null || true)
 
-        if echo "$decoded" | grep -q "otel-collector-sidecars"; then
+        if echo "$decoded" | grep -q "otel-collector"; then
             log_pass "Has OTEL collector scrape job"
         else
             log_fail "Has OTEL collector scrape job - not found in decoded config"
         fi
 
-        if echo "$decoded" | grep -q "prometheus_io_port"; then
-            log_pass "Has pod annotation relabeling"
+        if echo "$decoded" | grep -q "opentelemetry-collector"; then
+            log_pass "Has collector pod label selector"
         else
-            log_fail "Has pod annotation relabeling - not found in decoded config"
+            log_fail "Has collector pod label selector - not found in decoded config"
         fi
     else
         log_fail "Prometheus scrape config secret not found"
@@ -435,8 +446,8 @@ main() {
     echo "========================================"
     echo "Jupyter OTEL Integration Tests"
     echo "========================================"
-    test_jupyter_otel_annotations
-    test_jupyter_no_otel_annotations_when_disabled
+    test_jupyter_otel_labels
+    test_jupyter_no_otel_label_when_disabled
 
     echo ""
     echo "========================================"
@@ -453,6 +464,7 @@ main() {
     test_namespace_label_disabled
     test_admin_namespace_label_disabled
     test_non_admin_namespace_label_enabled
+    test_namespace_label_with_instrumentation_annotation
     test_otel_operator_namespace_selector
 
     echo ""

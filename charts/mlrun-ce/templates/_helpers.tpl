@@ -423,7 +423,7 @@ OpenTelemetry helpers
 OpenTelemetry Collector name
 */}}
 {{- define "mlrun-ce.otel.collector.name" -}}
-{{- default "otel-collector" .Values.opentelemetry.collector.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- default "otel" .Values.opentelemetry.collector.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
@@ -433,7 +433,7 @@ OpenTelemetry Collector fullname
 {{- if .Values.opentelemetry.collector.fullnameOverride }}
 {{- .Values.opentelemetry.collector.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
-{{- $name := default "otel-collector" .Values.opentelemetry.collector.nameOverride }}
+{{- $name := default "otel" .Values.opentelemetry.collector.nameOverride }}
 {{- if contains $name .Release.Name }}
 {{- .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -526,7 +526,7 @@ spec:
         endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.prometheus.port }}
         namespace: {{ .Values.opentelemetry.collector.prometheus.namespace }}
         const_labels:
-          collector_mode: sidecar
+          collector_mode: deployment
           metrics_source: otel_collector
         resource_to_telemetry_conversion:
           enabled: true
@@ -579,6 +579,8 @@ metadata:
   labels:
     {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
 spec:
+  exporter:
+    endpoint: http://{{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.httpPort }}
   propagators:
     {{- toYaml .Values.opentelemetry.instrumentation.propagators | nindent 4 }}
   sampler:
@@ -589,24 +591,6 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: metadata.labels['app.kubernetes.io/name']
-    - name: OTEL_RESOURCE_ATTRIBUTES
-      value: >-
-        k8s.namespace.name=$(OTEL_RESOURCE_ATTRIBUTES_NAMESPACE),
-        k8s.pod.name=$(OTEL_RESOURCE_ATTRIBUTES_POD_NAME),
-        k8s.container.name=$(OTEL_RESOURCE_ATTRIBUTES_CONTAINER_NAME),
-        service.namespace=$(OTEL_RESOURCE_ATTRIBUTES_NAMESPACE)
-    - name: OTEL_RESOURCE_ATTRIBUTES_NAMESPACE
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.namespace
-    - name: OTEL_RESOURCE_ATTRIBUTES_POD_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.name
-    - name: OTEL_RESOURCE_ATTRIBUTES_CONTAINER_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: metadata.name
     - name: OTEL_METRICS_EXPORTER
       value: otlp
     - name: OTEL_TRACES_EXPORTER
@@ -624,7 +608,7 @@ spec:
       - name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED
         value: "false"
       - name: OTEL_PYTHON_DISABLED_INSTRUMENTATIONS
-        value: ""
+        value: "aws_lambda"
   {{- end }}
   {{- if .Values.opentelemetry.instrumentation.java.enabled }}
   java:
@@ -635,4 +619,13 @@ spec:
       - name: OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED
         value: "true"
   {{- end }}
+{{- end }}
+..
+{{/*
+OTel pod label — marks a pod as OTel-monitored for metric enrichment and discovery.
+Namespace-level instrumentation annotation (set by namespace-label job) handles Python auto-instrumentation.
+Wrap usage with: {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+*/}}
+{{- define "mlrun-ce.otel.podLabels" -}}
+mlrun.io/otel: "true"
 {{- end }}

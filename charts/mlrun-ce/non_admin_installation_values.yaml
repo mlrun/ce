@@ -88,8 +88,8 @@ opentelemetry-operator:
   enabled: false
 
 # OpenTelemetry CRs - enabled for user namespace
-# The namespace will be labeled with opentelemetry.io/inject=enabled
-# so the operator can inject sidecars into pods
+# The namespace will be labeled and annotated for OTel deployment-mode collection
+# and namespace-wide Python auto-instrumentation.
 opentelemetry:
   namespaceLabel:
     enabled: true

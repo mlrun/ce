@@ -94,6 +94,13 @@ nuclio:
       kind: mlrun
       synchronizationInterval: 10m
       apiAddress: http://mlrun-api-chief:8080/api
+    # Default labels applied to all Nuclio function pods.
+    # mlrun.io/otel marks function pods for OTel metric enrichment; the namespace-level
+    # instrumentation annotation handles Python auto-instrumentation automatically.
+    functionDefaults:
+      metadata:
+        labels:
+          mlrun.io/otel: "true"
 
 mlrun:
   # set the type of filesystem to use: filesystem, s3
@@ -173,6 +180,13 @@ mlrun:
           name: mlrun-override-env
           optional: true
     extraPersistentVolumeMounts: ~
+    # Explicitly expose the Docker image's PYTHONPATH as a K8s env var so that the
+    # OpenTelemetry operator's PYTHONPATH injection (PYTHONPATH=/otel-auto-instrumentation-python:$(PYTHONPATH))
+    # can expand $(PYTHONPATH) correctly. Without this, K8s env var substitution resolves
+    # $(PYTHONPATH) to an empty string (it cannot see Docker image ENV vars), and the
+    # mlrun `services` package path is lost, crashing the API on startup.
+    extraEnvKeyValue:
+      PYTHONPATH: "/mlrun/server/py:/mlrun/server/py/schemas/proto"
 
     # Set mlrun api workers count by setting the minReplicas value.
     # This is recommended for production environments running at high scale.
@@ -323,6 +337,8 @@ seaweedfs:
 
   # Master server - metadata management
   master:
+    podLabels:
+      mlrun.io/otel: "true"
     port: 9333
     # Storage: use PVC instead of default hostPath
     data:
@@ -336,6 +352,8 @@ seaweedfs:
 
   # Volume server - actual data storage
   volume:
+    podLabels:
+      mlrun.io/otel: "true"
     port: 8080
     # Storage: use PVC instead of default hostPath
     dataDirs:
@@ -351,6 +369,8 @@ seaweedfs:
 
   # Filer server - file system interface
   filer:
+    podLabels:
+      mlrun.io/otel: "true"
     port: 8888
     # Storage: use PVC instead of default hostPath
     data:
@@ -368,6 +388,8 @@ seaweedfs:
 
   # S3 API gateway - MLRun connects to this endpoint
   s3:
+    podLabels:
+      mlrun.io/otel: "true"
     enabled: true  # Default is false
     port: 8333
     enableAuth: true  # Default is false
@@ -381,6 +403,8 @@ seaweedfs:
 
   # Admin server - user and policy management UI
   admin:
+    podLabels:
+      mlrun.io/otel: "true"
     enabled: true  # Default is false
     port: 23646
     secret:
@@ -570,30 +594,30 @@ kube-prometheus-stack:
       type: NodePort
       nodePort: 30020
     prometheusSpec:
-      # Additional scrape configs for OpenTelemetry collector sidecars
-      # This creates clear separation between direct scraping and OTEL-collected metrics
+      # Additional scrape configs for OpenTelemetry collector Deployment.
+      # In deployment mode, one collector pod runs per namespace and receives OTLP from all
+      # instrumented pods. Prometheus scrapes only the collector (port 8889), not individual pods.
       additionalScrapeConfigs:
-        # Job for scraping OTEL collector sidecars (metrics on port 8889)
-        # Discovers any pod with sidecar.opentelemetry.io/inject annotation — no per-function
-        # Prometheus annotations required. Port 8889 is the standard OTel prometheus exporter port.
-        - job_name: 'otel-collector-sidecars'
+        # Scrape the OTel Collector Deployment pod.
+        # Discovers pods with app.kubernetes.io/component=opentelemetry-collector label
+        # (applied automatically by the OTel operator to collector pods).
+        - job_name: 'otel-collector'
           kubernetes_sd_configs:
             - role: pod
           relabel_configs:
-            # Only scrape pods that have the OTel sidecar injected
-            - source_labels: [__meta_kubernetes_pod_annotation_sidecar_opentelemetry_io_inject]
+            # Only scrape the OTel collector pod
+            - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
               action: keep
-              regex: .+
-            # Use port 8889 (OTel prometheus exporter) regardless of what the pod exposes
+              regex: opentelemetry-collector
+            # Use port 8889 (OTel prometheus exporter)
             - source_labels: [__address__]
               action: replace
               regex: ([^:]+)(?::\d+)?
               replacement: $1:8889
               target_label: __address__
-            # Metrics path is always /metrics for the OTel prometheus exporter
             - target_label: __metrics_path__
               replacement: /metrics
-            # Add kubernetes labels
+            # Propagate pod labels as metric labels
             - action: labelmap
               regex: __meta_kubernetes_pod_label_(.+)
             - source_labels: [__meta_kubernetes_namespace]
@@ -602,62 +626,10 @@ kube-prometheus-stack:
             - source_labels: [__meta_kubernetes_pod_name]
               action: replace
               target_label: kubernetes_pod_name
-          # Add metric relabeling to identify OTEL-sourced metrics
           metric_relabel_configs:
             - action: replace
               target_label: metrics_source
               replacement: otel_collector
-
-        # Job for direct application scraping (non-OTEL)
-        # Only scrapes pods with prometheus.io/scrape-mode: "direct" or "both"
-        # Excludes OTEL sidecar port (8889)
-        - job_name: 'kubernetes-pods-direct'
-          kubernetes_sd_configs:
-            - role: pod
-          relabel_configs:
-            # Only scrape pods with prometheus.io/scrape=true
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-              action: keep
-              regex: true
-            # Exclude OTEL sidecar port (8889) - those are handled by otel-collector-sidecars job
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
-              action: drop
-              regex: "8889"
-            # Only scrape if scrape-mode is "direct" or "both" or not set (default to direct)
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape_mode]
-              action: keep
-              regex: (direct|both|)
-            # Set metrics path
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
-              action: replace
-              target_label: __metrics_path__
-              regex: (.+)
-              replacement: $1
-            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
-              action: replace
-              target_label: __metrics_path__
-              regex: ()
-              replacement: /metrics
-            # Set target address with port
-            - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
-              action: replace
-              regex: ([^:]+)(?::\d+)?;(\d+)
-              replacement: $1:$2
-              target_label: __address__
-            # Add kubernetes labels
-            - action: labelmap
-              regex: __meta_kubernetes_pod_label_(.+)
-            - source_labels: [__meta_kubernetes_namespace]
-              action: replace
-              target_label: kubernetes_namespace
-            - source_labels: [__meta_kubernetes_pod_name]
-              action: replace
-              target_label: kubernetes_pod_name
-          # Add metric relabeling to identify direct-scraped metrics
-          metric_relabel_configs:
-            - action: replace
-              target_label: metrics_source
-              replacement: direct_scrape
   kube-state-metrics:
     fullnameOverride: state-metrics
 prometheus-node-exporter:
@@ -846,22 +818,23 @@ opentelemetry-operator:
 # These are managed separately from the operator for admin/non-admin split
 # =============================================================================
 opentelemetry:
-  # Namespace label for enabling OpenTelemetry monitoring
-  # The namespace must have this label for the operator to inject sidecars
+  # Namespace label for enabling OpenTelemetry monitoring.
+  # When enabled, the post-install job labels the namespace and also annotates it with
+  # instrumentation.opentelemetry.io/inject-python so all Python pods are auto-instrumented.
   namespaceLabel:
     enabled: false
     key: "opentelemetry.io/inject"
     value: "enabled"
 
-  # OpenTelemetry Collector configuration (SIDECAR mode)
-  # In sidecar mode, the collector is injected into pods via webhook
-  # Not as a standalone deployment
+  # OpenTelemetry Collector configuration (DEPLOYMENT mode)
+  # A single collector Deployment runs per namespace, receiving OTLP from instrumented pods
+  # and exporting metrics to Prometheus.
   collector:
     enabled: false
     nameOverride: ""
     fullnameOverride: ""
-    # SIDECAR mode - collector is injected into pods by the operator
-    mode: sidecar
+    # DEPLOYMENT mode - one collector pod per namespace, not injected as a sidecar
+    mode: deployment
     # Collector sidecar container resources
     resources:
       requests:
@@ -880,13 +853,6 @@ opentelemetry:
     otlp:
       grpcPort: 4317
       httpPort: 4318
-    # Prometheus scrape mode for OTEL-instrumented pods
-    # Options:
-    #   - "direct": Direct Prometheus scraping only (default when OTEL disabled)
-    #   - "otel": Metrics collected via OTEL sidecar only (recommended when OTEL enabled)
-    #   - "both": Both OTEL sidecar and direct scraping (for debugging/transition)
-    # When enabling OTEL, set this to "otel" to prevent duplicate metrics
-    scrapeMode: "direct"
 
   # Instrumentation configuration for auto-instrumentation
   instrumentation:

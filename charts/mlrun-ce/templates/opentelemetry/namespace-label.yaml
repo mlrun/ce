@@ -9,7 +9,7 @@ metadata:
   labels:
 {{ include "mlrun-ce.otel.labels" . | indent 4 }}
   annotations:
-    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-10"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
     "helm.sh/hook-timeout": "120s"
@@ -30,5 +30,11 @@ spec:
         - |
           echo "Labeling namespace {{ .Release.Namespace }} for OpenTelemetry..."
           kubectl label namespace {{ .Release.Namespace }} {{ .Values.opentelemetry.namespaceLabel.key }}={{ .Values.opentelemetry.namespaceLabel.value }} --overwrite
-          echo "Namespace labeled successfully!"
+          {{- if .Values.opentelemetry.instrumentation.enabled }}
+          echo "Annotating namespace for namespace-wide Python auto-instrumentation..."
+          kubectl annotate namespace {{ .Release.Namespace }} \
+            instrumentation.opentelemetry.io/inject-python={{ include "mlrun-ce.otel.instrumentation.fullname" . }} \
+            --overwrite
+          {{- end }}
+          echo "Namespace configured for OpenTelemetry successfully!"
 {{- end -}}

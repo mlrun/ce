@@ -107,20 +107,16 @@ helm --namespace mlrun \
     --set opentelemetry-operator.enabled=true \
     --set opentelemetry.namespaceLabel.enabled=true \
     --set opentelemetry.collector.enabled=true \
-    --set opentelemetry.collector.scrapeMode=otel \
     --set opentelemetry.instrumentation.enabled=true \
     mlrun/mlrun-ce
 ```
 
-> **Important:** When enabling OpenTelemetry, set `opentelemetry.collector.scrapeMode=otel` to collect metrics 
-> via the OTEL sidecar and prevent duplicate metrics. The default is `direct` (for when OTEL is disabled).
-
 The installation will:
 - Deploy the OpenTelemetry Operator
-- Create an OpenTelemetryCollector CR (sidecar mode)
+- Create an OpenTelemetryCollector CR (deployment mode — one collector per namespace)
 - Create an Instrumentation CR for Python auto-instrumentation
-- Label the namespace with `opentelemetry.io/inject=enabled`
-- Configure Prometheus to scrape OTEL sidecar metrics (port 8889)
+- Label and annotate the namespace so all Python pods are auto-instrumented automatically
+- Configure Prometheus to scrape OTEL collector metrics (port 8889)
 
 #### Step 5: Verify OpenTelemetry Installation
 
@@ -140,21 +136,14 @@ kubectl -n mlrun get instrumentations
 kubectl -n mlrun get pods | grep opentelemetry
 ```
 
-#### Step 6: Verify Jupyter has OTEL Sidecar Annotations
+#### Step 6: Verify OTel Pod Labels and Namespace Annotation
 
 ```bash
-kubectl -n mlrun get deployment -l app.kubernetes.io/component=jupyter-notebook \
-    -o jsonpath='{.items[0].spec.template.metadata.annotations}' | jq .
-```
+# Check that the namespace has the instrumentation annotation (enables auto-instrumentation for all Python pods)
+kubectl get namespace mlrun -o jsonpath='{.metadata.annotations}' | jq .
 
-You should see annotations like:
-```json
-{
-  "instrumentation.opentelemetry.io/inject-python": "my-mlrun-otel-instrumentation",
-  "prometheus.io/port": "8889",
-  "prometheus.io/scrape": "true",
-  "sidecar.opentelemetry.io/inject": "my-mlrun-otel-collector"
-}
+# Check pod labels — all chart-managed pods should have mlrun.io/otel=true
+kubectl -n mlrun get pods --show-labels | grep mlrun.io/otel
 ```
 
 ### Installing MLRun-ce on minikube
@@ -185,7 +174,7 @@ Override those [in the normal methods](https://helm.sh/docs/chart_template_guide
 ### Configuring OpenTelemetry (Observability)
 
 MLRun CE includes the OpenTelemetry Operator for collecting metrics and traces from your ML workloads. 
-The operator runs in **sidecar mode**, automatically injecting collector containers into annotated pods.
+The operator runs one collector **Deployment** per namespace. Instrumented pods send OTLP metrics to the collector, which exports them to Prometheus.
 
 > **Note:** OpenTelemetry is **disabled by default**. See below for how to enable it.
 
@@ -212,10 +201,10 @@ kubectl label namespace <your-namespace> opentelemetry.io/inject=enabled
 #### Default Configuration
 
 By default, OpenTelemetry is **disabled**. When enabled, it provides:
-- Namespace labeling for OTEL operator webhook targeting
-- Sidecar collector injection for instrumented pods
-- Python auto-instrumentation for Jupyter notebooks
-- Prometheus metrics export on port 8889
+- A single OTel Collector Deployment per namespace (OTLP receiver → Prometheus exporter on port 8889)
+- Namespace-level Python auto-instrumentation (all Python pods in the namespace are instrumented automatically)
+- `mlrun.io/otel: "true"` label on Jupyter, SeaweedFS, and Nuclio function pods
+- Prometheus scrapes the collector pod (not individual pods)
 
 #### Enabling OpenTelemetry
 
@@ -228,7 +217,6 @@ helm --namespace mlrun install my-mlrun \
     --set opentelemetry-operator.enabled=true \
     --set opentelemetry.namespaceLabel.enabled=true \
     --set opentelemetry.collector.enabled=true \
-    --set opentelemetry.collector.scrapeMode=otel \
     --set opentelemetry.instrumentation.enabled=true \
     mlrun/mlrun-ce
 ```
@@ -240,7 +228,6 @@ helm --namespace mlrun upgrade my-mlrun \
     --set opentelemetry-operator.enabled=true \
     --set opentelemetry.namespaceLabel.enabled=true \
     --set opentelemetry.collector.enabled=true \
-    --set opentelemetry.collector.scrapeMode=otel \
     --set opentelemetry.instrumentation.enabled=true \
     mlrun/mlrun-ce
 ```
@@ -253,13 +240,12 @@ helm --namespace mlrun upgrade my-mlrun \
     --set opentelemetry.collector.enabled=false \
     --set opentelemetry.instrumentation.enabled=false \
     --set opentelemetry.namespaceLabel.enabled=false \
-    --set opentelemetry.collector.scrapeMode=direct \
     mlrun/mlrun-ce
 ```
 
 #### Custom Resource Limits
 
-Configure collector sidecar resources:
+Configure collector resources:
 
 ```bash
 helm --namespace mlrun install my-mlrun \
@@ -282,63 +268,23 @@ helm --namespace mlrun install my-mlrun \
 
 #### Adding OpenTelemetry to Custom Workloads
 
-To instrument your own deployments with the OTEL sidecar and Python auto-instrumentation:
+Python instrumentation is applied **namespace-wide** — any Python pod in the MLRun namespace is automatically instrumented when OTel is enabled. No per-pod annotations are required.
 
-1. Ensure your namespace has the OpenTelemetry label:
-   ```bash
-   kubectl label namespace <your-namespace> opentelemetry.io/inject=enabled
-   ```
-
-2. Add these annotations to your pod spec:
-   ```yaml
-   metadata:
-     annotations:
-       sidecar.opentelemetry.io/inject: "<release-name>-otel-collector"
-       instrumentation.opentelemetry.io/inject-python: "<release-name>-otel-instrumentation"
-       prometheus.io/scrape: "true"
-       prometheus.io/scrape-mode: "otel"
-       prometheus.io/port: "8889"
-   ```
-
-#### Preventing Prometheus/OTEL Metric Overlap
-
-To prevent duplicate metrics when using both Prometheus direct scraping and OpenTelemetry, 
-MLRun CE uses a **scrape-mode** annotation system:
-
-| Scrape Mode | Description | Use Case |
-|-------------|-------------|----------|
-| `direct` | Direct Prometheus scraping only | **Default** - When OTEL is disabled |
-| `otel` | Metrics collected via OTEL sidecar only | **Recommended when OTEL enabled** |
-| `both` | Both OTEL and direct scraping | Debugging/transition only |
-
-> **Note:** The default scrape mode is `direct`. When enabling OpenTelemetry, you must set 
-> `--set opentelemetry.collector.scrapeMode=otel` to collect metrics via the OTEL sidecar.
-
-**How it works:**
-- OTEL-collected metrics have the `mlrun_otel_` prefix and `metrics_source=otel_collector` label
-- Direct-scraped metrics have `metrics_source=direct_scrape` label
-- Prometheus scrape configs filter based on `prometheus.io/scrape-mode` annotation
-
-**Configure scrape mode when enabling OTEL:**
+For pods in other namespaces, annotate the namespace directly:
 ```bash
-helm --namespace mlrun install my-mlrun \
-    --set opentelemetry-operator.enabled=true \
-    --set opentelemetry.collector.enabled=true \
-    --set opentelemetry.collector.scrapeMode=otel \
-    --set opentelemetry.instrumentation.enabled=true \
-    mlrun/mlrun-ce
+kubectl annotate namespace <your-namespace> \
+    instrumentation.opentelemetry.io/inject-python=<release-name>-otel-instrumentation
 ```
 
-**Query metrics by source in Prometheus:**
+The `mlrun.io/otel: "true"` label is applied to: **Jupyter**, **SeaweedFS** (master, volume, filer, s3, admin), and **Nuclio function pods** (via `functionDefaults.metadata.labels`). This label is used for Prometheus metric filtering and enrichment.
+
+**Query OTEL-collected metrics in Prometheus:**
 ```promql
-# OTEL-collected metrics only
-{metrics_source="otel_collector"}
-
-# Direct-scraped metrics only  
-{metrics_source="direct_scrape"}
-
-# OTEL metrics use prefix
+# OTEL metrics use the mlrun_otel_ prefix
 mlrun_otel_http_server_duration_seconds_bucket{...}
+
+# Filter by source
+{metrics_source="otel_collector"}
 ```
 
 #### Split Installation (Admin/Non-Admin)

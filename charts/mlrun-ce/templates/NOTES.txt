@@ -134,25 +134,19 @@ OpenTelemetry Operator is enabled!
 -  Namespace selector: opentelemetry.io/inject=enabled
 {{- if .Values.opentelemetry.collector.enabled }}
 {{- "\n" }}
-OpenTelemetry Collector (sidecar mode):
--  Collector CR: {{ .Release.Name }}-otel-collector
+OpenTelemetry Collector (deployment mode):
+-  Collector CR: {{ include "mlrun-ce.otel.collector.fullname" . }}
 -  Mode: {{ .Values.opentelemetry.collector.mode }}
--  OTLP gRPC endpoint: localhost:{{ .Values.opentelemetry.collector.otlp.grpcPort }} (inside pod)
--  OTLP HTTP endpoint: localhost:{{ .Values.opentelemetry.collector.otlp.httpPort }} (inside pod)
--  Prometheus metrics port: {{ .Values.opentelemetry.collector.prometheus.port }}
--  Prometheus scrape mode: {{ .Values.opentelemetry.collector.scrapeMode }}
-{{- if eq .Values.opentelemetry.collector.scrapeMode "direct" }}
-
-⚠️  WARNING: Scrape mode is "direct" - OTEL sidecar metrics will NOT be collected!
-   To collect metrics via OTEL, reinstall with: --set opentelemetry.collector.scrapeMode=otel
-{{- end }}
+-  OTLP gRPC endpoint: {{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.grpcPort }}
+-  OTLP HTTP endpoint: {{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.httpPort }}
+-  Prometheus metrics port: {{ .Values.opentelemetry.collector.prometheus.port }} (scraped by Prometheus from the collector pod)
 {{- end }}
 {{- if .Values.opentelemetry.instrumentation.enabled }}
 {{- "\n" }}
 OpenTelemetry Auto-Instrumentation:
--  Instrumentation CR: {{ .Release.Name }}-otel-instrumentation
+-  Instrumentation CR: {{ include "mlrun-ce.otel.instrumentation.fullname" . }}
 {{- if .Values.opentelemetry.instrumentation.python.enabled }}
--  Python auto-instrumentation: enabled
+-  Python auto-instrumentation: enabled (namespace-wide via namespace annotation)
 {{- end }}
 {{- if .Values.opentelemetry.instrumentation.java.enabled }}
 -  Java auto-instrumentation: enabled
@@ -160,21 +154,16 @@ OpenTelemetry Auto-Instrumentation:
 {{- end }}
 {{- if .Values.opentelemetry.namespaceLabel.enabled }}
 {{- "\n" }}
-Namespace Label:
--  Namespace {{ .Release.Namespace }} is labeled with: {{ .Values.opentelemetry.namespaceLabel.key }}={{ .Values.opentelemetry.namespaceLabel.value }}
+Namespace OTel configuration:
+-  Label: {{ .Values.opentelemetry.namespaceLabel.key }}={{ .Values.opentelemetry.namespaceLabel.value }}
+{{- if .Values.opentelemetry.instrumentation.enabled }}
+-  Python instrumentation annotation applied to all pods in namespace {{ .Release.Namespace }}
 {{- end }}
+{{- end }}
+{{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
 {{- "\n" }}
-Prometheus Scrape Modes:
--  "otel"   : Metrics collected via OTEL sidecar only (recommended)
--  "direct" : Direct Prometheus scraping only (current: {{ .Values.opentelemetry.collector.scrapeMode }})
--  "both"   : Both methods active (for debugging)
-{{- "\n" }}
-To add OTEL instrumentation to your pods, add these annotations:
-  sidecar.opentelemetry.io/inject: "{{ .Release.Name }}-otel-collector"
-  instrumentation.opentelemetry.io/inject-python: "{{ .Release.Name }}-otel-instrumentation"
-  prometheus.io/scrape: "true"
-  prometheus.io/scrape-mode: "otel"
-  prometheus.io/port: "{{ .Values.opentelemetry.collector.prometheus.port }}"
+Pods labeled with mlrun.io/otel=true: Jupyter, SeaweedFS (master/volume/filer/s3/admin), and Nuclio function pods.
+{{- end }}
 {{- end }}
 
 Happy MLOPSing!!! :]

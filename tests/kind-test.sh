@@ -832,15 +832,15 @@ verify_multi_ns() {
         log_warn "Instrumentation CRD not found - operator may not be installed"
     fi
 
-    # Check if Jupyter pod has OTEL sidecar annotations
+    # Check if Jupyter pod has mlrun.io/otel label (deployment mode - no sidecar injection)
     echo ""
-    log_info "Checking Jupyter deployment for OTEL annotations..."
-    local jupyter_annotations
-    jupyter_annotations=$(kubectl get deployment -n "${NAMESPACE}" -l app.kubernetes.io/component=jupyter-notebook -o jsonpath='{.items[0].spec.template.metadata.annotations}' 2>/dev/null || echo "")
-    if echo "${jupyter_annotations}" | grep -q "sidecar.opentelemetry.io/inject"; then
-        log_info "Jupyter has OTEL sidecar injection annotation"
+    log_info "Checking Jupyter deployment for OTEL pod label..."
+    local jupyter_labels
+    jupyter_labels=$(kubectl get deployment -n "${NAMESPACE}" -l app.kubernetes.io/component=jupyter-notebook -o jsonpath='{.items[0].spec.template.metadata.labels}' 2>/dev/null || echo "")
+    if echo "${jupyter_labels}" | grep -q "mlrun.io/otel"; then
+        log_info "Jupyter has mlrun.io/otel=true pod label (deployment mode)"
     else
-        log_warn "Jupyter does not have OTEL sidecar injection annotation"
+        log_warn "Jupyter does not have mlrun.io/otel label (OTel may be disabled)"
     fi
 }
 
