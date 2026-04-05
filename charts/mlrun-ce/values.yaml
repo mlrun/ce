@@ -632,13 +632,13 @@ kube-prometheus-stack:
               replacement: otel_collector
   kube-state-metrics:
     fullnameOverride: state-metrics
-prometheus-node-exporter:
-  fullnameOverride: node-exporter
-  hostNetwork: false
-  service:
-    port: 9100
-  hostRootFsMount:
-    enabled: false
+  prometheus-node-exporter:
+    fullnameOverride: node-exporter
+    hostNetwork: false
+    service:
+      port: 9100
+    hostRootFsMount:
+      enabled: false
 
 timescaledb:
   enabled: true
