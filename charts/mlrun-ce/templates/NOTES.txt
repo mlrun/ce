@@ -161,7 +161,7 @@ Namespace OTel configuration:
 {{- end }}
 {{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
 {{- "\n" }}
-Pods labeled with mlrun.io/otel=true: Jupyter, SeaweedFS (master/volume/filer/s3/admin), and Nuclio function pods.
+Pods labeled with mlrun.io/otel=true: Jupyter, SeaweedFS (master/volume/filer/s3/admin), TimescaleDB, and Nuclio function pods (via functionDefaults).
 {{- end }}
 {{- end }}
 

@@ -143,6 +143,16 @@ rules:
       - patch
       - update
       - list
+  # Allow rollout restart of instrumented deployments/statefulsets after webhook is ready
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - patch
 ---
 # RoleBinding for the CR creator job
 apiVersion: rbac.authorization.k8s.io/v1

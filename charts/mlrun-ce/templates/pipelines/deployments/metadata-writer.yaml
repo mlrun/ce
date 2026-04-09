@@ -25,9 +25,6 @@ spec:
       labels:
         app: metadata-writer
         application-crd-id: kubeflow-pipelines
-        {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
-        {{- include "mlrun-ce.otel.podLabels" . | nindent 8 }}
-        {{- end }}
     spec:
       containers:
       - env:

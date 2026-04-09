@@ -27,9 +27,6 @@ spec:
       labels:
         application-crd-id: kubeflow-pipelines
         component: metadata-envoy
-        {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
-        {{- include "mlrun-ce.otel.podLabels" . | nindent 8 }}
-        {{- end }}
     spec:
       containers:
       - image: {{ .Values.pipelines.images.metadataEnvoy.repository }}:{{ .Values.pipelines.images.metadataEnvoy.tag }}

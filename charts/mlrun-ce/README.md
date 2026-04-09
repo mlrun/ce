@@ -65,42 +65,16 @@ helm --namespace mlrun \
     mlrun/mlrun-ce
 ```
 
-### Complete Installation with OpenTelemetry (From Scratch)
+### Installing with OpenTelemetry Enabled
 
-This section provides a complete step-by-step guide to install MLRun CE with full OpenTelemetry observability enabled.
+> **Note:** OpenTelemetry is **disabled by default**. Follow the standard [Installing the Chart](#installing-the-chart) steps, adding the OTel flags below.
 
-> **Note:** OpenTelemetry is **disabled by default**. Follow these steps to enable it.
-
-#### Step 1: Create the namespace
-
-```bash
-kubectl create namespace mlrun
-```
-
-#### Step 2: Add the Helm repository
-
-```bash
-helm repo add mlrun https://mlrun.github.io/ce
-helm repo update
-```
-
-#### Step 3: Create the docker registry secret
-
-```bash
-kubectl --namespace mlrun create secret docker-registry registry-credentials \
-    --docker-username <registry-username> \
-    --docker-password <login-password> \
-    --docker-server <server URL, e.g. https://index.docker.io/v1/> \
-    --docker-email <user-email>
-```
-
-#### Step 4: Install MLRun CE with OpenTelemetry Enabled
+To install with OpenTelemetry enabled, append the following flags to the helm install command:
 
 ```bash
 helm --namespace mlrun \
     install my-mlrun \
     --wait \
-    --timeout 15m \
     --set global.registry.url=<registry URL e.g. index.docker.io/iguazio> \
     --set global.registry.secretName=registry-credentials \
     --set opentelemetry-operator.enabled=true \
@@ -110,39 +84,12 @@ helm --namespace mlrun \
     mlrun/mlrun-ce
 ```
 
-The installation will:
-- Deploy the OpenTelemetry Operator
-- Create an OpenTelemetryCollector CR (deployment mode — one collector per namespace)
-- Create an Instrumentation CR for Python auto-instrumentation
-- Label and annotate the namespace so all Python pods are auto-instrumented automatically
-- Configure Prometheus to scrape OTEL collector metrics (port 8889)
-
-#### Step 5: Verify OpenTelemetry Installation
-
-Check that the OpenTelemetry resources are created:
+To verify the OpenTelemetry resources were created:
 
 ```bash
-# Check the namespace label
-kubectl get namespace mlrun --show-labels | grep opentelemetry
-
-# Check the OpenTelemetry Collector CR
 kubectl -n mlrun get opentelemetrycollectors
-
-# Check the Instrumentation CR
 kubectl -n mlrun get instrumentations
-
-# Check that the OTEL operator is running
 kubectl -n mlrun get pods | grep opentelemetry
-```
-
-#### Step 6: Verify OTel Pod Labels and Namespace Annotation
-
-```bash
-# Check that the namespace has the instrumentation annotation (enables auto-instrumentation for all Python pods)
-kubectl get namespace mlrun -o jsonpath='{.metadata.annotations}' | jq .
-
-# Check pod labels — all chart-managed pods should have mlrun.io/otel=true
-kubectl -n mlrun get pods --show-labels | grep mlrun.io/otel
 ```
 
 ### Installing MLRun-ce on minikube
@@ -172,46 +119,27 @@ Override those [in the normal methods](https://helm.sh/docs/chart_template_guide
 
 ### Configuring OpenTelemetry (Observability)
 
-MLRun CE includes the OpenTelemetry Operator for collecting metrics and traces from your ML workloads. 
-The operator runs one collector **Deployment** per namespace. Instrumented pods send OTLP metrics to the collector, which exports them to Prometheus.
+MLRun CE includes the OpenTelemetry Operator for collecting metrics and traces. When enabled, it deploys a single collector per namespace (deployment mode) — instrumented pods send OTLP data to the collector, which exports metrics to Prometheus on port 8889. All Python pods in the namespace are auto-instrumented, and the `mlrun.io/otel: "true"` label is applied to Jupyter, SeaweedFS, TimescaleDB, and Nuclio function pods for metric enrichment.
 
-> **Note:** OpenTelemetry is **disabled by default**. See below for how to enable it.
+For a fresh install with OTel, see [Installing with OpenTelemetry Enabled](#installing-with-opentelemetry-enabled).
 
-#### Namespace Labeling
+To enable OTel on an existing installation:
 
-The OpenTelemetry Operator **only monitors namespaces** with the label `opentelemetry.io/inject=enabled`.
-This is automatically applied to the MLRun namespace when OpenTelemetry is enabled.
-
-When enabling OpenTelemetry, the namespace is labeled automatically:
-```yaml
-# Automatically added to your namespace when opentelemetry.namespaceLabel.enabled=true
-labels:
-  opentelemetry.io/inject: "enabled"
-```
-
-For custom namespaces that need OpenTelemetry instrumentation, add the label manually:
 ```bash
-kubectl label namespace <your-namespace> opentelemetry.io/inject=enabled
+helm --namespace mlrun upgrade my-mlrun \
+    --set opentelemetry-operator.enabled=true \
+    --set opentelemetry.namespaceLabel.enabled=true \
+    --set opentelemetry.collector.enabled=true \
+    --set opentelemetry.instrumentation.enabled=true \
+    mlrun/mlrun-ce
 ```
-
-> **Note:** The controller namespace (where the operator runs) does **NOT** need this label,
-> as only the operator itself runs there - no workloads require instrumentation.
-
-#### Default Configuration
-
-By default, OpenTelemetry is **disabled**. When enabled, it provides:
-- A single OTel Collector Deployment per namespace (OTLP receiver → Prometheus exporter on port 8889)
-- Namespace-level Python auto-instrumentation (all Python pods in the namespace are instrumented automatically)
-- `mlrun.io/otel: "true"` label on Jupyter, SeaweedFS, and Nuclio function pods
-- Prometheus scrapes the collector pod (not individual pods)
 
 #### Split Installation (Admin/Non-Admin)
 
-For multi-tenant clusters, install the operator CRDs at the cluster level and collectors in user namespaces:
+For multi-tenant clusters, install the operator at the cluster level and the collector CRs in each user namespace:
 
 **Controller namespace (admin):**
 ```bash
-# Operator only - no namespace label needed (no instrumented workloads here)
 helm --namespace controller install mlrun-controller \
     -f admin_installation_values.yaml \
     mlrun/mlrun-ce
@@ -219,7 +147,6 @@ helm --namespace controller install mlrun-controller \
 
 **User namespace (non-admin):**
 ```bash
-# Collector CRs + namespace label applied automatically
 helm --namespace mlrun install my-mlrun \
     -f non_admin_installation_values.yaml \
     mlrun/mlrun-ce
