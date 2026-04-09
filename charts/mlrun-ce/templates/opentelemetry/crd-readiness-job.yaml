@@ -79,5 +79,22 @@ spec:
               {{- end }}
               
               echo "All OpenTelemetry CRs have been created successfully!"
+
+              # Wait for the operator webhook to be fully ready before restarting pods
+              echo "Waiting for OpenTelemetry operator webhook to be ready..."
+              until kubectl -n {{ .Release.Namespace }} rollout status deployment \
+                -l app.kubernetes.io/name=opentelemetry-operator --timeout=60s &>/dev/null; do
+                sleep 5
+              done
+
+              # Restart pods labeled mlrun.io/otel=true so they go through the webhook
+              # and receive OTel auto-instrumentation injection.
+              # This solves the race condition where pods start before the webhook is ready.
+              echo "Restarting instrumented deployments and statefulsets..."
+              kubectl -n {{ .Release.Namespace }} rollout restart deployment \
+                -l mlrun.io/otel=true 2>/dev/null || true
+              kubectl -n {{ .Release.Namespace }} rollout restart statefulset \
+                -l mlrun.io/otel=true 2>/dev/null || true
+              echo "Rollout restarts triggered — pods will be re-created with OTel injection."
 {{- end }}
 
