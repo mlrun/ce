@@ -136,7 +136,6 @@ OpenTelemetry Operator is enabled!
 {{- "\n" }}
 OpenTelemetry Collector (deployment mode):
 -  Collector CR: {{ include "mlrun-ce.otel.collector.fullname" . }}
--  Mode: {{ .Values.opentelemetry.collector.mode }}
 -  OTLP gRPC endpoint: {{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.grpcPort }}
 -  OTLP HTTP endpoint: {{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.httpPort }}
 -  Prometheus metrics port: {{ .Values.opentelemetry.collector.prometheus.port }} (scraped by Prometheus from the collector pod)

@@ -37,7 +37,6 @@ kubectl create namespace mlrun
 Add the mlrun ce helm chart repo
 ```bash
 helm repo add mlrun https://mlrun.github.io/ce
-helm repo update
 ```
 
 To work with the open source MLRun stack, you must an accessible docker-registry. The registry's URL and credentials
@@ -205,87 +204,6 @@ By default, OpenTelemetry is **disabled**. When enabled, it provides:
 - Namespace-level Python auto-instrumentation (all Python pods in the namespace are instrumented automatically)
 - `mlrun.io/otel: "true"` label on Jupyter, SeaweedFS, and Nuclio function pods
 - Prometheus scrapes the collector pod (not individual pods)
-
-#### Enabling OpenTelemetry
-
-To install **with** OpenTelemetry enabled:
-
-```bash
-helm --namespace mlrun install my-mlrun \
-    --set global.registry.url=<registry-url> \
-    --set global.registry.secretName=registry-credentials \
-    --set opentelemetry-operator.enabled=true \
-    --set opentelemetry.namespaceLabel.enabled=true \
-    --set opentelemetry.collector.enabled=true \
-    --set opentelemetry.instrumentation.enabled=true \
-    mlrun/mlrun-ce
-```
-
-To **enable** OpenTelemetry on an existing installation:
-
-```bash
-helm --namespace mlrun upgrade my-mlrun \
-    --set opentelemetry-operator.enabled=true \
-    --set opentelemetry.namespaceLabel.enabled=true \
-    --set opentelemetry.collector.enabled=true \
-    --set opentelemetry.instrumentation.enabled=true \
-    mlrun/mlrun-ce
-```
-
-To **disable** OpenTelemetry (default):
-
-```bash
-helm --namespace mlrun upgrade my-mlrun \
-    --set opentelemetry-operator.enabled=false \
-    --set opentelemetry.collector.enabled=false \
-    --set opentelemetry.instrumentation.enabled=false \
-    --set opentelemetry.namespaceLabel.enabled=false \
-    mlrun/mlrun-ce
-```
-
-#### Custom Resource Limits
-
-Configure collector resources:
-
-```bash
-helm --namespace mlrun install my-mlrun \
-    --set opentelemetry.collector.resources.requests.cpu=100m \
-    --set opentelemetry.collector.resources.requests.memory=128Mi \
-    --set opentelemetry.collector.resources.limits.cpu=500m \
-    --set opentelemetry.collector.resources.limits.memory=512Mi \
-    mlrun/mlrun-ce
-```
-
-#### Enabling Java Auto-Instrumentation
-
-To enable Java auto-instrumentation (disabled by default):
-
-```bash
-helm --namespace mlrun install my-mlrun \
-    --set opentelemetry.instrumentation.java.enabled=true \
-    mlrun/mlrun-ce
-```
-
-#### Adding OpenTelemetry to Custom Workloads
-
-Python instrumentation is applied **namespace-wide** — any Python pod in the MLRun namespace is automatically instrumented when OTel is enabled. No per-pod annotations are required.
-
-For pods in other namespaces, annotate the namespace directly:
-```bash
-kubectl annotate namespace <your-namespace> \
-    instrumentation.opentelemetry.io/inject-python=<release-name>-otel-instrumentation
-```
-
-The `mlrun.io/otel: "true"` label is applied to: **Jupyter**, **SeaweedFS** (master, volume, filer, s3, admin), and **Nuclio function pods** (via `functionDefaults.metadata.labels`). This label is used for Prometheus metric filtering and enrichment.
-
-**Query OTEL-collected metrics in Prometheus:**
-```promql
-# OTEL metrics use the mlrun_otel_ prefix
-mlrun_otel_http_server_duration_seconds_bucket{...}
-
-# Filter by source
-{metrics_source="otel_collector"}
-```
 
 #### Split Installation (Admin/Non-Admin)
 
