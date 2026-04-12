@@ -594,42 +594,14 @@ kube-prometheus-stack:
       type: NodePort
       nodePort: 30020
     prometheusSpec:
-      # Additional scrape configs for OpenTelemetry collector Deployment.
-      # In deployment mode, one collector pod runs per namespace and receives OTLP from all
-      # instrumented pods. Prometheus scrapes only the collector (port 8889), not individual pods.
-      additionalScrapeConfigs:
-        # Scrape the OTel Collector Deployment pod.
-        # Discovers pods with app.kubernetes.io/component=opentelemetry-collector label
-        # (applied automatically by the OTel operator to collector pods).
-        - job_name: 'otel-collector'
-          kubernetes_sd_configs:
-            - role: pod
-          relabel_configs:
-            # Only scrape the OTel collector pod
-            - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
-              action: keep
-              regex: opentelemetry-collector
-            # Use port 8889 (OTel prometheus exporter)
-            - source_labels: [__address__]
-              action: replace
-              regex: ([^:]+)(?::\d+)?
-              replacement: $1:8889
-              target_label: __address__
-            - target_label: __metrics_path__
-              replacement: /metrics
-            # Propagate pod labels as metric labels
-            - action: labelmap
-              regex: __meta_kubernetes_pod_label_(.+)
-            - source_labels: [__meta_kubernetes_namespace]
-              action: replace
-              target_label: kubernetes_namespace
-            - source_labels: [__meta_kubernetes_pod_name]
-              action: replace
-              target_label: kubernetes_pod_name
-          metric_relabel_configs:
-            - action: replace
-              target_label: metrics_source
-              replacement: otel_collector
+      # Enable OTLP write receiver so the OTel collector can push metrics directly
+      # to Prometheus at /api/v1/otlp/v1/metrics instead of Prometheus scraping the collector.
+      # Prometheus v3 requires both the feature flag AND --web.enable-otlp-receiver.
+      enableFeatures:
+        - otlp-write-receiver
+      additionalArgs:
+        - name: web.enable-otlp-receiver
+          value: ""
   kube-state-metrics:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
@@ -765,6 +737,13 @@ spark:
 # =============================================================================
 opentelemetry-operator:
   enabled: false
+  # CRDs are bootstrapped by the parent chart's crds/ directory (tiny stubs applied
+  # before any templates so the type is established immediately on fresh install).
+  # Disable sub-chart CRD rendering to avoid ownership conflicts with the crds/ stubs.
+  # The stubs use x-kubernetes-preserve-unknown-fields so the operator can still
+  # manage CRs; the operator's admission webhook handles CR validation.
+  crds:
+    create: false
   # Admission webhooks configuration
   admissionWebhooks:
     certManager:
@@ -843,12 +822,6 @@ opentelemetry:
       limits:
         cpu: 200m
         memory: 256Mi
-    # Prometheus exporter port for metrics
-    prometheus:
-      port: 8889
-      # Metric prefix added to all OTEL-collected metrics
-      # Helps distinguish OTEL metrics from directly-scraped metrics
-      namespace: mlrun_otel
     # OTLP receiver configuration
     otlp:
       grpcPort: 4317

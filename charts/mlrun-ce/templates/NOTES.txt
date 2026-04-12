@@ -138,7 +138,7 @@ OpenTelemetry Collector (deployment mode):
 -  Collector CR: {{ include "mlrun-ce.otel.collector.fullname" . }}
 -  OTLP gRPC endpoint: {{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.grpcPort }}
 -  OTLP HTTP endpoint: {{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.httpPort }}
--  Prometheus metrics port: {{ .Values.opentelemetry.collector.prometheus.port }} (scraped by Prometheus from the collector pod)
+-  Metrics export: collector pushes via OTLP to Prometheus at /api/v1/otlp/v1/metrics
 {{- end }}
 {{- if .Values.opentelemetry.instrumentation.enabled }}
 {{- "\n" }}

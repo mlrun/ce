@@ -522,14 +522,10 @@ spec:
         timeout: 5s
         override: false
     exporters:
-      prometheus:
-        endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.prometheus.port }}
-        namespace: {{ .Values.opentelemetry.collector.prometheus.namespace }}
-        const_labels:
-          collector_mode: deployment
-          metrics_source: otel_collector
-        resource_to_telemetry_conversion:
-          enabled: true
+      otlphttp/prometheus:
+        endpoint: http://prometheus-operated.{{ .Release.Namespace }}.svc:9090/api/v1/otlp
+        tls:
+          insecure: true
       debug:
         verbosity: basic
         sampling_initial: 5
@@ -549,7 +545,7 @@ spec:
             - resourcedetection
             - batch
           exporters:
-            - prometheus
+            - otlphttp/prometheus
             - debug
         traces:
           receivers:
