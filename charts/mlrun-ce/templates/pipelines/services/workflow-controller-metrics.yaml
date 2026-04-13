@@ -20,6 +20,5 @@ spec:
   selector:
     app: workflow-controller
     application-crd-id: kubeflow-pipelines
-  sessionAffinity: None
   type: ClusterIP
 {{- end -}}

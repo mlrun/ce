@@ -14,6 +14,5 @@ spec:
   selector:
     app: mysql
     application-crd-id: kubeflow-pipelines
-  sessionAffinity: None
   type: ClusterIP
 {{- end -}}

@@ -1,20 +1,22 @@
 {{- if .Values.seaweedfs.enabled }}
-# =============================================================================
-# SeaweedFS S3 API Service
-# This service exposes the SeaweedFS S3 API for external access, providing
-# S3-compatible storage access for MLRun, Jupyter, and other clients
-# =============================================================================
-
-{{- if and .Values.seaweedfs.s3 .Values.seaweedfs.s3.enabled .Values.seaweedfs.s3Service }}
+{{- if .Values.seaweedfs.s3Service }}
 ---
+# =============================================================================
+# SeaweedFS S3 Service
+# Named "seaweedfs-s3" to match the cluster-internal hostname used by MLRun,
+# KFP, and Jupyter helpers (mlrun-ce.s3.service.url / mlrun-ce.s3.service.host).
+# In allInOne mode the S3 gateway runs inside the all-in-one pod; this service
+# replaces the chart's native seaweedfs-s3 service (only created when the
+# dedicated s3 component is enabled, which we keep disabled to save a pod).
+# =============================================================================
 apiVersion: v1
 kind: Service
 metadata:
-  name: seaweedfs-s3-api
+  name: seaweedfs-s3
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "mlrun-ce.common.labels" . | nindent 4 }}
-    app.kubernetes.io/component: seaweedfs-s3-api
+    app.kubernetes.io/component: seaweedfs-s3
 spec:
   type: {{ .Values.seaweedfs.s3Service.type | default "NodePort" }}
   ports:
@@ -27,7 +29,6 @@ spec:
       protocol: TCP
   selector:
     app.kubernetes.io/name: seaweedfs
-    app.kubernetes.io/component: s3
+    app.kubernetes.io/component: seaweedfs-all-in-one
 {{- end }}
-
 {{- end }}

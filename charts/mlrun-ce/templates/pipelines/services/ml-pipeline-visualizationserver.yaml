@@ -15,6 +15,5 @@ spec:
   selector:
     app: ml-pipeline-visualizationserver
     application-crd-id: kubeflow-pipelines
-  sessionAffinity: None
   type: ClusterIP
 {{- end -}}

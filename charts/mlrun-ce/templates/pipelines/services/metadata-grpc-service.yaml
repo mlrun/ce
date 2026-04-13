@@ -16,6 +16,5 @@ spec:
   selector:
     application-crd-id: kubeflow-pipelines
     component: metadata-grpc-server
-  sessionAffinity: None
   type: ClusterIP
 {{- end -}}
