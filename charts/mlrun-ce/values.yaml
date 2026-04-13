@@ -355,7 +355,7 @@ seaweedfs:
         memory: 256Mi
         cpu: 100m
       limits:
-        memory: 512Mi
+        memory: 2Gi
 
   # Admin server - user and policy management UI
   admin:
@@ -378,6 +378,7 @@ seaweedfs:
         cpu: 25m
       limits:
         memory: 128Mi
+        cpu: 1
 
   # Custom NodePort service for Admin UI external access
   adminService:
