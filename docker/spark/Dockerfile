@@ -43,9 +43,4 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 
 RUN mkdir /home/spark && chown spark /home/spark
 
-# Disable S3A ETag-based change detection — SeaweedFS does not return ETags
-# in a format that satisfies Hadoop's S3A change detection requirements (CEML-669)
-RUN mkdir -p /opt/spark/conf && \
-    echo "spark.hadoop.fs.s3a.change.detection.mode none" >> /opt/spark/conf/spark-defaults.conf
-
 USER spark

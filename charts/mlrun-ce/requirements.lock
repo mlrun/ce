@@ -10,7 +10,7 @@ dependencies:
   version: 0.6.0
 - name: seaweedfs
   repository: https://seaweedfs.github.io/seaweedfs/helm
-  version: 4.0.407
+  version: 4.17.0
 - name: spark-operator
   repository: https://kubeflow.github.io/spark-operator
   version: 2.1.0
@@ -20,5 +20,5 @@ dependencies:
 - name: strimzi-kafka-operator
   repository: https://strimzi.io/charts/
   version: 0.48.0
-digest: sha256:f7f2ab0eaec5fb3097c09946f6de510a602293fd7f9c59c40539991b5449a6d1
-generated: "2026-03-08T12:42:39.145588+02:00"
+digest: sha256:e2b2d1b7531c4829aa25c8ce8d95506642ab59d0cb692a343d2e508a71525374
+generated: "2026-03-31T17:13:31.403112322Z"
