@@ -310,6 +310,8 @@ mpi-operator:
 
 seaweedfs:
   enabled: true
+  # Preserve resource names after chart upgrade (4.17 switched from seaweedfs.name to seaweedfs.fullname)
+  fullnameOverride: seaweedfs
   global:
     # Override parent chart's global.registry (which is a map) with empty string
     # to prevent "map[secretName:<nil> url:mustprovide]" in image names
