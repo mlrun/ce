@@ -814,6 +814,8 @@ opentelemetry:
     fullnameOverride: ""
     # DEPLOYMENT mode - one collector pod per namespace, not injected as a sidecar
     mode: deployment
+    # Set to "none" to prevent automatic collector upgrades when the operator is upgraded
+    upgradeStrategy: automatic
     # Collector sidecar container resources
     resources:
       requests:

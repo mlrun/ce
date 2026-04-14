@@ -134,23 +134,7 @@ helm --namespace mlrun upgrade my-mlrun \
     mlrun/mlrun-ce
 ```
 
-#### Split Installation (Admin/Non-Admin)
-
-For multi-tenant clusters, install the operator at the cluster level and the collector CRs in each user namespace:
-
-**Controller namespace (admin):**
-```bash
-helm --namespace controller install mlrun-controller \
-    -f admin_installation_values.yaml \
-    mlrun/mlrun-ce
-```
-
-**User namespace (non-admin):**
-```bash
-helm --namespace mlrun install my-mlrun \
-    -f non_admin_installation_values.yaml \
-    mlrun/mlrun-ce
-```
+> **Note:** The above assumes a single-namespace installation. For multi-namespace (admin/non-admin) deployments, refer to the MLRun documentation.
 
 ### Working with ECR
 

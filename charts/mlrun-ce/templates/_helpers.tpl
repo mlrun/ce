@@ -494,7 +494,7 @@ metadata:
     {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
 spec:
   mode: {{ .Values.opentelemetry.collector.mode }}
-  upgradeStrategy: automatic
+  upgradeStrategy: {{ .Values.opentelemetry.collector.upgradeStrategy }}
   managementState: managed
   image: {{ (index .Values "opentelemetry-operator").manager.collectorImage.repository }}:{{ (index .Values "opentelemetry-operator").manager.collectorImage.tag }}
   resources:
