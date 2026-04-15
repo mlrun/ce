@@ -10,7 +10,7 @@ dependencies:
   version: 0.6.0
 - name: seaweedfs
   repository: https://seaweedfs.github.io/seaweedfs/helm
-  version: 4.0.407
+  version: 4.17.0
 - name: spark-operator
   repository: https://kubeflow.github.io/spark-operator
   version: 2.1.0

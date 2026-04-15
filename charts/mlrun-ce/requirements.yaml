@@ -11,7 +11,7 @@ dependencies:
     repository: "https://v3io.github.io/helm-charts/stable"
   - name: seaweedfs
     repository: "https://seaweedfs.github.io/seaweedfs/helm"
-    version: "4.0.407"
+    version: "4.17.0"
     condition: seaweedfs.enabled
   - name: spark-operator
     repository: "https://kubeflow.github.io/spark-operator"
