@@ -586,7 +586,7 @@ spec:
     - name: OTEL_SERVICE_NAME
       valueFrom:
         fieldRef:
-          fieldPath: metadata.labels['app.kubernetes.io/name']
+          fieldPath: metadata.name
     - name: OTEL_METRICS_EXPORTER
       value: otlp
     - name: OTEL_TRACES_EXPORTER
@@ -616,7 +616,6 @@ spec:
         value: "true"
   {{- end }}
 {{- end }}
-..
 {{/*
 OTel pod label — marks a pod as OTel-monitored for metric enrichment and discovery.
 Namespace-level instrumentation annotation (set by namespace-label job) handles Python auto-instrumentation.

@@ -1,7 +1,7 @@
 {{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
 ---
-# Job to wait for OpenTelemetry CRDs to be available and then create the CRs
-# This solves the race condition between the operator starting and CR creation
+# Job to create OpenTelemetry CRs after the operator webhook is ready to accept them.
+# Retries kubectl apply until the webhook accepts the CR (fresh install timing fix).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -27,7 +27,7 @@ spec:
       serviceAccountName: {{ .Release.Name }}-otel-cr-creator
       containers:
         - name: cr-creator
-          image: bitnami/kubectl:latest
+          image: bitnami/kubectl:1.32
           resources:
             requests:
               cpu: {{ .Values.opentelemetry.crdReadinessJob.resources.requests.cpu }}
