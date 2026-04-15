@@ -23,7 +23,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: label-namespace
-        image: bitnami/kubectl:latest
+        image: bitnami/kubectl:1.32
         resources:
           requests:
             cpu: {{ .Values.opentelemetry.namespaceLabelJob.resources.requests.cpu }}
