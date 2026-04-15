@@ -22,13 +22,13 @@ jobs:
             const allowedScopes = ['feature', 'fix', 'docs', 'perf', 'improvement', 'revert', 'breaking', 'ci'];
 
             const scopeToLabel = {
-              feature:      { name: 'feature',       color: '0075ca' },
-              ci:           { name: 'ci',       color: '0075ca' },
-              fix:          { name: 'bug',            color: 'd73a4a' },
-              docs:         { name: 'documentation',  color: '0052cc' },
-              improvement:  { name: 'improvement',       color: 'bfd4f2'},
-              revert:       { name: 'revert',         color: 'fef2c0' },
-              breaking:     { name: 'breaking-change',color: 'b60205' },
+              feature:     'feature',
+              ci:          'ci',
+              fix:         'bug',
+              docs:        'documentation',
+              improvement: 'improvement',
+              revert:      'revert',
+              breaking:    'breaking-change',
             };
 
             const match = title.match(/^\[([^\]]+)\]\s+\S+/);
@@ -53,31 +53,10 @@ jobs:
               return;
             }
 
-            const { name: labelName, color: labelColor } = scopeToLabel[scope];
-
-            // Ensure label exists in the repo, create it if not
-            try {
-              await github.rest.issues.getLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                name: labelName,
-              });
-            } catch (e) {
-              if (e.status === 404) {
-                await github.rest.issues.createLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  name: labelName,
-                  color: labelColor,
-                });
-                core.info(`Created label: ${labelName}`);
-              } else {
-                throw e;
-              }
-            }
+            const labelName = scopeToLabel[scope];
 
             // Remove any stale scope labels from a previous title edit
-            const allScopeLabels = Object.values(scopeToLabel).map(l => l.name);
+            const allScopeLabels = Object.values(scopeToLabel);
             const currentLabels = context.payload.pull_request.labels.map(l => l.name);
 
             for (const stale of currentLabels) {
