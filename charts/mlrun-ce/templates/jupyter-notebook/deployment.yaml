@@ -5,6 +5,9 @@ metadata:
   name: {{ include "mlrun-ce.jupyter.fullname" . }}
   labels:
     {{- include "mlrun-ce.jupyter.labels" . | nindent 4 }}
+    {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+    {{- include "mlrun-ce.otel.podLabels" . | nindent 4 }}
+    {{- end }}
 spec:
   replicas: 1
   selector:

@@ -63,16 +63,17 @@ spec:
               echo "Instrumentation CRD is available!"
               {{- end }}
               
-              # Wait a bit more for the operator to be fully ready
-              echo "Waiting for operator webhook to be ready..."
-              sleep 10
-              
               {{- if .Values.opentelemetry.collector.enabled }}
-              # Create or update the OpenTelemetryCollector CR
-              echo "Creating/updating OpenTelemetryCollector CR..."
-              cat <<'EOF' | kubectl apply -f -
+              # Write the OpenTelemetryCollector CR to a temp file and retry applying it
+              # until the operator webhook is ready to accept it (fresh install timing fix).
+              cat > /tmp/collector-cr.yaml <<'EOF'
               {{- include "mlrun-ce.otel.collector.manifest" . | nindent 14 }}
               EOF
+              echo "Creating/updating OpenTelemetryCollector CR (with webhook readiness retry)..."
+              until kubectl apply -f /tmp/collector-cr.yaml 2>&1; do
+                echo "Webhook not ready yet, retrying in 5s..."
+                sleep 5
+              done
               echo "OpenTelemetryCollector CR created/updated!"
               {{- end }}
               
