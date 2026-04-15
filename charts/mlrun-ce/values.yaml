@@ -337,8 +337,6 @@ seaweedfs:
 
   # Master server - metadata management
   master:
-    podLabels:
-      mlrun.io/otel: "true"
     port: 9333
     # Storage: use PVC instead of default hostPath
     data:
@@ -352,8 +350,6 @@ seaweedfs:
 
   # Volume server - actual data storage
   volume:
-    podLabels:
-      mlrun.io/otel: "true"
     port: 8080
     # Storage: use PVC instead of default hostPath
     dataDirs:
@@ -369,8 +365,6 @@ seaweedfs:
 
   # Filer server - file system interface
   filer:
-    podLabels:
-      mlrun.io/otel: "true"
     port: 8888
     # Storage: use PVC instead of default hostPath
     data:
@@ -388,8 +382,6 @@ seaweedfs:
 
   # S3 API gateway - MLRun connects to this endpoint
   s3:
-    podLabels:
-      mlrun.io/otel: "true"
     enabled: true  # Default is false
     port: 8333
     enableAuth: true  # Default is false
@@ -403,8 +395,6 @@ seaweedfs:
 
   # Admin server - user and policy management UI
   admin:
-    podLabels:
-      mlrun.io/otel: "true"
     enabled: true  # Default is false
     port: 23646
     secret:
@@ -868,3 +858,22 @@ opentelemetry:
         limits:
           cpu: 500m
           memory: 512Mi
+
+  # CRD readiness job resources (kubectl-only container)
+  crdReadinessJob:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  # Namespace label job resources (kubectl-only container)
+  namespaceLabelJob:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi

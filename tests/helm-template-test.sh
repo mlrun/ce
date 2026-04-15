@@ -134,8 +134,8 @@ test_otel_collector_default() {
     assert_contains "$output" "kind: Job" "Has correct kind"
     assert_contains "$output" "kind: OpenTelemetryCollector" "Job contains OpenTelemetryCollector CR"
     assert_contains "$output" "mode: deployment" "Uses deployment mode"
-    assert_contains "$output" "prometheus:" "Has Prometheus exporter"
-    assert_contains "$output" "endpoint: 0.0.0.0:8889" "Prometheus on port 8889"
+    assert_contains "$output" "otlphttp/prometheus:" "Has OTLP HTTP Prometheus exporter"
+    assert_contains "$output" "/api/v1/otlp" "Pushes to Prometheus OTLP endpoint"
     assert_contains "$output" "otlp:" "Has OTLP receiver"
     assert_contains "$output" "helm.sh/hook" "Has Helm hooks"
     assert_contains "$output" "post-install,post-upgrade" "Has correct hook triggers"
@@ -149,6 +149,18 @@ test_otel_collector_disabled() {
     # When disabled, the crd-readiness-job should not render
     assert_not_renders "templates/opentelemetry/crd-readiness-job.yaml" \
         "CRD Readiness Job does not render when collector disabled (default)"
+}
+
+test_otel_collector_upgrade_strategy() {
+    log_test "OpenTelemetry Collector - upgradeStrategy override"
+
+    local output
+    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true \
+        --set opentelemetry.collector.upgradeStrategy=none)
+
+    assert_contains "$output" "upgradeStrategy: none" "upgradeStrategy can be overridden to none"
 }
 
 test_otel_collector_resources() {
@@ -355,39 +367,6 @@ test_otel_operator_namespace_selector() {
     fi
 }
 
-# ============================================================================
-# Prometheus Integration Tests
-# ============================================================================
-
-test_prometheus_otel_scrape_config() {
-    log_test "Prometheus - OTEL scrape configuration"
-
-    local output
-    output=$(render_all --set global.registry.url=test.io)
-
-    # The scrape config is in a Secret as base64, extract and decode it
-    local secret_data
-    secret_data=$(echo "$output" | grep "additional-scrape-configs.yaml:" | head -1 | sed 's/.*: "//' | sed 's/"$//' || true)
-
-    if [[ -n "$secret_data" ]]; then
-        local decoded
-        decoded=$(echo "$secret_data" | base64 -d 2>/dev/null || true)
-
-        if echo "$decoded" | grep -q "otel-collector"; then
-            log_pass "Has OTEL collector scrape job"
-        else
-            log_fail "Has OTEL collector scrape job - not found in decoded config"
-        fi
-
-        if echo "$decoded" | grep -q "opentelemetry-collector"; then
-            log_pass "Has collector pod label selector"
-        else
-            log_fail "Has collector pod label selector - not found in decoded config"
-        fi
-    else
-        log_fail "Prometheus scrape config secret not found"
-    fi
-}
 
 # ============================================================================
 # Full Chart Render Test
@@ -425,6 +404,7 @@ main() {
     echo "========================================"
     test_otel_collector_default
     test_otel_collector_disabled
+    test_otel_collector_upgrade_strategy
     test_otel_collector_resources
 
     echo ""
@@ -467,11 +447,6 @@ main() {
     test_namespace_label_with_instrumentation_annotation
     test_otel_operator_namespace_selector
 
-    echo ""
-    echo "========================================"
-    echo "Prometheus Integration Tests"
-    echo "========================================"
-    test_prometheus_otel_scrape_config
 
     echo ""
     echo "========================================"

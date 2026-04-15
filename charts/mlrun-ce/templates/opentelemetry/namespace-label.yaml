@@ -24,6 +24,13 @@ spec:
       containers:
       - name: label-namespace
         image: bitnami/kubectl:latest
+        resources:
+          requests:
+            cpu: {{ .Values.opentelemetry.namespaceLabelJob.resources.requests.cpu }}
+            memory: {{ .Values.opentelemetry.namespaceLabelJob.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.opentelemetry.namespaceLabelJob.resources.limits.cpu }}
+            memory: {{ .Values.opentelemetry.namespaceLabelJob.resources.limits.memory }}
         command:
         - /bin/sh
         - -c

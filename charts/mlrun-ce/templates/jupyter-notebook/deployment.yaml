@@ -74,7 +74,36 @@ spec:
         ports:
         - containerPort: 8888
           name: http
+        {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+        command:
+          - /bin/bash
+          - -c
+          - |
+            # Extract tar if needed (mirrors mlce-start.sh setup)
+            file_path="${HOME}/.intdata"
+            if [ ! -f "$file_path" ]; then
+              echo "Base data does not exist, extracting home backup..."
+              cd / && tar -xvf /tmp/basehome.tar
+              echo "1" > "$file_path"
+            fi
+            cd "${HOME}"
+            # Add OTel sitecustomize.py to PYTHONPATH so Jupyter's own Python
+            # process bootstraps OTel directly (bypassing start-notebook.py which
+            # strips the path to prevent re-instrumentation of subprocesses).
+            OTEL_PATH=/otel-auto-instrumentation-python/opentelemetry/instrumentation/auto_instrumentation
+            if [ -d "$OTEL_PATH" ]; then
+              export PYTHONPATH="${OTEL_PATH}:${PYTHONPATH:-/otel-auto-instrumentation-python}"
+            fi
+            exec /opt/conda/bin/python3 /opt/conda/bin/jupyter-lab \
+              --ip=0.0.0.0 \
+              --port=8888 \
+              --NotebookApp.token="" \
+              --NotebookApp.password="" \
+              --NotebookApp.allow_origin="*" \
+              --NotebookApp.default_url=/lab
+        {{- else }}
         command: ["/bin/bash", "/usr/local/bin/mlce-start.sh"]
+        {{- end }}
       {{- with .Values.jupyterNotebook.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
       {{- end }}

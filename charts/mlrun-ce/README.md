@@ -119,7 +119,7 @@ Override those [in the normal methods](https://helm.sh/docs/chart_template_guide
 
 ### Configuring OpenTelemetry (Observability)
 
-MLRun CE includes the OpenTelemetry Operator for collecting metrics and traces. When enabled, it deploys a single collector per namespace (deployment mode) — instrumented pods send OTLP data to the collector, which exports metrics to Prometheus on port 8889. All Python pods in the namespace are auto-instrumented, and the `mlrun.io/otel: "true"` label is applied to Jupyter, SeaweedFS, TimescaleDB, and Nuclio function pods for metric enrichment.
+MLRun CE includes the OpenTelemetry Operator for collecting metrics and traces. When enabled, it deploys a single collector per namespace (deployment mode) — instrumented pods push OTLP data to the collector, which forwards metrics to Prometheus via the OTLP endpoint. Python auto-instrumentation is applied namespace-wide via a webhook, and the `mlrun.io/otel: "true"` label is applied to Jupyter and Nuclio function pods to mark them for metric enrichment and trigger OTel injection on restart.
 
 For a fresh install with OTel, see [Installing with OpenTelemetry Enabled](#installing-with-opentelemetry-enabled).
 

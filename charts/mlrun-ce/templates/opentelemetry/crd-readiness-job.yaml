@@ -28,6 +28,13 @@ spec:
       containers:
         - name: cr-creator
           image: bitnami/kubectl:latest
+          resources:
+            requests:
+              cpu: {{ .Values.opentelemetry.crdReadinessJob.resources.requests.cpu }}
+              memory: {{ .Values.opentelemetry.crdReadinessJob.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.opentelemetry.crdReadinessJob.resources.limits.cpu }}
+              memory: {{ .Values.opentelemetry.crdReadinessJob.resources.limits.memory }}
           command:
             - /bin/bash
             - -c
