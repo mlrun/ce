@@ -41,28 +41,9 @@ spec:
             - |
               set -e
               
-              echo "Waiting for OpenTelemetry CRDs to be available..."
-              
-              # Wait for the OpenTelemetryCollector CRD
-              {{- if .Values.opentelemetry.collector.enabled }}
-              echo "Waiting for OpenTelemetryCollector CRD..."
-              until kubectl get crd opentelemetrycollectors.opentelemetry.io &>/dev/null; do
-                echo "Waiting for opentelemetrycollectors.opentelemetry.io CRD..."
-                sleep 5
-              done
-              echo "OpenTelemetryCollector CRD is available!"
-              {{- end }}
-              
-              # Wait for the Instrumentation CRD
-              {{- if .Values.opentelemetry.instrumentation.enabled }}
-              echo "Waiting for Instrumentation CRD..."
-              until kubectl get crd instrumentations.opentelemetry.io &>/dev/null; do
-                echo "Waiting for instrumentations.opentelemetry.io CRD..."
-                sleep 5
-              done
-              echo "Instrumentation CRD is available!"
-              {{- end }}
-              
+              # CRDs are guaranteed to exist — Helm applies charts/mlrun-ce/crds/ before
+              # any hooks run, so no polling needed here.
+
               {{- if .Values.opentelemetry.collector.enabled }}
               # Write the OpenTelemetryCollector CR to a temp file and retry applying it
               # until the operator webhook is ready to accept it (fresh install timing fix).
