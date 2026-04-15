@@ -489,7 +489,7 @@ pipelines:
       tag: 2.15.0
       busybox:
         repository: busybox
-        tag: "1.36"
+        tag: 1.37
     persistenceagent:
       repository: ghcr.io/kubeflow/kfp-persistence-agent
       tag: 2.15.0
