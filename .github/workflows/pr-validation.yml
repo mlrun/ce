@@ -1,0 +1,105 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+
+jobs:
+  validate-and-label:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Validate PR title and assign label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const prNumber = context.payload.pull_request.number;
+
+            const allowedScopes = ['feature', 'fix', 'docs', 'perf', 'improvement', 'revert', 'breaking', 'ci'];
+
+            const scopeToLabel = {
+              feature:      { name: 'feature',       color: '0075ca' },
+              ci:           { name: 'ci',       color: '0075ca' },
+              fix:          { name: 'bug',            color: 'd73a4a' },
+              docs:         { name: 'documentation',  color: '0052cc' },
+              improvement:  { name: 'improvement',       color: 'bfd4f2'},
+              revert:       { name: 'revert',         color: 'fef2c0' },
+              breaking:     { name: 'breaking-change',color: 'b60205' },
+            };
+
+            const match = title.match(/^\[([^\]]+)\]\s+\S+/);
+
+            if (!match) {
+              core.setFailed(
+                `PR title must follow the format: [scope] description\n` +
+                `Example: [Feat] Add SeaweedFS bucket auto-creation\n` +
+                `Allowed scopes: ${allowedScopes.join(', ')}`
+              );
+              return;
+            }
+
+            const scope = match[1].toLowerCase();
+
+            if (!allowedScopes.includes(scope)) {
+              core.setFailed(
+                `Invalid scope "[${match[1]}]".\n` +
+                `Allowed scopes: ${allowedScopes.join(', ')}\n` +
+                `Example: [Feat] Add SeaweedFS bucket auto-creation`
+              );
+              return;
+            }
+
+            const { name: labelName, color: labelColor } = scopeToLabel[scope];
+
+            // Ensure label exists in the repo, create it if not
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+              });
+            } catch (e) {
+              if (e.status === 404) {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: labelName,
+                  color: labelColor,
+                });
+                core.info(`Created label: ${labelName}`);
+              } else {
+                throw e;
+              }
+            }
+
+            // Remove any stale scope labels from a previous title edit
+            const allScopeLabels = Object.values(scopeToLabel).map(l => l.name);
+            const currentLabels = context.payload.pull_request.labels.map(l => l.name);
+
+            for (const stale of currentLabels) {
+              if (allScopeLabels.includes(stale) && stale !== labelName) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  name: stale,
+                });
+                core.info(`Removed stale label: ${stale}`);
+              }
+            }
+
+            // Apply the correct label if not already present
+            if (!currentLabels.includes(labelName)) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                labels: [labelName],
+              });
+            }
+
+            core.info(`PR title valid — scope: [${scope}] → label: ${labelName}`);
