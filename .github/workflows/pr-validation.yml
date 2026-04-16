@@ -1,14 +1,14 @@
 name: PR Validation
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, edited, reopened, synchronize]
 
 jobs:
   validate-and-label:
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
+      issues: write
 
     steps:
       - name: Validate PR title and assign label
