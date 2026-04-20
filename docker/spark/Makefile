@@ -1,5 +1,5 @@
 MLRUN_CE_IMAGE_PLATFORM ?= linux/amd64
-MLRUN_CE_IMAGE_TAG ?= gcr.io/iguazio/spark-app:3.5.6-scala2.12-java17-ubuntu
+MLRUN_CE_IMAGE_TAG ?= gcr.io/iguazio/spark-app:3.5.6-scala2.12-java17-ubuntu-1
 
 .PHONY: build
 build:
