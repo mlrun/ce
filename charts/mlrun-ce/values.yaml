@@ -327,10 +327,6 @@ seaweedfs:
   master:
     enabled: false
   volume:
-    dataDirs:
-      - name: data
-        type: "persistentVolumeClaim"
-        maxVolumes: 0
     enabled: false
   filer:
     enabled: false
