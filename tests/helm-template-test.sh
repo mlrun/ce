@@ -125,8 +125,8 @@ test_otel_collector_default() {
     log_test "OpenTelemetry Collector - Enabled (via CRD Readiness Job)"
 
     local output
-    # The collector CR is now created by the crd-readiness-job, not directly
-    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
+    # The collector CR is now created by the otel-cr-installer, not directly
+    output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.collector.enabled=true)
 
@@ -146,8 +146,8 @@ test_otel_collector_default() {
 test_otel_collector_disabled() {
     log_test "OpenTelemetry Collector - Disabled (default)"
 
-    # When disabled, the crd-readiness-job should not render
-    assert_not_renders "templates/opentelemetry/crd-readiness-job.yaml" \
+    # When disabled, the otel-cr-installer should not render
+    assert_not_renders "templates/opentelemetry/otel-cr-installer.yaml" \
         "CRD Readiness Job does not render when collector disabled (default)"
 }
 
@@ -155,7 +155,7 @@ test_otel_collector_upgrade_strategy() {
     log_test "OpenTelemetry Collector - upgradeStrategy override"
 
     local output
-    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
+    output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.collector.enabled=true \
         --set opentelemetry.collector.upgradeStrategy=none)
@@ -167,7 +167,7 @@ test_otel_collector_resources() {
     log_test "OpenTelemetry Collector - Custom resources"
 
     local output
-    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
+    output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.collector.enabled=true \
         --set opentelemetry.collector.resources.requests.cpu=100m \
@@ -185,7 +185,7 @@ test_otel_instrumentation_default() {
     log_test "OpenTelemetry Instrumentation - Enabled (via CRD Readiness Job)"
 
     local output
-    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
+    output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.instrumentation.enabled=true)
 
@@ -202,7 +202,7 @@ test_otel_instrumentation_disabled() {
     log_test "OpenTelemetry Instrumentation - Disabled (default)"
 
     # When both collector and instrumentation are disabled, the job should not render
-    assert_not_renders "templates/opentelemetry/crd-readiness-job.yaml" \
+    assert_not_renders "templates/opentelemetry/otel-cr-installer.yaml" \
         "CRD Readiness Job does not render when instrumentation disabled (default)"
 }
 
@@ -210,7 +210,7 @@ test_otel_instrumentation_java_enabled() {
     log_test "OpenTelemetry Instrumentation - Java enabled"
 
     local output
-    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
+    output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
         --set opentelemetry.instrumentation.enabled=true \
         --set opentelemetry.instrumentation.java.enabled=true)
@@ -275,7 +275,7 @@ test_admin_values_otel() {
     log_test "Admin installation - OTEL operator enabled, CRs disabled"
 
     # CRD readiness job should not render when CRs are disabled
-    assert_not_renders "templates/opentelemetry/crd-readiness-job.yaml" \
+    assert_not_renders "templates/opentelemetry/otel-cr-installer.yaml" \
         "CRD Readiness Job not rendered with admin values" \
         -f "${CHART_DIR}/admin_installation_values.yaml"
 }
@@ -284,7 +284,7 @@ test_non_admin_values_otel() {
     log_test "Non-admin installation - OTEL CRs enabled"
 
     local output
-    output=$(render_template "templates/opentelemetry/crd-readiness-job.yaml" \
+    output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
         -f "${CHART_DIR}/non_admin_installation_values.yaml")
 

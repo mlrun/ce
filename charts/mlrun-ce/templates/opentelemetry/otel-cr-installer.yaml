@@ -12,7 +12,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ .Release.Name }}-otel-cr-creator
+  name: {{ .Release.Name }}-otel-cr-installer
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
@@ -37,11 +37,11 @@ spec:
           image: {{ .Values.opentelemetry.kubectlImage.repository }}:{{ .Values.opentelemetry.kubectlImage.tag }}
           resources:
             requests:
-              cpu: {{ .Values.opentelemetry.crdReadinessJob.resources.requests.cpu }}
-              memory: {{ .Values.opentelemetry.crdReadinessJob.resources.requests.memory }}
+              cpu: {{ .Values.opentelemetry.otelCrInstaller.resources.requests.cpu }}
+              memory: {{ .Values.opentelemetry.otelCrInstaller.resources.requests.memory }}
             limits:
-              cpu: {{ .Values.opentelemetry.crdReadinessJob.resources.limits.cpu }}
-              memory: {{ .Values.opentelemetry.crdReadinessJob.resources.limits.memory }}
+              cpu: {{ .Values.opentelemetry.otelCrInstaller.resources.limits.cpu }}
+              memory: {{ .Values.opentelemetry.otelCrInstaller.resources.limits.memory }}
           command:
             - /bin/bash
             - -c

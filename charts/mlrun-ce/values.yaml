@@ -928,13 +928,13 @@ opentelemetry:
           cpu: 500m
           memory: 512Mi
 
-  # kubectl image used by the crdReadinessJob and namespaceLabelJob
+  # kubectl image used by the otelCrInstaller and namespaceLabelJob
   kubectlImage:
     repository: bitnami/kubectl
     tag: "latest"
 
-  # CRD readiness job resources (kubectl-only container)
-  crdReadinessJob:
+  # OTel CR installer job resources (kubectl-only container)
+  otelCrInstaller:
     resources:
       requests:
         cpu: 50m
