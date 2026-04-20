@@ -72,11 +72,29 @@ jobs:
         id: first_rc
         run: |
           VERSION="${{ steps.version_check.outputs.version }}"
+
           FIRST_RC=$(git tag --sort=version:refname \
-            | grep "^mlrun-ce-${VERSION}-rc." \
+            | grep "^mlrun-ce-${VERSION}-rc\." \
             | head -1)
-          echo "tag=${FIRST_RC}" >> $GITHUB_OUTPUT
-          echo "First RC tag: ${FIRST_RC}"
+
+          if [[ -n "$FIRST_RC" ]]; then
+            echo "range=${FIRST_RC}^..HEAD" >> $GITHUB_OUTPUT
+            echo "Range start: first RC tag ${FIRST_RC}"
+          else
+            # Hotfix with no RC — use previous stable tag so notes cover only this version
+            PREV_STABLE=$(git tag --sort=version:refname \
+              | grep "^mlrun-ce-[0-9]" \
+              | grep -v "\-rc\." \
+              | grep -v "^mlrun-ce-${VERSION}$" \
+              | tail -1)
+            if [[ -n "$PREV_STABLE" ]]; then
+              echo "range=${PREV_STABLE}..HEAD" >> $GITHUB_OUTPUT
+              echo "Range start: previous stable tag ${PREV_STABLE}"
+            else
+              echo "range=HEAD" >> $GITHUB_OUTPUT
+              echo "Range start: none (first ever release)"
+            fi
+          fi
 
       - name: Generate release notes with git-cliff
         if: steps.version_check.outputs.is_rc == 'false'
@@ -84,7 +102,7 @@ jobs:
         with:
           config: cliff.toml
           args: >-
-            ${{ steps.first_rc.outputs.tag }}^..HEAD
+            ${{ steps.first_rc.outputs.range }}
             --tag mlrun-ce-${{ steps.version_check.outputs.version }}
             --ignore-tags "mlrun-ce-${{ steps.version_check.outputs.version }}-rc.*"
         env:
@@ -93,7 +111,7 @@ jobs:
       - name: Update GitHub Release with release notes
         if: steps.version_check.outputs.is_rc == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
           gh release edit "mlrun-ce-${{ steps.version_check.outputs.version }}" \
             --notes-file RELEASE_NOTES.md

@@ -24,36 +24,33 @@ commit_parsers = [
   # skip merge commits
   { message = "(?i)^merge", skip = true },
 
-  # new PR title format (enforced going forward): [scope] ...
-  { message = "(?i)^\\[feat\\]", group = "Features" },
+  # new PR title format (enforced by pr-validation.yml): [scope] description
+  # allowed scopes: feature, fix, docs, improvement, revert, breaking, ci
+  { message = "(?i)^\\[feature\\]", group = "Features" },
   { message = "(?i)^\\[fix\\]", group = "Bug Fixes" },
-  { message = "(?i)^\\[perf\\]", group = "Performance" },
-  { message = "(?i)^\\[refactor\\]", group = "Refactor" },
-  { message = "(?i)^\\[docs?\\]", group = "Documentation" },
-  { message = "(?i)^\\[chore\\]", group = "Miscellaneous" },
+  { message = "(?i)^\\[docs\\]", group = "Documentation" },
+  { message = "(?i)^\\[improvement\\]", group = "Improvements" },
   { message = "(?i)^\\[revert\\]", group = "Reverts" },
   { message = "(?i)^\\[breaking\\]", group = "Breaking Changes" },
+  { message = "(?i)^\\[ci\\]", group = "CI/CD" },
 
   # conventional commits format: feat: / fix: ...
   { message = "(?i)^feat", group = "Features" },
   { message = "(?i)^fix", group = "Bug Fixes" },
-  { message = "(?i)^perf", group = "Performance" },
-  { message = "(?i)^refactor", group = "Refactor" },
+  { message = "(?i)^refactor", group = "Improvements" },
   { message = "(?i)^docs?", group = "Documentation" },
-  { message = "(?i)^chore\\(deps\\)", group = "Dependencies" },
-  { message = "(?i)^chore", group = "Miscellaneous" },
+  { message = "(?i)^chore\\(deps\\)", group = "Improvements" },
   { message = "(?i)^revert", group = "Reverts" },
 
   # historical [ComponentName] format — infer type from the verb in the message
   { message = "(?i)^\\[[^\\]]+\\].*(fix|bug|broken|regression)", group = "Bug Fixes" },
   { message = "(?i)^\\[[^\\]]+\\].*(add|support|enable|upgrade|update|migrate|connect|expose|allow)", group = "Features" },
-  { message = "(?i)^\\[[^\\]]+\\].*(disable|remove|clean|deprecat)", group = "Miscellaneous" },
-  { message = "(?i)^\\[[^\\]]+\\]", group = "Changes" },
+  { message = "(?i)^\\[[^\\]]+\\]", group = "Other" },
 
   # plain English fallback
   { message = "(?i)^(fix|bug)", group = "Bug Fixes" },
   { message = "(?i)^(add|update|upgrade|support|enable|migrate|expose|allow)", group = "Features" },
-  { message = "(?i)^(remove|disable|clean|deprecat)", group = "Miscellaneous" },
+  { message = "(?i)^(remove|disable|clean|deprecat)", group = "Other" },
 
   # catch-all — anything that didn't match above
   { message = ".*", group = "Other" },

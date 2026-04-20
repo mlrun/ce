@@ -36,8 +36,8 @@ jobs:
             if (!match) {
               core.setFailed(
                 `PR title must follow the format: [scope] description\n` +
-                `Example: [Feat] Add SeaweedFS bucket auto-creation\n` +
-                `Allowed scopes: ${allowedScopes.join(', ')}`
+                `Allowed scopes (case-insensitive): [Feature], [Fix], [Docs], [Improvement], [Revert], [Breaking], [CI]\n` +
+                `Example: [Feature] Add SeaweedFS bucket auto-creation`
               );
               return;
             }
@@ -47,8 +47,8 @@ jobs:
             if (!allowedScopes.includes(scope)) {
               core.setFailed(
                 `Invalid scope "[${match[1]}]".\n` +
-                `Allowed scopes: ${allowedScopes.join(', ')}\n` +
-                `Example: [Feat] Add SeaweedFS bucket auto-creation`
+                `Allowed scopes (case-insensitive): [Feature], [Fix], [Docs], [Improvement], [Revert], [Breaking], [CI]\n` +
+                `Example: [Fix] Resolve crash on startup`
               );
               return;
             }
