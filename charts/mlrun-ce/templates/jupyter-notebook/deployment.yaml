@@ -58,6 +58,10 @@ spec:
           value: "yes"
         - name: CHOWN_HOME_OPTS
           value: "-R"
+        {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+        - name: OTEL_SERVICE_NAME
+          value: {{ include "mlrun-ce.jupyter.fullname" . | quote }}
+        {{- end }}
         {{- if .Values.jupyterNotebook.extraEnv }}
         {{ toYaml .Values.jupyterNotebook.extraEnv | nindent 8 }}
         {{- end }}

@@ -94,13 +94,21 @@ nuclio:
       kind: mlrun
       synchronizationInterval: 10m
       apiAddress: http://mlrun-api-chief:8080/api
-    # Default labels applied to all Nuclio function pods.
+    # Default labels/env applied to all Nuclio function pods.
     # mlrun.io/otel marks function pods for OTel metric enrichment; the namespace-level
     # instrumentation annotation handles Python auto-instrumentation automatically.
+    # OTEL_SERVICE_NAME uses the stable function name (nuclio.io/function-name label)
+    # so metrics survive function redeployments without creating new Prometheus series.
     functionDefaults:
       metadata:
         labels:
           mlrun.io/otel: "true"
+      spec:
+        env:
+          - name: OTEL_SERVICE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: "metadata.labels['nuclio.io/function-name']"
 
 mlrun:
   # set the type of filesystem to use: filesystem, s3
