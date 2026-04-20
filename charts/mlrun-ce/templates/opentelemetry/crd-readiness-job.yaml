@@ -2,6 +2,13 @@
 ---
 # Job to create OpenTelemetry CRs after the operator webhook is ready to accept them.
 # Retries kubectl apply until the webhook accepts the CR (fresh install timing fix).
+#
+# NOTE: The OpenTelemetryCollector and Instrumentation CRs are NOT created as standalone
+# Helm-managed resources. Instead they are applied by this job after the operator webhook
+# is confirmed ready, avoiding a race condition on fresh installs.
+# - CR manifests are defined in templates/_helpers.tpl (mlrun-ce.otel.collector.manifest,
+#   mlrun-ce.otel.instrumentation.manifest)
+# - Configuration lives in values.yaml under opentelemetry.collector and opentelemetry.instrumentation
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -27,7 +34,7 @@ spec:
       serviceAccountName: {{ .Release.Name }}-otel-cr-creator
       containers:
         - name: cr-creator
-          image: bitnami/kubectl:1.32
+          image: {{ .Values.opentelemetry.kubectlImage.repository }}:{{ .Values.opentelemetry.kubectlImage.tag }}
           resources:
             requests:
               cpu: {{ .Values.opentelemetry.crdReadinessJob.resources.requests.cpu }}

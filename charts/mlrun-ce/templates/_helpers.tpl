@@ -500,67 +500,7 @@ spec:
   resources:
     {{- toYaml .Values.opentelemetry.collector.resources | nindent 4 }}
   config:
-    receivers:
-      otlp:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.otlp.grpcPort }}
-          http:
-            endpoint: 0.0.0.0:{{ .Values.opentelemetry.collector.otlp.httpPort }}
-    processors:
-      batch:
-        send_batch_size: 10000
-        timeout: 10s
-      memory_limiter:
-        check_interval: 1s
-        limit_percentage: 80
-        spike_limit_percentage: 25
-      resourcedetection:
-        detectors:
-          - env
-          - system
-        timeout: 5s
-        override: false
-    exporters:
-      otlphttp/prometheus:
-        endpoint: http://prometheus-operated.{{ .Release.Namespace }}.svc:9090/api/v1/otlp
-        tls:
-          insecure: true
-      debug:
-        verbosity: basic
-        sampling_initial: 5
-        sampling_thereafter: 200
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
-    service:
-      extensions:
-        - health_check
-      pipelines:
-        metrics:
-          receivers:
-            - otlp
-          processors:
-            - memory_limiter
-            - resourcedetection
-            - batch
-          exporters:
-            - otlphttp/prometheus
-            - debug
-        traces:
-          receivers:
-            - otlp
-          processors:
-            - memory_limiter
-            - resourcedetection
-            - batch
-          exporters:
-            - debug
-      telemetry:
-        logs:
-          level: info
-        metrics:
-          address: 0.0.0.0:8888
+    {{- toYaml .Values.opentelemetry.collector.config | nindent 4 }}
 {{- end }}
 
 {{/*

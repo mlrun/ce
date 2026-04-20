@@ -816,10 +816,77 @@ opentelemetry:
       limits:
         cpu: 200m
         memory: 256Mi
-    # OTLP receiver configuration
+    # OTLP receiver port references — used by the Instrumentation CR endpoint and NOTES output.
+    # If you change these, update the matching ports in collector.config.receivers.otlp as well.
     otlp:
       grpcPort: 4317
       httpPort: 4318
+    # Full OpenTelemetry Collector pipeline configuration.
+    # This is passed verbatim to the OpenTelemetryCollector CR spec.config field.
+    # Override any section to customize receivers, processors, exporters, or pipelines.
+    config:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+      processors:
+        batch:
+          send_batch_size: 10000
+          timeout: 10s
+        memory_limiter:
+          check_interval: 1s
+          limit_percentage: 80
+          spike_limit_percentage: 25
+        resourcedetection:
+          detectors:
+            - env
+            - system
+          timeout: 5s
+          override: false
+      exporters:
+        otlphttp/prometheus:
+          # Short DNS works within the same namespace; no namespace interpolation needed.
+          endpoint: http://prometheus-operated:9090/api/v1/otlp
+          tls:
+            insecure: true
+        debug:
+          verbosity: basic
+          sampling_initial: 5
+          sampling_thereafter: 200
+      extensions:
+        health_check:
+          endpoint: 0.0.0.0:13133
+      service:
+        extensions:
+          - health_check
+        pipelines:
+          metrics:
+            receivers:
+              - otlp
+            processors:
+              - memory_limiter
+              - resourcedetection
+              - batch
+            exporters:
+              - otlphttp/prometheus
+              - debug
+          traces:
+            receivers:
+              - otlp
+            processors:
+              - memory_limiter
+              - resourcedetection
+              - batch
+            exporters:
+              - debug
+        telemetry:
+          logs:
+            level: info
+          metrics:
+            address: 0.0.0.0:8888
 
   # Instrumentation configuration for auto-instrumentation
   instrumentation:
@@ -860,6 +927,11 @@ opentelemetry:
         limits:
           cpu: 500m
           memory: 512Mi
+
+  # kubectl image used by the crdReadinessJob and namespaceLabelJob
+  kubectlImage:
+    repository: bitnami/kubectl
+    tag: "latest"
 
   # CRD readiness job resources (kubectl-only container)
   crdReadinessJob:
