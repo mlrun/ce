@@ -323,68 +323,49 @@ seaweedfs:
     # Enabling this creates a ClusterRole, which conflicts in multi-NS deployments.
     createClusterRole: false
 
-  # Master server - metadata management
+  # Disable individual component pods - allInOne runs everything in a single deployment
   master:
-    port: 9333
-    # Storage: use PVC instead of default hostPath
-    data:
-      type: "persistentVolumeClaim"
-      size: "1Gi"
-    logs:
-      type: "emptyDir"
-    resources:
-      requests:
-        memory: 128Mi
-
-  # Volume server - actual data storage
+    enabled: false
   volume:
-    port: 8080
-    # Storage: use PVC instead of default hostPath
-    dataDirs:
-      - name: data
-        type: "persistentVolumeClaim"
-        size: "10Gi"
-        maxVolumes: 0
-    logs:
-      type: "emptyDir"
-    resources:
-      requests:
-        memory: 256Mi
-
-  # Filer server - file system interface
+    enabled: false
   filer:
-    port: 8888
-    # Storage: use PVC instead of default hostPath
-    data:
-      type: "persistentVolumeClaim"
-      size: "1Gi"
-    logs:
-      type: "emptyDir"
-    # Filer's embedded S3 gateway
+    enabled: false
+
+  # S3 auth config - enableAuth gates the seaweedfs-s3-config Secret creation in
+  # templates/seaweedfs/seaweedfs-s3-config.yaml even though the dedicated s3 pod
+  # is disabled. The secret is consumed by allInOne.s3.existingConfigSecret below.
+  s3:
+    port: 8333
+    enableAuth: true
+
+  # Single-pod mode: master + volume + filer + S3 gateway in one deployment.
+  # Reduces from 4 component pods down to 1, cutting CPU/memory footprint significantly.
+  allInOne:
+    enabled: true
     s3:
       enabled: true
       port: 8333
+      enableAuth: true
+      # IAM config secret created by templates/seaweedfs/seaweedfs-s3-config.yaml
+      existingConfigSecret: "seaweedfs-s3-config"
+    # Storage: use PVC instead of default emptyDir
+    data:
+      type: "persistentVolumeClaim"
+      size: "10Gi"
     resources:
       requests:
-        memory: 128Mi
-
-  # S3 API gateway - MLRun connects to this endpoint
-  s3:
-    enabled: true  # Default is false
-    port: 8333
-    enableAuth: true  # Default is false
-    # SeaweedFS S3 IAM configuration secret - defines authorized users/credentials
-    # and their permissions for S3 API access (Admin, Read, List, Write, etc.)
-    # Created by templates/seaweedfs/seaweedfs-s3-config.yaml using s3.accessKey/secretKey
-    existingConfigSecret: "seaweedfs-s3-config"
-    resources:
-      requests:
-        memory: 128Mi
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 2Gi
 
   # Admin server - user and policy management UI
   admin:
-    enabled: true  # Default is false
+    enabled: true
     port: 23646
+    # Point admin at the allInOne service since the standalone master StatefulSet
+    # is disabled. Without this the chart cannot auto-discover the master address.
+    masters: "seaweedfs-all-in-one:9333"
     secret:
       adminUser: "seaweed"
       adminPassword: "seaweed123"
@@ -396,6 +377,10 @@ seaweedfs:
     resources:
       requests:
         memory: 64Mi
+        cpu: 25m
+      limits:
+        memory: 128Mi
+        cpu: 1
 
   # Custom NodePort service for Admin UI external access
   adminService:
@@ -411,7 +396,8 @@ seaweedfs:
       annotations: {}
       tls: []
 
-  # Custom NodePort service for S3 API external access
+  # Custom NodePort service for S3 API external access.
+  # Also provides the internal "seaweedfs-s3" cluster alias used by MLRun/KFP helpers.
   s3Service:
     type: NodePort
     port: 8333
