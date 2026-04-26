@@ -737,13 +737,12 @@ spark:
 # =============================================================================
 opentelemetry-operator:
   enabled: false
-  # CRDs are bootstrapped by the parent chart's crds/ directory (tiny stubs applied
-  # before any templates so the type is established immediately on fresh install).
-  # Disable sub-chart CRD rendering to avoid ownership conflicts with the crds/ stubs.
-  # The stubs use x-kubernetes-preserve-unknown-fields so the operator can still
-  # manage CRs; the operator's admission webhook handles CR validation.
+  # CRDs are managed by the operator sub-chart (crds.create: true).
+  # The otel-cr-installer job polls kubectl wait --for=condition=Established
+  # on each CRD before applying CRs, so there is no race condition on fresh install.
+  # CRDs are automatically kept in sync with the operator chart version on every upgrade.
   crds:
-    create: false
+    create: true
   # Admission webhooks configuration
   admissionWebhooks:
     certManager:

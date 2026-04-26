@@ -1,11 +1,11 @@
 {{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
 ---
-# Job to create OpenTelemetry CRs after the operator webhook is ready to accept them.
-# Retries kubectl apply until the webhook accepts the CR (fresh install timing fix).
+# Job to create OpenTelemetry CRs after CRDs are established and the operator webhook is ready.
 #
 # NOTE: The OpenTelemetryCollector and Instrumentation CRs are NOT created as standalone
-# Helm-managed resources. Instead they are applied by this job after the operator webhook
-# is confirmed ready, avoiding a race condition on fresh installs.
+# Helm-managed resources. Instead they are applied by this job, which:
+# 1. Waits for OTel CRDs to be Established (the sub-chart renders them as regular templates)
+# 2. Retries kubectl apply until the operator webhook is ready to accept the CR
 # - CR manifests are defined in templates/_helpers.tpl (mlrun-ce.otel.collector.manifest,
 #   mlrun-ce.otel.instrumentation.manifest)
 # - Configuration lives in values.yaml under opentelemetry.collector and opentelemetry.instrumentation
@@ -47,9 +47,21 @@ spec:
             - -c
             - |
               set -e
-              
-              # CRDs are guaranteed to exist — Helm applies charts/mlrun-ce/crds/ before
-              # any hooks run, so no polling needed here.
+
+              # Wait for the OTel CRDs to be fully established before applying CRs.
+              # The operator sub-chart renders CRDs as regular templates (not in crds/),
+              # so they may not exist yet when this post-install hook fires.
+              echo "Waiting for OpenTelemetry CRDs to be established..."
+              for crd in \
+                opentelemetrycollectors.opentelemetry.io \
+                instrumentations.opentelemetry.io \
+                opampbridges.opentelemetry.io; do
+                until kubectl wait --for=condition=Established crd/${crd} --timeout=10s &>/dev/null; do
+                  echo "  ${crd} not established yet, retrying..."
+                  sleep 5
+                done
+                echo "  ${crd} ready."
+              done
 
               {{- if .Values.opentelemetry.collector.enabled }}
               # Write the OpenTelemetryCollector CR to a temp file and retry applying it
