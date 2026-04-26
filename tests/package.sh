@@ -30,9 +30,14 @@ helm dependency update
 # Helm v4 enforces metaschema validation strictly and rejects the install otherwise.
 echo "Patching opentelemetry-operator schema (featureGates.examples string -> array)..."
 python3 - <<'PYEOF'
-import json, tarfile, os, shutil, tempfile
+import json, tarfile, os, shutil, tempfile, yaml, subprocess
 
-tgz = "charts/opentelemetry-operator-0.78.1.tgz"
+# Read version dynamically from requirements.yaml so this doesn't silently break on bumps
+with open("requirements.yaml") as f:
+    deps = yaml.safe_load(f)["dependencies"]
+version = next(d["version"] for d in deps if d["name"] == "opentelemetry-operator")
+tgz = f"charts/opentelemetry-operator-{version}.tgz"
+
 if not os.path.exists(tgz):
     print(f"  {tgz} not found, skipping patch")
     exit(0)
@@ -54,58 +59,17 @@ with tempfile.TemporaryDirectory() as tmp:
     # Repack without macOS metadata
     env = os.environ.copy()
     env["COPYFILE_DISABLE"] = "1"
-    import subprocess
     subprocess.run(
         ["tar", "czf", os.path.abspath(tgz), "opentelemetry-operator"],
         cwd=tmp, env=env, check=True
     )
 PYEOF
 
-# Slim down the opentelemetry-operator sub-chart by replacing large conf/crds/ files
-# with empty stubs. The CRDs are managed by the parent chart's crds/ directory instead
-# (crds.create: false in values.yaml). Keeping the full 542 KB CRD files would push
-# the Helm release Secret over the Kubernetes 3 MB API request limit.
-echo "Slimming opentelemetry-operator conf/crds/ (replacing with empty stubs)..."
-python3 - <<'PYEOF'
-import tarfile, os, shutil, tempfile, io
-
-tgz = "charts/opentelemetry-operator-0.78.1.tgz"
-if not os.path.exists(tgz):
-    print(f"  {tgz} not found, skipping")
-    exit(0)
-
-# Stub content: preserves the {{- if .Values.crds.create }} guard so the template
-# renders correctly (empty output) whether crds.create is true or false.
-STUB = b"{{- if .Values.crds.create }}\n{{- end }}\n"
-
-crd_files = {
-    "opentelemetry-operator/conf/crds/crd-opentelemetrycollector.yaml",
-    "opentelemetry-operator/conf/crds/crd-opentelemetryinstrumentation.yaml",
-    "opentelemetry-operator/conf/crds/crd-opentelemetry.io_opampbridges.yaml",
-}
-
-with tempfile.TemporaryDirectory() as tmp:
-    with tarfile.open(tgz, "r:gz") as t:
-        t.extractall(tmp)
-
-    for rel in crd_files:
-        path = os.path.join(tmp, rel)
-        if os.path.exists(path):
-            orig = os.path.getsize(path)
-            with open(path, "wb") as f:
-                f.write(STUB)
-            print(f"  {os.path.basename(rel)}: {orig} -> {len(STUB)} bytes")
-        else:
-            print(f"  {rel} not found, skipping")
-
-    import subprocess, os as _os
-    env = _os.environ.copy()
-    env["COPYFILE_DISABLE"] = "1"
-    subprocess.run(
-        ["tar", "czf", os.path.abspath(tgz), "opentelemetry-operator"],
-        cwd=tmp, env=env, check=True
-    )
-PYEOF
+# NOTE: CRD slimming step was removed.
+# Previously this step replaced conf/crds/ templates with empty stubs (crds.create: false).
+# We now use Option B: crds.create: true so the operator sub-chart manages CRD lifecycle.
+# The full CRD YAML (~1.6 MB) compresses to ~160 KB gzipped — well within the 3 MB
+# Kubernetes API request limit for the Helm release Secret.
 
 # Create MLRun CE tarball
 helm package .

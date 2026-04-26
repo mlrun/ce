@@ -367,6 +367,101 @@ test_otel_operator_namespace_selector() {
     fi
 }
 
+# ============================================================================
+# RBAC Lifecycle Tests (Issue 6 — resources must be regular, not hooks)
+# ============================================================================
+
+test_rbac_no_hook_annotations() {
+    log_test "RBAC - ClusterRole and ClusterRoleBinding are regular resources (no hook annotations)"
+
+    local output
+    output=$(render_template "templates/opentelemetry/rbac.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true)
+
+    # Extract ClusterRole and ClusterRoleBinding sections; neither should have helm.sh/hook
+    local cluster_section
+    cluster_section=$(echo "$output" | awk '/kind: ClusterRole/{found=1} found{print} /^---/{if(found && NR>1) found=0}')
+
+    assert_not_contains "$cluster_section" "helm.sh/hook" \
+        "ClusterRole has no helm.sh/hook annotation (deleted on uninstall)"
+    assert_not_contains "$output" "before-hook-creation" \
+        "No before-hook-creation delete policy (resources are regular Helm-managed)"
+}
+
+test_rbac_cr_creator_no_hooks() {
+    log_test "RBAC - ServiceAccount/Role/RoleBinding for otel-cr-creator are regular resources"
+
+    local output
+    output=$(render_template "templates/opentelemetry/rbac.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true)
+
+    # The entire file should have no hook annotations at all
+    assert_not_contains "$output" "helm.sh/hook" \
+        "rbac.yaml has no helm.sh/hook annotations (all resources are regular)"
+}
+
+# ============================================================================
+# Namespace-label hook timing (Issue 6 — must be post-install, not pre-install)
+# ============================================================================
+
+test_namespace_label_post_install_hook() {
+    log_test "Namespace Label - Uses post-install hook (not pre-install)"
+
+    local output
+    output=$(render_template "templates/opentelemetry/namespace-label.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.namespaceLabel.enabled=true \
+        --set opentelemetry.collector.enabled=true)
+
+    assert_contains "$output" "post-install,post-upgrade" \
+        "Namespace label job uses post-install,post-upgrade hook"
+    assert_not_contains "$output" "pre-install" \
+        "Namespace label job does NOT use pre-install hook"
+}
+
+# ============================================================================
+# CR Installer resilience (Issue 2 — retry counter, Issue 3 — restart guard)
+# ============================================================================
+
+test_otel_cr_installer_retry_counter() {
+    log_test "OTel CR Installer - Has bounded retry counter with exit on failure"
+
+    local output
+    output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true \
+        --set opentelemetry.instrumentation.enabled=true)
+
+    assert_contains "$output" "max_retries" \
+        "Has max_retries variable (bounded retry loop)"
+    assert_contains "$output" "exit 1" \
+        "Has exit 1 on retry exhaustion (no infinite loop)"
+    assert_contains "$output" "retries=0" \
+        "Initializes retry counter"
+    assert_contains "$output" "instrumentation-cr.yaml" \
+        "Instrumentation CR uses temp file (not heredoc-in-until)"
+    assert_contains "$output" "collector-cr.yaml" \
+        "Collector CR uses temp file"
+}
+
+test_otel_cr_installer_restart_guard() {
+    log_test "OTel CR Installer - Rollout restart guarded by init container check"
+
+    local output
+    output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
+        --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true)
+
+    assert_contains "$output" "initContainers" \
+        "Checks for existing OTel init container before restart"
+    assert_contains "$output" "skipping rollout restart" \
+        "Has skip message when OTel already injected"
+    assert_contains "$output" "opentelemetry" \
+        "Checks for opentelemetry init container name"
+}
+
 
 # ============================================================================
 # Full Chart Render Test
@@ -447,6 +542,26 @@ main() {
     test_namespace_label_with_instrumentation_annotation
     test_otel_operator_namespace_selector
 
+
+    echo ""
+    echo "========================================"
+    echo "RBAC Lifecycle Tests"
+    echo "========================================"
+    test_rbac_no_hook_annotations
+    test_rbac_cr_creator_no_hooks
+
+    echo ""
+    echo "========================================"
+    echo "Namespace Label Hook Timing Tests"
+    echo "========================================"
+    test_namespace_label_post_install_hook
+
+    echo ""
+    echo "========================================"
+    echo "CR Installer Resilience Tests"
+    echo "========================================"
+    test_otel_cr_installer_retry_counter
+    test_otel_cr_installer_restart_guard
 
     echo ""
     echo "========================================"

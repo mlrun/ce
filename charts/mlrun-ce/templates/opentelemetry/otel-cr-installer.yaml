@@ -70,22 +70,39 @@ spec:
               {{- include "mlrun-ce.otel.collector.manifest" . | nindent 14 }}
               EOF
               echo "Creating/updating OpenTelemetryCollector CR (with webhook readiness retry)..."
+              retries=0; max_retries=30  # 30 × 5s = 150s max, well within 300s hook-timeout
               until kubectl apply -f /tmp/collector-cr.yaml 2>&1; do
-                echo "Webhook not ready yet, retrying in 5s..."
+                retries=$((retries + 1))
+                if [ $retries -ge $max_retries ]; then
+                  echo "ERROR: Webhook did not become ready after $((max_retries * 5))s. Check operator logs."
+                  exit 1
+                fi
+                echo "Webhook not ready yet, retrying in 5s... ($retries/$max_retries)"
                 sleep 5
               done
               echo "OpenTelemetryCollector CR created/updated!"
               {{- end }}
-              
+
               {{- if .Values.opentelemetry.instrumentation.enabled }}
-              # Create or update the Instrumentation CR
-              echo "Creating/updating Instrumentation CR..."
-              cat <<'EOF' | kubectl apply -f -
+              # Write the Instrumentation CR to a temp file and retry applying it
+              # (same pattern as the Collector CR — avoids heredoc-in-until-condition bash issues)
+              cat > /tmp/instrumentation-cr.yaml <<'EOF'
               {{- include "mlrun-ce.otel.instrumentation.manifest" . | nindent 14 }}
               EOF
+              echo "Creating/updating Instrumentation CR..."
+              retries=0; max_retries=30
+              until kubectl apply -f /tmp/instrumentation-cr.yaml 2>&1; do
+                retries=$((retries + 1))
+                if [ $retries -ge $max_retries ]; then
+                  echo "ERROR: Webhook did not become ready after $((max_retries * 5))s. Check operator logs."
+                  exit 1
+                fi
+                echo "Webhook not ready yet, retrying in 5s... ($retries/$max_retries)"
+                sleep 5
+              done
               echo "Instrumentation CR created/updated!"
               {{- end }}
-              
+
               echo "All OpenTelemetry CRs have been created successfully!"
 
               # Wait for the operator webhook to be fully ready before restarting pods
@@ -96,13 +113,19 @@ spec:
               done
 
               # Restart pods labeled mlrun.io/otel=true so they go through the webhook
-              # and receive OTel auto-instrumentation injection.
-              # This solves the race condition where pods start before the webhook is ready.
-              echo "Restarting instrumented deployments and statefulsets..."
-              kubectl -n {{ .Release.Namespace }} rollout restart deployment \
-                -l mlrun.io/otel=true 2>/dev/null || true
-              kubectl -n {{ .Release.Namespace }} rollout restart statefulset \
-                -l mlrun.io/otel=true 2>/dev/null || true
-              echo "Rollout restarts triggered — pods will be re-created with OTel injection."
+              # and receive OTel auto-instrumentation injection — but only if they don't
+              # already have the OTel init container (skip on upgrades where OTel was running).
+              if ! kubectl -n {{ .Release.Namespace }} get pods -l mlrun.io/otel=true \
+                  -o jsonpath='{.items[0].spec.initContainers[0].name}' 2>/dev/null \
+                  | grep -q opentelemetry; then
+                echo "Restarting instrumented deployments and statefulsets..."
+                kubectl -n {{ .Release.Namespace }} rollout restart deployment \
+                  -l mlrun.io/otel=true 2>/dev/null || true
+                kubectl -n {{ .Release.Namespace }} rollout restart statefulset \
+                  -l mlrun.io/otel=true 2>/dev/null || true
+                echo "Rollout restarts triggered — pods will be re-created with OTel injection."
+              else
+                echo "OTel already injected, skipping rollout restart."
+              fi
 {{- end }}
 

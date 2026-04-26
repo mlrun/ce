@@ -193,6 +193,13 @@ mlrun:
     # can expand $(PYTHONPATH) correctly. Without this, K8s env var substitution resolves
     # $(PYTHONPATH) to an empty string (it cannot see Docker image ENV vars), and the
     # mlrun `services` package path is lost, crashing the API on startup.
+    #
+    # NOTE: Ideally the MLRun API pod would opt out of OTel Python injection via
+    # instrumentation.opentelemetry.io/inject-python: "false" annotation. However the
+    # upstream mlrun chart template hardcodes pod annotations and has no podAnnotations
+    # values key — so the opt-out is not possible without patching the sub-chart.
+    # The PYTHONPATH workaround is the accepted solution unless the upstream chart adds
+    # podAnnotations support. Keep this in sync with the mlrun image's internal PYTHONPATH.
     extraEnvKeyValue:
       PYTHONPATH: "/mlrun/server/py:/mlrun/server/py/schemas/proto"
 
@@ -597,6 +604,11 @@ kube-prometheus-stack:
       # Enable OTLP write receiver so the OTel collector can push metrics directly
       # to Prometheus at /api/v1/otlp/v1/metrics instead of Prometheus scraping the collector.
       # Prometheus v3 requires both the feature flag AND --web.enable-otlp-receiver.
+      #
+      # NOTE: These flags are always set regardless of opentelemetry.collector.enabled.
+      # There is no Helm-native way to conditionally configure sub-chart values.
+      # The risk is minimal: the OTLP endpoint (/api/v1/otlp) shares port 9090 with the
+      # Prometheus query API which is already unauthenticated in CE.
       enableFeatures:
         - otlp-write-receiver
       additionalArgs:
