@@ -2,7 +2,10 @@ name: PR Validation
 
 on:
   pull_request_target:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, edited, reopened]
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   validate-and-label:
