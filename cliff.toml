@@ -1,0 +1,64 @@
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | sort(attribute="group") | group_by(attribute="group") %}\
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}\
+        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
+        {% if commit.breaking %}[**breaking**] {% endif %}\
+        {{ commit.message | split(pat="\n") | first | upper_first }} \
+        ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/mlrun/ce/commit/{{ commit.id }}))\
+        \n \
+    {% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = false
+filter_unconventional = false
+split_commits = false
+commit_preprocessors = []
+commit_parsers = [
+  # skip merge commits
+  { message = "(?i)^merge", skip = true },
+
+  # new PR title format (enforced by pr-validation.yml): [scope] description
+  # allowed scopes: feature, fix, docs, improvement, revert, breaking, ci
+  { message = "(?i)^\\[feature\\]", group = "Features" },
+  { message = "(?i)^\\[fix\\]", group = "Bug Fixes" },
+  { message = "(?i)^\\[docs\\]", group = "Documentation" },
+  { message = "(?i)^\\[improvement\\]", group = "Improvements" },
+  { message = "(?i)^\\[revert\\]", group = "Reverts" },
+  { message = "(?i)^\\[breaking\\]", group = "Breaking Changes" },
+  { message = "(?i)^\\[ci\\]", group = "CI/CD" },
+
+  # conventional commits format: feat: / fix: ...
+  { message = "(?i)^feat", group = "Features" },
+  { message = "(?i)^fix", group = "Bug Fixes" },
+  { message = "(?i)^refactor", group = "Improvements" },
+  { message = "(?i)^docs?", group = "Documentation" },
+  { message = "(?i)^chore\\(deps\\)", group = "Improvements" },
+  { message = "(?i)^revert", group = "Reverts" },
+
+  # historical [ComponentName] format — infer type from the verb in the message
+  { message = "(?i)^\\[[^\\]]+\\].*(fix|bug|broken|regression)", group = "Bug Fixes" },
+  { message = "(?i)^\\[[^\\]]+\\].*(add|support|enable|upgrade|update|migrate|connect|expose|allow)", group = "Features" },
+  { message = "(?i)^\\[[^\\]]+\\]", group = "Other" },
+
+  # plain English fallback
+  { message = "(?i)^(fix|bug)", group = "Bug Fixes" },
+  { message = "(?i)^(add|update|upgrade|support|enable|migrate|expose|allow)", group = "Features" },
+  { message = "(?i)^(remove|disable|clean|deprecat)", group = "Other" },
+
+  # catch-all — anything that didn't match above
+  { message = ".*", group = "Other" },
+]
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "mlrun-ce-[0-9].*"
+skip_tags = ""
+ignore_tags = ""
+topo_order = false
+sort_commits = "newest"
