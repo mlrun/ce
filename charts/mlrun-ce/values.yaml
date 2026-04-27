@@ -328,6 +328,9 @@ seaweedfs:
     enabled: false
   volume:
     enabled: false
+    dataDirs:
+      - name: data1
+        maxVolumes: 12
   filer:
     enabled: false
 
@@ -342,6 +345,8 @@ seaweedfs:
   # Reduces from 4 component pods down to 1, cutting CPU/memory footprint significantly.
   allInOne:
     enabled: true
+    extraEnvironmentVars:
+      WEED_MASTER_VOLUME_GROWTH_COPY_1: "1"
     s3:
       enabled: true
       port: 8333
