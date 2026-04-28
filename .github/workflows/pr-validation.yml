@@ -11,7 +11,6 @@ jobs:
   validate-and-label:
     runs-on: ubuntu-latest
     permissions:
-      issues: write
       pull-requests: write
 
     steps:
