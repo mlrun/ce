@@ -47,8 +47,10 @@ jobs:
           echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
           if [[ "$CHART_VERSION" =~ -rc ]]; then
             echo "is_rc=true" >> $GITHUB_OUTPUT
+            echo "Chart version: $CHART_VERSION (RC release)"
           else
             echo "is_rc=false" >> $GITHUB_OUTPUT
+            echo "Chart version: $CHART_VERSION (stable release)"
           fi
 
       - name: Add Helm Repos
