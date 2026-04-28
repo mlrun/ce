@@ -322,12 +322,17 @@ seaweedfs:
     # delete other pods during data migration (e.g., multi-node rebalancing).
     # Enabling this creates a ClusterRole, which conflicts in multi-NS deployments.
     createClusterRole: false
+    extraEnvironmentVars:
+      WEED_MASTER_VOLUME_GROWTH_COPY_1: "1"
 
   # Disable individual component pods - allInOne runs everything in a single deployment
   master:
     enabled: false
   volume:
     enabled: false
+    dataDirs:
+      - name: data1
+        maxVolumes: 12
   filer:
     enabled: false
 
