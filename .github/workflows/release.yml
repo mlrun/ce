@@ -113,7 +113,7 @@ jobs:
       - name: Update GitHub Release with release notes
         if: steps.version_check.outputs.is_rc == 'false'
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
           gh release edit "mlrun-ce-${{ steps.version_check.outputs.version }}" \
             --notes-file RELEASE_NOTES.md
