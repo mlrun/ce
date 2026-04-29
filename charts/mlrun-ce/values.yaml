@@ -199,7 +199,8 @@ mlrun:
     # upstream mlrun chart template hardcodes pod annotations and has no podAnnotations
     # values key — so the opt-out is not possible without patching the sub-chart.
     # The PYTHONPATH workaround is the accepted solution unless the upstream chart adds
-    # podAnnotations support. Keep this in sync with the mlrun image's internal PYTHONPATH.
+    # podAnnotations support. Keep this in sync with the mlrun image's internal PYTHONPATH:
+    # https://github.com/mlrun/mlrun/blob/development/dockerfiles/mlrun-api/Dockerfile#L70
     extraEnvKeyValue:
       PYTHONPATH: "/mlrun/server/py:/mlrun/server/py/schemas/proto"
 

@@ -113,8 +113,10 @@ spec:
               done
 
               # Restart pods labeled mlrun.io/otel=true so they go through the webhook
-              # and receive OTel auto-instrumentation injection — but only if they don't
-              # already have the OTel init container (skip on upgrades where OTel was running).
+              # and receive OTel auto-instrumentation injection — skipped if pods already have
+              # the OTel init container (i.e. OTel was enabled in a previous install/upgrade).
+              # Affected pods: Jupyter. Restart also occurs when enabling OTel for the first time on upgrade.
+              # This increases installation time when OTel is enabled.
               if ! kubectl -n {{ .Release.Namespace }} get pods -l mlrun.io/otel=true \
                   -o jsonpath='{.items[0].spec.initContainers[0].name}' 2>/dev/null \
                   | grep -q opentelemetry; then
