@@ -28,6 +28,10 @@ spec:
       securityContext:
         {{- toYaml .Values.timescaledb.securityContext | nindent 8 }}
       {{- end }}
+      {{- with .Values.timescaledb.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: timescaledb
           image: "{{ .Values.timescaledb.image.repository }}:{{ .Values.timescaledb.image.tag }}"
