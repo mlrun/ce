@@ -38,11 +38,5 @@ spec:
         - |
           echo "Labeling namespace {{ .Release.Namespace }} for OpenTelemetry..."
           kubectl label namespace {{ .Release.Namespace }} {{ .Values.opentelemetry.namespaceLabel.key }}={{ .Values.opentelemetry.namespaceLabel.value }} --overwrite
-          {{- if .Values.opentelemetry.instrumentation.enabled }}
-          echo "Annotating namespace for namespace-wide Python auto-instrumentation..."
-          kubectl annotate namespace {{ .Release.Namespace }} \
-            instrumentation.opentelemetry.io/inject-python={{ include "mlrun-ce.otel.instrumentation.fullname" . }} \
-            --overwrite
-          {{- end }}
           echo "Namespace configured for OpenTelemetry successfully!"
 {{- end -}}

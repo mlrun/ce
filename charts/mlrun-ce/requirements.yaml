@@ -27,5 +27,5 @@ dependencies:
     condition: strimzi-kafka-operator.enabled
   - name: opentelemetry-operator
     repository: "https://open-telemetry.github.io/opentelemetry-helm-charts"
-    version: "0.78.1"
+    version: "0.105.0"
     condition: opentelemetry-operator.enabled

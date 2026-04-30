@@ -145,7 +145,7 @@ OpenTelemetry Collector (deployment mode):
 OpenTelemetry Auto-Instrumentation:
 -  Instrumentation CR: {{ include "mlrun-ce.otel.instrumentation.fullname" . }}
 {{- if .Values.opentelemetry.instrumentation.python.enabled }}
--  Python auto-instrumentation: enabled (namespace-wide via namespace annotation)
+-  Python auto-instrumentation: enabled (per-pod via annotation on Jupyter and Nuclio function pods)
 {{- end }}
 {{- if .Values.opentelemetry.instrumentation.java.enabled }}
 -  Java auto-instrumentation: enabled
@@ -156,7 +156,7 @@ OpenTelemetry Auto-Instrumentation:
 Namespace OTel configuration:
 -  Label: {{ .Values.opentelemetry.namespaceLabel.key }}={{ .Values.opentelemetry.namespaceLabel.value }}
 {{- if .Values.opentelemetry.instrumentation.enabled }}
--  Python instrumentation annotation applied to all pods in namespace {{ .Release.Namespace }}
+-  Webhook scoped to this namespace; injection is opt-in per pod (not namespace-wide)
 {{- end }}
 {{- end }}
 {{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}

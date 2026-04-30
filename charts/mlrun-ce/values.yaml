@@ -103,6 +103,10 @@ nuclio:
       metadata:
         labels:
           mlrun.io/otel: "true"
+        annotations:
+          # Opt-in to OTel Python auto-instrumentation per pod (not namespace-wide).
+          # Harmless when OTel is disabled — webhook only runs in labeled namespaces.
+          instrumentation.opentelemetry.io/inject-python: "mlrun-otel-instrumentation"
       spec:
         env:
           - name: OTEL_SERVICE_NAME
@@ -188,21 +192,6 @@ mlrun:
           name: mlrun-override-env
           optional: true
     extraPersistentVolumeMounts: ~
-    # Explicitly expose the Docker image's PYTHONPATH as a K8s env var so that the
-    # OpenTelemetry operator's PYTHONPATH injection (PYTHONPATH=/otel-auto-instrumentation-python:$(PYTHONPATH))
-    # can expand $(PYTHONPATH) correctly. Without this, K8s env var substitution resolves
-    # $(PYTHONPATH) to an empty string (it cannot see Docker image ENV vars), and the
-    # mlrun `services` package path is lost, crashing the API on startup.
-    #
-    # NOTE: Ideally the MLRun API pod would opt out of OTel Python injection via
-    # instrumentation.opentelemetry.io/inject-python: "false" annotation. However the
-    # upstream mlrun chart template hardcodes pod annotations and has no podAnnotations
-    # values key — so the opt-out is not possible without patching the sub-chart.
-    # The PYTHONPATH workaround is the accepted solution unless the upstream chart adds
-    # podAnnotations support. Keep this in sync with the mlrun image's internal PYTHONPATH:
-    # https://github.com/mlrun/mlrun/blob/development/dockerfiles/mlrun-api/Dockerfile#L70
-    extraEnvKeyValue:
-      PYTHONPATH: "/mlrun/server/py:/mlrun/server/py/schemas/proto"
 
     # Set mlrun api workers count by setting the minReplicas value.
     # This is recommended for production environments running at high scale.
@@ -770,15 +759,13 @@ opentelemetry-operator:
   manager:
     # Collector image used by the operator when creating collectors
     collectorImage:
-      # Using contrib distribution pinned to 0.108.0 — versions 0.109+ use a dynamically linked
-      # binary in a distroless image that lacks /lib64/ld-linux-x86-64.so.2 and fails to exec.
       repository: otel/opentelemetry-collector-contrib
-      tag: 0.108.0
+      tag: 0.145.0
     # Auto-instrumentation images (all fields required by the sub-chart schema)
     autoInstrumentationImage:
       python:
         repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python
-        tag: 0.50b0
+        tag: 0.60b1
       java:
         repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
         tag: 2.10.0
@@ -826,8 +813,9 @@ opentelemetry:
     fullnameOverride: ""
     # DEPLOYMENT mode - one collector pod per namespace, not injected as a sidecar
     mode: deployment
-    # Set to "none" to prevent automatic collector upgrades when the operator is upgraded
-    upgradeStrategy: automatic
+    # "none" keeps the collector at the image version specified below, preventing the operator
+    # from auto-upgrading it on operator upgrades (which can introduce breaking config changes).
+    upgradeStrategy: none
     # Collector sidecar container resources
     resources:
       requests:
@@ -905,14 +893,13 @@ opentelemetry:
         telemetry:
           logs:
             level: info
-          metrics:
-            address: 0.0.0.0:8888
 
   # Instrumentation configuration for auto-instrumentation
   instrumentation:
     enabled: false
     nameOverride: ""
-    fullnameOverride: ""
+    # Fixed name so Nuclio functionDefaults.podAnnotations can reference it without Helm templating
+    fullnameOverride: "mlrun-otel-instrumentation"
     # Propagators for distributed tracing context
     propagators:
       - tracecontext
@@ -926,7 +913,7 @@ opentelemetry:
       enabled: true
       image:
         repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python
-        tag: 0.50b0
+        tag: 0.60b1
       resources:
         requests:
           cpu: 50m

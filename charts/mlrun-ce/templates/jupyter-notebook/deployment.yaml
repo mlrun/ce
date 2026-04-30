@@ -20,6 +20,10 @@ spec:
         {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
         {{- include "mlrun-ce.otel.podLabels" . | nindent 8 }}
         {{- end }}
+      {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: {{ include "mlrun-ce.otel.instrumentation.fullname" . | quote }}
+      {{- end }}
     spec:
       {{- with .Values.jupyterNotebook.image.pullSecrets }}
       imagePullSecrets:
