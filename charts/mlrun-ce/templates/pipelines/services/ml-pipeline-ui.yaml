@@ -17,6 +17,5 @@ spec:
   selector:
     app: ml-pipeline-ui
     application-crd-id: kubeflow-pipelines
-  sessionAffinity: None
   type: {{ .Values.pipelines.service.type }}
 {{- end -}}
