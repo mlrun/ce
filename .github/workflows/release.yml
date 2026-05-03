@@ -36,6 +36,23 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
+      - name: Extract Chart Version and check RC
+        id: version_check
+        run: |
+          CHART_VERSION=$(grep '^version:' charts/mlrun-ce/Chart.yaml | awk '{print $2}')
+          if [[ -z "$CHART_VERSION" ]]; then
+            echo "Error: Failed to extract version from Chart.yaml" >&2
+            exit 1
+          fi
+          echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
+          if [[ "$CHART_VERSION" =~ -rc ]]; then
+            echo "is_rc=true" >> $GITHUB_OUTPUT
+            echo "Chart version: $CHART_VERSION (RC release)"
+          else
+            echo "is_rc=false" >> $GITHUB_OUTPUT
+            echo "Chart version: $CHART_VERSION (stable release)"
+          fi
+
       - name: Add Helm Repos
         run: |
           helm repo add stable https://charts.helm.sh/stable
@@ -53,18 +70,57 @@ jobs:
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Extract Chart Version from Chart.yaml
-        id: extract_version
+      - name: Find first RC tag for this version
+        if: steps.version_check.outputs.is_rc == 'false'
+        id: first_rc
         run: |
-          CHART_VERSION=$(grep '^version:' charts/mlrun-ce/Chart.yaml | awk '{print $2}')
-          if [[ -z "$CHART_VERSION" ]]; then
-            echo "Error: Failed to extract version from Chart.yaml" >&2
-            exit 1
+          VERSION="${{ steps.version_check.outputs.version }}"
+
+          FIRST_RC=$(git tag --sort=version:refname \
+            | grep "^mlrun-ce-${VERSION}-rc\." \
+            | head -1)
+
+          if [[ -n "$FIRST_RC" ]]; then
+            echo "range=${FIRST_RC}^..HEAD" >> $GITHUB_OUTPUT
+            echo "Range start: first RC tag ${FIRST_RC}"
+          else
+            # Hotfix with no RC — use previous stable tag so notes cover only this version
+            PREV_STABLE=$(git tag --sort=version:refname \
+              | grep "^mlrun-ce-[0-9]" \
+              | grep -v "\-rc\." \
+              | grep -v "^mlrun-ce-${VERSION}$" \
+              | tail -1)
+            if [[ -n "$PREV_STABLE" ]]; then
+              echo "range=${PREV_STABLE}..HEAD" >> $GITHUB_OUTPUT
+              echo "Range start: previous stable tag ${PREV_STABLE}"
+            else
+              echo "range=HEAD" >> $GITHUB_OUTPUT
+              echo "Range start: none (first ever release)"
+            fi
           fi
-          echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes with git-cliff
+        if: steps.version_check.outputs.is_rc == 'false'
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: >-
+            ${{ steps.first_rc.outputs.range }}
+            --tag mlrun-ce-${{ steps.version_check.outputs.version }}
+            --ignore-tags "mlrun-ce-${{ steps.version_check.outputs.version }}-rc.*"
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      - name: Update GitHub Release with release notes
+        if: steps.version_check.outputs.is_rc == 'false'
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          gh release edit "mlrun-ce-${{ steps.version_check.outputs.version }}" \
+            --notes-file RELEASE_NOTES.md
 
     outputs:
-      version: ${{ steps.extract_version.outputs.version }}
+      version: ${{ steps.version_check.outputs.version }}
 
   deploy_ce_onprem:
     needs: release
