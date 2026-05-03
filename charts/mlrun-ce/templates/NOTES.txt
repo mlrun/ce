@@ -145,7 +145,7 @@ OpenTelemetry Collector (deployment mode):
 OpenTelemetry Auto-Instrumentation:
 -  Instrumentation CR: {{ include "mlrun-ce.otel.instrumentation.fullname" . }}
 {{- if .Values.opentelemetry.instrumentation.python.enabled }}
--  Python auto-instrumentation: enabled (per-pod via annotation on Jupyter and Nuclio function pods)
+-  Python auto-instrumentation: enabled (per-pod via annotation on Nuclio function pods)
 {{- end }}
 {{- if .Values.opentelemetry.instrumentation.java.enabled }}
 -  Java auto-instrumentation: enabled
@@ -161,8 +161,8 @@ Namespace OTel configuration:
 {{- end }}
 {{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
 {{- "\n" }}
-Pods labeled with mlrun.io/otel=true: Jupyter and Nuclio function pods (via functionDefaults).
-These Python-based pods receive OTel auto-instrumentation (runtime metrics, traces, HTTP metrics for Nuclio functions).
+Pods labeled with mlrun.io/otel=true: Nuclio function pods (via functionDefaults).
+These pods receive OTel auto-instrumentation (runtime metrics, traces, HTTP metrics).
 {{- end }}
 {{- end }}
 

@@ -115,7 +115,8 @@ spec:
               # Restart pods labeled mlrun.io/otel=true so they go through the webhook
               # and receive OTel auto-instrumentation injection — skipped if pods already have
               # the OTel init container (i.e. OTel was enabled in a previous install/upgrade).
-              # Affected pods: Jupyter. Restart also occurs when enabling OTel for the first time on upgrade.
+              # Affected pods: Nuclio function pods labeled mlrun.io/otel=true (only exist after user deploys functions).
+              # Primarily useful on upgrade when functions are already running and need to pick up OTel injection.
               # This increases installation time when OTel is enabled.
               if ! kubectl -n {{ .Release.Namespace }} get pods -l mlrun.io/otel=true \
                   -o jsonpath='{.items[0].spec.initContainers[0].name}' 2>/dev/null \
