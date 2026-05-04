@@ -1,7 +1,7 @@
 ---
 name: bump
 description: Bump the chart version in charts/mlrun-ce/Chart.yaml (patch, minor, or rc)
-allowed-tools: Read(charts/mlrun-ce/Chart.yaml) Edit(charts/mlrun-ce/Chart.yaml)
+allowed-tools: Read(charts/mlrun-ce/Chart.yaml) Edit(charts/mlrun-ce/Chart.yaml) Read(charts/mlrun-ce/README.md) Edit(charts/mlrun-ce/README.md)
 ---
 
 Bump the version in `charts/mlrun-ce/Chart.yaml`.
@@ -19,5 +19,6 @@ Steps:
 3. Show the user: "Bumping `<old>` → `<new>`" and ask for confirmation before writing.
 4. On confirmation, update the `version:` field in `charts/mlrun-ce/Chart.yaml` in-place.
 5. Remind the user: version bumps must be committed before opening a PR, and the PR title must follow `[Scope] description` format.
+6. Update the MLRun CE version under Version Matrix in `charts/mlrun-ce/README.md`.
 
 If no argument is given, show the current version and list the three options with the resulting version for each, then ask which to apply.
