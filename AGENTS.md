@@ -18,14 +18,6 @@ make helm-repo-add
 
 # Package the chart as a tarball
 make package
-
-# Run full local end-to-end test on a Kind cluster (requires docker, kind, kubectl, helm)
-./tests/kind-test.sh full          # Create Kind cluster + install chart
-./tests/kind-test.sh create        # Create cluster only
-./tests/kind-test.sh install       # Install chart (assumes cluster exists)
-./tests/kind-test.sh verify        # Verify installation
-./tests/kind-test.sh delete        # Delete Kind cluster
-CLEANUP_ON_EXIT=true ./tests/kind-test.sh  # Auto-cleanup after test
 ```
 
 ## Architecture
