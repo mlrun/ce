@@ -84,19 +84,6 @@ helm template mlrun charts/mlrun-ce \
   | kubectl apply --dry-run=client -f -
 ```
 
-### 3. End-to-end on Kind (full install)
-
-```bash
-./tests/kind-test.sh full          # Create Kind cluster + install chart + verify
-./tests/kind-test.sh create        # Create cluster only
-./tests/kind-test.sh install       # Install chart (assumes cluster exists)
-./tests/kind-test.sh verify        # Verify installation
-./tests/kind-test.sh delete        # Delete Kind cluster
-CLEANUP_ON_EXIT=true ./tests/kind-test.sh full  # Auto-cleanup after test
-```
-
-Requires docker, kind, kubectl, helm in `$PATH`.
-
 ## Adding a New Component
 
 For the full step-by-step guide see [AGENTS.md — How to Add a New Component](AGENTS.md#how-to-add-a-new-component). The summary:
