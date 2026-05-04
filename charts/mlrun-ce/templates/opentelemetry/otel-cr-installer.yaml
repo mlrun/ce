@@ -63,7 +63,6 @@ spec:
                 echo "  ${crd} ready."
               done
 
-              {{- if .Values.opentelemetry.collector.enabled }}
               # Write the OpenTelemetryCollector CR to a temp file and retry applying it
               # until the operator webhook is ready to accept it (fresh install timing fix).
               cat > /tmp/collector-cr.yaml <<'EOF'
@@ -81,7 +80,6 @@ spec:
                 sleep 5
               done
               echo "OpenTelemetryCollector CR created/updated!"
-              {{- end }}
 
               {{- if .Values.opentelemetry.instrumentation.enabled }}
               # Write the Instrumentation CR to a temp file and retry applying it
