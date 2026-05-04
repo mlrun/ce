@@ -4,3 +4,6 @@ charts/mlrun-ce/charts/*
 **/.DS_Store
 *.DS_Store
 **/__pycache__
+
+# Claude Code local settings (machine-specific, not for commit)
+.claude/settings.local.json
