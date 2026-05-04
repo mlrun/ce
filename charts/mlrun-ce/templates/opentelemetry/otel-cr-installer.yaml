@@ -1,4 +1,4 @@
-{{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+{{- if .Values.opentelemetry.collector.enabled }}
 ---
 # Job to create OpenTelemetry CRs after CRDs are established and the operator webhook is ready.
 #

@@ -1,4 +1,4 @@
-{{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+{{- if .Values.opentelemetry.collector.enabled }}
 ---
 # ServiceAccount for OpenTelemetry collector sidecar
 apiVersion: v1

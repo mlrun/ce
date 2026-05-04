@@ -1,4 +1,4 @@
-{{- if and (or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled) .Values.opentelemetry.namespaceLabel.enabled -}}
+{{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.namespaceLabel.enabled -}}
 # This template uses a post-install/post-upgrade hook to label the namespace
 # for OpenTelemetry operator webhook injection, avoiding Helm ownership conflicts
 apiVersion: batch/v1
