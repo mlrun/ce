@@ -118,5 +118,5 @@ From a fresh clone to a linted chart:
 15. Add a section to this AGENTS.md file describing the component's architecture, dependencies, and any special design patterns used.
 16. Try to reuse existing patterns and templates as much as possible — for example, if the component needs a ConfigMap of environment variables, add them to `templates/config/` and follow the same pattern as `mlrun-common-env` or `jupyter-common-env`.
 17. Try and customize the component's configuration via `values.yaml` rather than hardcoding values in the templates. For example, if the component needs a port number, add a `myComponent.port` value and reference it in the template, rather than hardcoding a port.
-18. Each k8s that support limit and request should be added to the values file and template or use the default values from the sub-chart if it already supports it.
+18. Each Kubernetes resource that supports limits and requests should have them added to the values file and template, or use the default values from the sub-chart if it already supports them.
 19. Run `make helm-lint` and fix any lint errors before opening a PR.
