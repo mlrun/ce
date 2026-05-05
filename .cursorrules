@@ -19,9 +19,9 @@
 
 ## Common Tasks (Claude Code has `/bump`, `/pr` skills for these)
 
-When a user asks you to help with the following tasks, use the commands below — these are the manual equivalents of the Claude Code skills defined in `.claude/commands/`.
+When a user asks you to help with the following tasks, use the commands below — these are the manual equivalents of the Claude Code skills defined in `.claude/skills/`.
 
-**Render chart templates** (`/render` in Claude Code)
+**Render chart templates**
 ```bash
 # Full chart
 helm template mlrun charts/mlrun-ce -f charts/mlrun-ce/values.yaml
