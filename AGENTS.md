@@ -4,7 +4,7 @@
 
 This is a Helm umbrella chart repository for **MLRun Community Edition (CE)** — an open-source MLOps stack. The main chart lives at `charts/mlrun-ce/` and bundles: Nuclio, MLRun, Jupyter, MPI Operator, SeaweedFS (S3-compatible storage), Spark Operator, Kubeflow Pipelines, Prometheus stack, TimescaleDB, and Strimzi Kafka Operator.
 
-## Commands
+## Commands to lint, package, and manage the chart:
 
 ```bash
 # Lint the helm chart (requires helm and chart-testing `ct` installed)
@@ -51,8 +51,8 @@ make package
 
 ### Values Files
 
-- `charts/mlrun-ce/values.yaml` - base values for all modes, anb default installation
-- `charts/mlrun-ce/admin_installation_values.yaml` - use for install cluster resources such as CRDs, RBAC, and operators deployemnt
+- `charts/mlrun-ce/values.yaml` - base values for all modes, and default installation
+- `charts/mlrun-ce/admin_installation_values.yaml` - use for install cluster resources such as CRDs, RBAC, and operators deployment.
 - `charts/mlrun-ce/non_admin_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with NodePort.
 - `charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with ClusterIP.
 
