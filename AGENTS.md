@@ -51,7 +51,7 @@ make package
 
 ### Values Files
 
-- `charts/mlrun-ce/values.yaml` - base values for all modes, and default installation
+- `charts/mlrun-ce/values.yaml` - base values for all modes, and default installation.
 - `charts/mlrun-ce/admin_installation_values.yaml` - use for install cluster resources such as CRDs, RBAC, and operators deployment.
 - `charts/mlrun-ce/non_admin_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with NodePort.
 - `charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with ClusterIP.
@@ -110,7 +110,7 @@ From a fresh clone to a linted chart:
 7. Must create a NodePort service if the component exposes a user-facing UI or API that should be accessible outside the cluster. If the component is internal-only, use a ClusterIP service instead.
 8. Storage credentials — mount the existing `storage-credentials` Secret via `envFrom.secretRef`; do not create a second credentials secret.
 9. CRD dependencies — if the component depends on CRDs from a sub-chart, use `helm.sh/hook: post-install,post-upgrade` with an appropriate `hook-weight` on the CRs (see `templates/kafka/` for the established pattern).
-10. Update all three values files to explicitly set `myComponent.enabled: true/false` as appropriate for each install mode.
+10. Update the three install-mode values files to explicitly set `myComponent.enabled: true/false` as appropriate for each install mode.
 11. Add the component's service URL to `templates/NOTES.txt` using the existing conditional pattern.
 12. Update `charts/mlrun-ce/README.md` if a new NodePort is exposed.
 13. Bump the version in `charts/mlrun-ce/Chart.yaml`.
