@@ -2,6 +2,7 @@
 name: bump
 description: Bump the chart version in charts/mlrun-ce/Chart.yaml (patch, minor, or rc)
 allowed-tools: Read(charts/mlrun-ce/Chart.yaml) Edit(charts/mlrun-ce/Chart.yaml) Read(charts/mlrun-ce/README.md) Edit(charts/mlrun-ce/README.md)
+disable-model-invocation: false
 ---
 
 Bump the version in `charts/mlrun-ce/Chart.yaml`.

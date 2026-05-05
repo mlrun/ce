@@ -2,6 +2,7 @@
 name: pr
 description: Analyze branch changes and generate a fully filled PR description ready to paste into GitHub
 allowed-tools: Bash(git diff*) Bash(git log*)
+disable-model-invocation: false
 ---
 
 Analyze the current branch changes and generate a fully filled PR description ready to paste into GitHub.

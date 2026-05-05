@@ -9,7 +9,6 @@
 ## Preferred Response Patterns
 <!-- Mirrors CLAUDE.md — duplicated here because Cursor has no @file import support -->
 
-- Helm install commands: always include `--namespace mlrun --wait`
 - Values changes: show `--set` flags or a patch values file overlay, not edits to `values.yaml` directly
 - New templates: show the complete file including the `{{- if .Values.<component>.enabled }}` guard and `include "mlrun-ce.common.labels"` call
 - Service references within templates: use `{{ .Release.Namespace }}`, never hardcode namespace strings

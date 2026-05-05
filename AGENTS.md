@@ -62,7 +62,7 @@ From a fresh clone to a linted chart:
 
 1. `make helm-repo-add` — adds all external repos (reads `requirements.yaml`; idempotent)
 2. `make helm-update-dependencies` — downloads sub-chart tarballs into `charts/mlrun-ce/charts/` (must run before any lint or template render)
-3. `make helm-lint` — runs `helm lint charts/mlrun-ce` + `ct lint --target-branch development`
+3. `make helm-lint` — runs `helm lint charts/mlrun-ce` + `ct lint`
    - `ct` only lints charts with changes relative to the target branch; always run from a feature branch, not directly on `development`
 4. Render all templates locally (no cluster needed):
    ```bash
@@ -94,29 +94,19 @@ From a fresh clone to a linted chart:
 
 ## How to Add a New Component
 
-1. Add a top-level block to `values.yaml`:
+1. Add a top-level block to `values.yaml` and update the three install-mode values files:
    ```yaml
    myComponent:
      enabled: true
    ```
-2. Create `charts/mlrun-ce/templates/myComponent/`.
-3. Every template file must open with `{{- if .Values.myComponent.enabled }}` and close with `{{- end }}`.
-4. Add label helpers to `_helpers.tpl` following the `mlrun-ce.<component>.labels` / `mlrun-ce.<component>.selectorLabels` pattern.
-5. NodePort selection — avoid all currently occupied ports:
+2. Create `charts/mlrun-ce/templates/myComponent/`. Every template file must open with `{{- if .Values.myComponent.enabled }}` and close with `{{- end }}`. Add label helpers to `_helpers.tpl` following the `mlrun-ce.<component>.labels` / `mlrun-ce.<component>.selectorLabels` pattern.
+3. NodePort selection — avoid all currently occupied ports:
    - 30010 Grafana, 30020 Prometheus, 30040 Jupyter, 30050 Nuclio
    - 30060 MLRun UI, 30070 MLRun API, 30093 SeaweedFS Admin, 30094 SeaweedFS S3
    - 30100 Pipelines, 30110 TimescaleDB
-6. NodePort services must be optional and only created when the component is enabled.
-7. Must create a NodePort service if the component exposes a user-facing UI or API that should be accessible outside the cluster. If the component is internal-only, use a ClusterIP service instead.
-8. Storage credentials — mount the existing `storage-credentials` Secret via `envFrom.secretRef`; do not create a second credentials secret.
-9. CRD dependencies — if the component depends on CRDs from a sub-chart, use `helm.sh/hook: post-install,post-upgrade` with an appropriate `hook-weight` on the CRs (see `templates/kafka/` for the established pattern).
-10. Update the three install-mode values files to explicitly set `myComponent.enabled: true/false` as appropriate for each install mode.
-11. Add the component's service URL to `templates/NOTES.txt` using the existing conditional pattern.
-12. Update `charts/mlrun-ce/README.md` if a new NodePort is exposed.
-13. Bump the version in `charts/mlrun-ce/Chart.yaml`.
-14. Keep secrets and ENV's naming consistent with existing patterns (`storage-credentials` Secret, `mlrun-common-env` ConfigMap, etc.).
-15. Add a section to this AGENTS.md file describing the component's architecture, dependencies, and any special design patterns used.
-16. Try to reuse existing patterns and templates as much as possible — for example, if the component needs a ConfigMap of environment variables, add them to `templates/config/` and follow the same pattern as `mlrun-common-env` or `jupyter-common-env`.
-17. Try to customize the component's configuration via `values.yaml` rather than hardcoding values in the templates. For example, if the component needs a port number, add a `myComponent.port` value and reference it in the template, rather than hardcoding a port.
-18. Each Kubernetes resource that supports limits and requests should have them added to the values file and template, or use the default values from the sub-chart if it already supports them.
-19. Run `make helm-lint` and fix any lint errors before opening a PR.
+   - Create a NodePort service only for user-facing UIs or APIs; internal-only components use ClusterIP.
+4. Storage credentials — mount the existing `storage-credentials` Secret via `envFrom.secretRef`; do not create a second credentials secret. Expose all port numbers and other tunables as `values.yaml` keys rather than hardcoding them in templates.
+5. CRD dependencies — if the component depends on CRDs from a sub-chart, use `helm.sh/hook: post-install,post-upgrade` with an appropriate `hook-weight` on the CRs (see `templates/kafka/` for the established pattern).
+6. Keep Secret and ConfigMap names consistent with existing patterns (`storage-credentials`, `mlrun-common-env`, etc.). Add env config to `templates/config/` following the `mlrun-common-env` / `jupyter-common-env` pattern. Each Kubernetes resource that supports limits and requests should expose them in `values.yaml`.
+7. Add the component's service URL to `templates/NOTES.txt`, update `charts/mlrun-ce/README.md` if a new NodePort is exposed, and add a section to this AGENTS.md describing the component's architecture and dependencies.
+8. Bump `charts/mlrun-ce/Chart.yaml` and run `make helm-lint` before opening a PR.
