@@ -29,8 +29,8 @@ Analyze the current branch changes and generate a fully filled PR description re
    - The storage credentials structure changed
    - Any hook annotation or hook-weight changed in a way that affects upgrade order
 
-5. Provide an option PR title following the `[Scope] description` format, where Scope is one of: `['feature', 'fix', 'docs', 'improvement', 'revert', 'breaking', 'ci']`. For example: `[Feature] Add Redis support to mlrun-ce`.
-6. **Fill the PR template** — produce the complete filled template below. Be specific and concrete; do not use placeholder text.
+4. Provide an option PR title following the `[Scope] description` format, where Scope is one of: `['feature', 'fix', 'docs', 'improvement', 'revert', 'breaking', 'ci']`. For example: `[Feature] Add Redis support to mlrun-ce`.
+5. **Fill the PR template** — produce the complete filled template below. Be specific and concrete; do not use placeholder text.
 
 ---
 
@@ -104,4 +104,4 @@ Then replace each `[ ]` with `[x]` on items you can confirm from the diff, follo
 
 After outputting the filled template, add a short **"Warnings"** section (outside the template) listing anything that needs human attention before opening the PR (missing version bump, unsynced values files, potential breaking changes, etc.).
 
-Between every sentence that end with a `.` add a two new lines to make it more readable.
+Between every sentence that ends with a `.` add a two new lines to make it more readable.

@@ -268,9 +268,7 @@ $ kubectl --namespace mlrun delete pvc <pv-name>
 # Remove hostpath(s) used for mlrun (and possibly nfs). Those will be created, by default under /tmp, and will contain
 # your release name, e.g.:
 $ rm -rf my-mlrun-mlrun-ce-mlrun
-...
 ```
-
 
 ### Using Kubeflow Pipelines
 

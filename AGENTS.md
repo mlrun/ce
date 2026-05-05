@@ -51,9 +51,10 @@ make package
 
 ### Values Files
 
-- `charts/mlrun-ce/admin_installation_values.yaml` — admin install
-- `charts/mlrun-ce/non_admin_installation_values.yaml` — non-admin install
-- `charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml` — non-admin with ClusterIP
+- `charts/mlrun-ce/values.yaml` - base values for all modes, anb default installation
+- `charts/mlrun-ce/admin_installation_values.yaml` - use for install cluster resources such as CRDs, RBAC, and operators deployemnt
+- `charts/mlrun-ce/non_admin_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with NodePort.
+- `charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with ClusterIP.
 
 ## Quick-Start Dev Workflow
 
@@ -108,7 +109,7 @@ From a fresh clone to a linted chart:
 6. NodePort services must be optional and only created when the component is enabled.
 7. Must create a NodePort service if the component exposes a user-facing UI or API that should be accessible outside the cluster. If the component is internal-only, use a ClusterIP service instead.
 8. Storage credentials — mount the existing `storage-credentials` Secret via `envFrom.secretRef`; do not create a second credentials secret.
-8. CRD dependencies — if the component depends on CRDs from a sub-chart, use `helm.sh/hook: post-install,post-upgrade` with an appropriate `hook-weight` on the CRs (see `templates/kafka/` for the established pattern).
+9. CRD dependencies — if the component depends on CRDs from a sub-chart, use `helm.sh/hook: post-install,post-upgrade` with an appropriate `hook-weight` on the CRs (see `templates/kafka/` for the established pattern).
 10. Update all three values files to explicitly set `myComponent.enabled: true/false` as appropriate for each install mode.
 11. Add the component's service URL to `templates/NOTES.txt` using the existing conditional pattern.
 12. Update `charts/mlrun-ce/README.md` if a new NodePort is exposed.
@@ -118,4 +119,4 @@ From a fresh clone to a linted chart:
 16. Try to reuse existing patterns and templates as much as possible — for example, if the component needs a ConfigMap of environment variables, add them to `templates/config/` and follow the same pattern as `mlrun-common-env` or `jupyter-common-env`.
 17. Try and customize the component's configuration via `values.yaml` rather than hardcoding values in the templates. For example, if the component needs a port number, add a `myComponent.port` value and reference it in the template, rather than hardcoding a port.
 18. Each k8s that support limit and request should be added to the values file and template or use the default values from the sub-chart if it already supports it.
-15. Run `make helm-lint` and fix any lint errors before opening a PR.
+19. Run `make helm-lint` and fix any lint errors before opening a PR.

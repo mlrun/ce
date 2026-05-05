@@ -28,16 +28,16 @@ make helm-lint
 2. Clone your fork and set the upstream remote to the main repository:
 
 ```bash
-git clone
+git clone https://github.com/<UserName>/ce.git
 cd ce
 git remote add upstream https://github.com/mlrun/ce
 ```
-2. Branch from `development` — the default branch is `development`, not `main` or `master`.
-3. Branch naming convention: `<scope>/<short-description or ticket-number>`, e.g. `feature/add-redis-support` or `fix/CE-111`.
-2. All PRs target `upstream/development`.
-3. Bump the version in `charts/mlrun-ce/Chart.yaml` before opening a PR (format: `major.minor.patch` or `major.minor.patch-rc.N`, e.g. `0.11.0-rc.1`).
-4. If you change `requirements.yaml`, run `make helm-update-dependencies` and commit the updated `requirements.lock` alongside it.
-6. Each change should support Local Mac installations and native k8s as explained in [prerequisites documentation](https://docs.mlrun.org/en/stable/install-mlrun-ce/kubernetes-install.html#prerequisites).
+3. Branch from `development` — the default branch is `development`, not `main` or `master`.
+4. Branch naming convention: `<scope>/<short-description or ticket-number>`, e.g. `feature/add-redis-support` or `fix/CE-111`.
+5. All PRs target `upstream/development`.
+7. Bump the version in `charts/mlrun-ce/Chart.yaml` before opening a PR (format: `major.minor.patch` or `major.minor.patch-rc.N`, e.g. `0.11.0-rc.1`).
+8. If you change `requirements.yaml`, run `make helm-update-dependencies` and commit the updated `requirements.lock` alongside it.
+9. Each change should support Local Mac installations and native k8s as explained in [prerequisites documentation](https://docs.mlrun.org/en/stable/install-mlrun-ce/kubernetes-install.html#prerequisites).
 
 ## Commit and PR Title Format
 
@@ -58,7 +58,7 @@ The format is enforced by `.github/workflows/pr-validation.yml` and auto-applies
 
 ## Testing
 
-Three levels, run them in order:
+Two levels, run them in order:
 
 ### 1. Lint (no cluster required)
 
@@ -93,10 +93,11 @@ For the full step-by-step guide see [AGENTS.md — How to Add a New Component](A
 3. Wrap every template file with `{{- if .Values.<componentName>.enabled }}` / `{{- end }}`.
 4. Mount the existing `storage-credentials` Secret for storage access; don't create a new one.
 5. Use `helm.sh/hook: post-install,post-upgrade` for resources that depend on CRDs.
-6. Update all three install-mode values files:
-   - `charts/mlrun-ce/values.yaml`
-   - `charts/mlrun-ce/admin_installation_values.yaml`
-   - `charts/mlrun-ce/non_admin_installation_values.yaml`
+6. Update values.yaml and all three install-mode values files:
+   - `charts/mlrun-ce/values.yaml` - base values for all modes, anb default installation
+   - `charts/mlrun-ce/admin_installation_values.yaml` - use for install cluster resources such as CRDs, RBAC, and operators deployemnt
+   - `charts/mlrun-ce/non_admin_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with NodePort.
+   - `charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with ClusterIP.
 7. Update `templates/NOTES.txt` and `charts/mlrun-ce/README.md`.
 8. Bump `charts/mlrun-ce/Chart.yaml` version.
 9. Run `make helm-lint`.
