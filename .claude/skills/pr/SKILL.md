@@ -104,4 +104,4 @@ Then replace each `[ ]` with `[x]` on items you can confirm from the diff, follo
 
 After outputting the filled template, add a short **"Warnings"** section (outside the template) listing anything that needs human attention before opening the PR (missing version bump, unsynced values files, potential breaking changes, etc.).
 
-Between every sentence that ends with a `.` add a two new lines to make it more readable.
+Between every sentence that ends with a `.` add two new lines to make it more readable.
