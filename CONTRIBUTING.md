@@ -95,7 +95,7 @@ For the full step-by-step guide see [AGENTS.md — How to Add a New Component](A
 5. Use `helm.sh/hook: post-install,post-upgrade` for resources that depend on CRDs.
 6. Update values.yaml and all three install-mode values files:
    - `charts/mlrun-ce/values.yaml` - base values for all modes, and default installation.
-   - `charts/mlrun-ce/admin_installation_values.yaml` - use for install cluster resources such as CRDs, RBAC, and operators deployment.
+   - `charts/mlrun-ce/admin_installation_values.yaml` - use to install cluster resources such as CRDs, RBAC, and operators deployment.
    - `charts/mlrun-ce/non_admin_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with NodePort.
    - `charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with ClusterIP.
 7. Update `templates/NOTES.txt` and `charts/mlrun-ce/README.md`.

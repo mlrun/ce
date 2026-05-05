@@ -29,7 +29,7 @@ Analyze the current branch changes and generate a fully filled PR description re
    - The storage credentials structure changed
    - Any hook annotation or hook-weight changed in a way that affects upgrade order
 
-4. Provide an option PR title following the `[Scope] description` format, where Scope is one of: `['feature', 'fix', 'docs', 'improvement', 'revert', 'breaking', 'ci']`. For example: `[Feature] Add Redis support to mlrun-ce`.
+4. Provide an optional PR title following the `[Scope] description` format, where Scope is one of: `['feature', 'fix', 'docs', 'improvement', 'revert', 'breaking', 'ci']`. For example: `[Feature] Add Redis support to mlrun-ce`.
 5. **Fill the PR template** — produce the complete filled template below. Be specific and concrete; do not use placeholder text.
 
 ---

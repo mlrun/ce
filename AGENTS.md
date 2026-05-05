@@ -52,7 +52,7 @@ make package
 ### Values Files
 
 - `charts/mlrun-ce/values.yaml` - base values for all modes, and default installation.
-- `charts/mlrun-ce/admin_installation_values.yaml` - use for install cluster resources such as CRDs, RBAC, and operators deployment.
+- `charts/mlrun-ce/admin_installation_values.yaml` - use to install cluster resources such as CRDs, RBAC, and operators deployment.
 - `charts/mlrun-ce/non_admin_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with NodePort.
 - `charts/mlrun-ce/non_admin_cluster_ip_installation_values.yaml` - use to install non-cluster resources such as Deployments, Services, and Ingresses with ClusterIP.
 
