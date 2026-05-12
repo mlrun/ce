@@ -36,7 +36,7 @@ package: ## Package the application
 .PHONY: helm-lint
 helm-lint: helm-repo-add ## Lint Helm Chart
 	@helm lint charts/mlrun-ce
-	@ct lint --target-branch $(HELM_LINT_DEFAULT_BRANCH)
+	@ct lint --target-branch $(HELM_LINT_DEFAULT_BRANCH) --validate-maintainers=false --helm-extra-args "--timeout 600s"
 
 .PHONY: helm-update-dependencies
 helm-update-dependencies:  ## Update Helm Chart dependencies

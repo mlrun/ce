@@ -413,3 +413,154 @@ TimescaleDB connection string for MLRun model monitoring
 postgresql://{{ .Values.timescaledb.auth.username | urlquery }}:{{ .Values.timescaledb.auth.password | urlquery }}@{{ include "mlrun-ce.timescaledb.fullname" . }}:{{ .Values.timescaledb.service.port }}/{{ .Values.timescaledb.auth.database }}
 {{- end }}
 
+{{/*
+=============================================================================
+OpenTelemetry helpers
+=============================================================================
+*/}}
+
+{{/*
+OpenTelemetry Collector name
+*/}}
+{{- define "mlrun-ce.otel.collector.name" -}}
+{{- default "otel" .Values.opentelemetry.collector.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+OpenTelemetry Collector fullname
+*/}}
+{{- define "mlrun-ce.otel.collector.fullname" -}}
+{{- if .Values.opentelemetry.collector.fullnameOverride }}
+{{- .Values.opentelemetry.collector.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default "otel" .Values.opentelemetry.collector.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+OpenTelemetry Instrumentation name
+*/}}
+{{- define "mlrun-ce.otel.instrumentation.name" -}}
+{{- default "otel-instrumentation" .Values.opentelemetry.instrumentation.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+OpenTelemetry Instrumentation fullname
+*/}}
+{{- define "mlrun-ce.otel.instrumentation.fullname" -}}
+{{- if .Values.opentelemetry.instrumentation.fullnameOverride }}
+{{- .Values.opentelemetry.instrumentation.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default "otel-instrumentation" .Values.opentelemetry.instrumentation.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+OpenTelemetry common labels
+*/}}
+{{- define "mlrun-ce.otel.labels" -}}
+{{ include "mlrun-ce.common.labels" . }}
+{{ include "mlrun-ce.otel.selectorLabels" . }}
+{{- end }}
+
+{{/*
+OpenTelemetry selector labels
+*/}}
+{{- define "mlrun-ce.otel.selectorLabels" -}}
+{{ include "mlrun-ce.common.selectorLabels" . }}
+app.kubernetes.io/component: opentelemetry
+{{- end }}
+
+{{/*
+OpenTelemetryCollector CR manifest for use in the CRD readiness job
+*/}}
+{{- define "mlrun-ce.otel.collector.manifest" -}}
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: {{ include "mlrun-ce.otel.collector.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+spec:
+  mode: {{ .Values.opentelemetry.collector.mode }}
+  upgradeStrategy: {{ .Values.opentelemetry.collector.upgradeStrategy }}
+  managementState: managed
+  image: {{ (index .Values "opentelemetry-operator").manager.collectorImage.repository }}:{{ (index .Values "opentelemetry-operator").manager.collectorImage.tag }}
+  resources:
+    {{- toYaml .Values.opentelemetry.collector.resources | nindent 4 }}
+  config:
+    {{- toYaml .Values.opentelemetry.collector.config | nindent 4 }}
+{{- end }}
+
+{{/*
+Instrumentation CR manifest for use in the CRD readiness job
+*/}}
+{{- define "mlrun-ce.otel.instrumentation.manifest" -}}
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: {{ include "mlrun-ce.otel.instrumentation.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+spec:
+  exporter:
+    endpoint: http://{{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.httpPort }}
+  propagators:
+    {{- toYaml .Values.opentelemetry.instrumentation.propagators | nindent 4 }}
+  sampler:
+    type: {{ .Values.opentelemetry.instrumentation.sampler.type }}
+    argument: {{ .Values.opentelemetry.instrumentation.sampler.argument | quote }}
+  env:
+    - name: OTEL_SERVICE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: OTEL_METRICS_EXPORTER
+      value: otlp
+    - name: OTEL_TRACES_EXPORTER
+      value: otlp
+    - name: OTEL_LOGS_EXPORTER
+      value: none
+  {{- if .Values.opentelemetry.instrumentation.python.enabled }}
+  python:
+    image: {{ .Values.opentelemetry.instrumentation.python.image.repository }}:{{ .Values.opentelemetry.instrumentation.python.image.tag }}
+    resourceRequirements:
+      {{- toYaml .Values.opentelemetry.instrumentation.python.resources | nindent 6 }}
+    env:
+      - name: OTEL_PYTHON_LOG_CORRELATION
+        value: "true"
+      - name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED
+        value: "false"
+      - name: OTEL_PYTHON_DISABLED_INSTRUMENTATIONS
+        value: "aws_lambda"
+  {{- end }}
+  {{- if .Values.opentelemetry.instrumentation.java.enabled }}
+  java:
+    image: {{ .Values.opentelemetry.instrumentation.java.image.repository }}:{{ .Values.opentelemetry.instrumentation.java.image.tag }}
+    resourceRequirements:
+      {{- toYaml .Values.opentelemetry.instrumentation.java.resources | nindent 6 }}
+    env:
+      - name: OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED
+        value: "true"
+  {{- end }}
+{{- end }}
+{{/*
+OTel pod label — marks a pod as OTel-monitored for metric enrichment and discovery.
+Namespace-level instrumentation annotation (set by namespace-label job) handles Python auto-instrumentation.
+Wrap usage with: {{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+*/}}
+{{- define "mlrun-ce.otel.podLabels" -}}
+mlrun.io/otel: "true"
+{{- end }}

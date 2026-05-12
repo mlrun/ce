@@ -127,5 +127,44 @@ TimescaleDB is available at:
 {{- end }}
 {{- end }}
 
+{{- if index .Values "opentelemetry-operator" "enabled" }}
+{{- "\n" }}
+OpenTelemetry Operator is enabled!
+-  Operator manages OpenTelemetryCollector and Instrumentation CRs
+-  Namespace selector: opentelemetry.io/inject=enabled
+{{- if .Values.opentelemetry.collector.enabled }}
+{{- "\n" }}
+OpenTelemetry Collector (deployment mode):
+-  Collector CR: {{ include "mlrun-ce.otel.collector.fullname" . }}
+-  OTLP gRPC endpoint: {{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.grpcPort }}
+-  OTLP HTTP endpoint: {{ include "mlrun-ce.otel.collector.fullname" . }}-collector:{{ .Values.opentelemetry.collector.otlp.httpPort }}
+-  Metrics export: collector pushes via OTLP to Prometheus at /api/v1/otlp/v1/metrics
+{{- end }}
+{{- if .Values.opentelemetry.instrumentation.enabled }}
+{{- "\n" }}
+OpenTelemetry Auto-Instrumentation:
+-  Instrumentation CR: {{ include "mlrun-ce.otel.instrumentation.fullname" . }}
+{{- if .Values.opentelemetry.instrumentation.python.enabled }}
+-  Python auto-instrumentation: enabled (per-pod via annotation on Nuclio function pods)
+{{- end }}
+{{- if .Values.opentelemetry.instrumentation.java.enabled }}
+-  Java auto-instrumentation: enabled
+{{- end }}
+{{- end }}
+{{- if .Values.opentelemetry.namespaceLabel.enabled }}
+{{- "\n" }}
+Namespace OTel configuration:
+-  Label: {{ .Values.opentelemetry.namespaceLabel.key }}={{ .Values.opentelemetry.namespaceLabel.value }}
+{{- if .Values.opentelemetry.instrumentation.enabled }}
+-  Webhook scoped to this namespace; injection is opt-in per pod (not namespace-wide)
+{{- end }}
+{{- end }}
+{{- if or .Values.opentelemetry.collector.enabled .Values.opentelemetry.instrumentation.enabled }}
+{{- "\n" }}
+Pods labeled with mlrun.io/otel=true: Nuclio function pods (via functionDefaults).
+These pods receive OTel auto-instrumentation (runtime metrics, traces, HTTP metrics).
+{{- end }}
+{{- end }}
+
 Happy MLOPSing!!! :]
 {{- end }}

@@ -164,6 +164,7 @@ setup_helm_repos() {
     helm repo add spark-operator https://kubeflow.github.io/spark-operator 2>/dev/null || true
     helm repo add kube-prometheus-stack https://prometheus-community.github.io/helm-charts 2>/dev/null || true
     helm repo add kafka https://charts.bitnami.com/bitnami 2>/dev/null || true
+    helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts 2>/dev/null || true
     helm repo update
 }
 
@@ -793,6 +794,53 @@ verify_multi_ns() {
     else
         log_error "${total_errors} check(s) failed"
         exit 1
+    fi
+
+    # Verify OpenTelemetry CRDs and resources
+    echo ""
+    log_info "Verifying OpenTelemetry..."
+
+    # Check if OpenTelemetry Operator is installed (CRDs exist)
+    if kubectl get crd opentelemetrycollectors.opentelemetry.io &>/dev/null; then
+        log_info "OpenTelemetryCollector CRD exists"
+
+        # Check for collector CR
+        local collector
+        collector=$(kubectl get opentelemetrycollectors -n "${NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [[ -n "${collector}" ]]; then
+            log_info "OpenTelemetryCollector CR found: ${collector}"
+            kubectl get opentelemetrycollectors -n "${NAMESPACE}" "${collector}" -o yaml 2>/dev/null | grep -E "mode:|status:" | head -5 || true
+        else
+            log_warn "No OpenTelemetryCollector CR found in namespace ${NAMESPACE}"
+        fi
+    else
+        log_warn "OpenTelemetryCollector CRD not found - operator may not be installed"
+    fi
+
+    if kubectl get crd instrumentations.opentelemetry.io &>/dev/null; then
+        log_info "Instrumentation CRD exists"
+
+        # Check for instrumentation CR
+        local instrumentation
+        instrumentation=$(kubectl get instrumentations -n "${NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+        if [[ -n "${instrumentation}" ]]; then
+            log_info "Instrumentation CR found: ${instrumentation}"
+        else
+            log_warn "No Instrumentation CR found in namespace ${NAMESPACE}"
+        fi
+    else
+        log_warn "Instrumentation CRD not found - operator may not be installed"
+    fi
+
+    # Check if Jupyter pod has mlrun.io/otel label (deployment mode - no sidecar injection)
+    echo ""
+    log_info "Checking Jupyter deployment for OTEL pod label..."
+    local jupyter_labels
+    jupyter_labels=$(kubectl get deployment -n "${NAMESPACE}" -l app.kubernetes.io/component=jupyter-notebook -o jsonpath='{.items[0].spec.template.metadata.labels}' 2>/dev/null || echo "")
+    if echo "${jupyter_labels}" | grep -q "mlrun.io/otel"; then
+        log_info "Jupyter has mlrun.io/otel=true pod label (deployment mode)"
+    else
+        log_warn "Jupyter does not have mlrun.io/otel label (OTel may be disabled)"
     fi
 }
 

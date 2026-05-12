@@ -20,5 +20,8 @@ dependencies:
 - name: strimzi-kafka-operator
   repository: https://strimzi.io/charts/
   version: 0.48.0
-digest: sha256:e2b2d1b7531c4829aa25c8ce8d95506642ab59d0cb692a343d2e508a71525374
-generated: "2026-03-31T17:13:31.403112322Z"
+- name: opentelemetry-operator
+  repository: https://open-telemetry.github.io/opentelemetry-helm-charts
+  version: 0.105.0
+digest: sha256:ffa30cab1c7fdc60950e1184741bf359b1b0f8487192cffedae7209f85a4fadc
+generated: "2026-04-30T16:39:21.63182+03:00"

@@ -14,6 +14,7 @@ The Open source MLRun ce chart includes the following stack:
 * Spark Operator - https://github.com/GoogleCloudPlatform/spark-on-k8s-operator
 * Pipelines - https://github.com/kubeflow/pipelines
 * Prometheus stack - https://github.com/prometheus-community/helm-charts
+* OpenTelemetry Operator - https://github.com/open-telemetry/opentelemetry-operator (observability)
 
 ## Prerequisites
 
@@ -64,6 +65,33 @@ helm --namespace mlrun \
     mlrun/mlrun-ce
 ```
 
+### Installing with OpenTelemetry Enabled
+
+> **Note:** OpenTelemetry is **disabled by default**. Follow the standard [Installing the Chart](#installing-the-chart) steps, adding the OTel flags below.
+
+To install with OpenTelemetry enabled, append the following flags to the helm install command:
+
+```bash
+helm --namespace mlrun \
+    install my-mlrun \
+    --wait \
+    --set global.registry.url=<registry URL e.g. index.docker.io/iguazio> \
+    --set global.registry.secretName=registry-credentials \
+    --set opentelemetry-operator.enabled=true \
+    --set opentelemetry.namespaceLabel.enabled=true \
+    --set opentelemetry.collector.enabled=true \
+    --set opentelemetry.instrumentation.enabled=true \
+    mlrun/mlrun-ce
+```
+
+To verify the OpenTelemetry resources were created:
+
+```bash
+kubectl -n mlrun get opentelemetrycollectors
+kubectl -n mlrun get instrumentations
+kubectl -n mlrun get pods | grep opentelemetry
+```
+
 ### Installing MLRun-ce on minikube
 
 The Open source MLRun ce uses node ports for simplicity. If your kubernetes cluster is running inside a VM, 
@@ -88,6 +116,25 @@ following values:
 
 Additional configurable values are documented in the `values.yaml`, and the `values.yaml` of all sub charts. 
 Override those [in the normal methods](https://helm.sh/docs/chart_template_guide/values_files/).
+
+### Configuring OpenTelemetry (Observability)
+
+MLRun CE includes the OpenTelemetry Operator for collecting metrics and traces. When enabled, it deploys a single collector per namespace (deployment mode) — instrumented pods push OTLP data to the collector, which forwards metrics to Prometheus via the OTLP endpoint. Python auto-instrumentation is opt-in per pod. Nuclio function pods are labeled `mlrun.io/otel: "true"` via `functionDefaults`. To enable OTel injection on a function, add the annotation before deploying: `fn.with_annotations({"instrumentation.opentelemetry.io/inject-python": "true"})`.
+
+For a fresh install with OTel, see [Installing with OpenTelemetry Enabled](#installing-with-opentelemetry-enabled).
+
+To enable OTel on an existing installation:
+
+```bash
+helm --namespace mlrun upgrade my-mlrun \
+    --set opentelemetry-operator.enabled=true \
+    --set opentelemetry.namespaceLabel.enabled=true \
+    --set opentelemetry.collector.enabled=true \
+    --set opentelemetry.instrumentation.enabled=true \
+    mlrun/mlrun-ce
+```
+
+> **Note:** The above assumes a single-namespace installation. For multi-namespace (admin/non-admin) deployments, refer to the MLRun documentation.
 
 ### Working with ECR
 
@@ -268,7 +315,6 @@ $ kubectl --namespace mlrun delete pvc <pv-name>
 # Remove hostpath(s) used for mlrun (and possibly nfs). Those will be created, by default under /tmp, and will contain
 # your release name, e.g.:
 $ rm -rf my-mlrun-mlrun-ce-mlrun
-...
 ```
 
 
@@ -283,6 +329,6 @@ Refer to the [**Kubeflow documentation**](https://www.kubeflow.org/docs/started/
 
 This table shows the versions of the main components in the MLRun CE chart:
 
-| MLRun CE   | MLRun  | Nuclio | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack |
-|------------|--------|--------|---------|--------------|-----------|----------------|-----------|-----------------------|
-| **0.11.0** | 1.11.0 | 1.15.9 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                |
+| MLRun CE   | MLRun  | Nuclio | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack | OpenTelemetry Operator |
+|------------|--------|--------|---------|--------------|-----------|----------------|-----------|-----------------------|------------------------|
+| **0.11.0** | 1.11.0 | 1.15.9 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |

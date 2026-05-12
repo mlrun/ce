@@ -1,0 +1,64 @@
+# MLRun Community Edition — Cursor Rules
+
+## Source of Truth
+
+`AGENTS.md` is the authoritative reference for this project. Read it before making any suggestions. It covers architecture, design patterns, template conventions, component dependencies, how to add new components, and common debugging scenarios.
+
+`CONTRIBUTING.md` covers the development workflow, commit format, and PR process.
+
+## Preferred Response Patterns
+<!-- Mirrors CLAUDE.md — duplicated here because Cursor has no @file import support -->
+
+- Values changes: show `--set` flags or a patch values file overlay, not edits to `values.yaml` directly
+- New templates: show the complete file including the `{{- if .Values.<component>.enabled }}` guard and `include "mlrun-ce.common.labels"` call
+- Service references within templates: use `{{ .Release.Namespace }}`, never hardcode namespace strings
+- After any `requirements.yaml` change: remind the user to run `make helm-update-dependencies` and commit `requirements.lock`
+- If a change affects the default installation, remind the user to update `values.yaml` and all three install-mode values files (`admin_installation_values.yaml`, `non_admin_installation_values.yaml`, `non_admin_cluster_ip_installation_values.yaml`) with the appropriate default
+- If a change adds a new component, changes a component version, or changes the installation process, remind the user to update `charts/mlrun-ce/README.md`
+
+## Common Tasks (Claude Code has `/bump`, `/pr` skills for these)
+
+When a user asks you to help with the following tasks, use the commands below — these are the manual equivalents of the Claude Code skills defined in `.claude/skills/`.
+
+**Render chart templates**
+```bash
+# Full chart
+helm template mlrun charts/mlrun-ce -f charts/mlrun-ce/values.yaml
+
+# Single template or directory
+helm template mlrun charts/mlrun-ce -f charts/mlrun-ce/values.yaml \
+  --show-only templates/<path>
+
+# With a values overlay (e.g. non-admin install)
+helm template mlrun charts/mlrun-ce \
+  -f charts/mlrun-ce/values.yaml \
+  -f charts/mlrun-ce/non_admin_installation_values.yaml
+```
+
+**Bump Chart version** (`/bump` in Claude Code)
+Read the current version from `charts/mlrun-ce/Chart.yaml` and increment:
+- `patch` — `0.11.0` → `0.11.1`
+- `minor` — `0.11.3` → `0.12.0`
+- `rc` — `0.11.0-rc.34` → `0.11.0-rc.35` (or append `-rc.1` if no suffix)
+
+Always show the old → new version before writing and confirm with the user.
+
+**Generate PR description** (`/pr` in Claude Code)
+Run `git diff upstream/development...HEAD`, `git log upstream/development..HEAD --oneline`, and `git diff upstream/development...HEAD --name-only`, then fill in `.github/pull_request_template.md` based on the changes. Check `[x]` on checklist items confirmable from the diff; leave `[ ]` on items requiring human action. Flag missing version bumps, unsynced values files, and breaking changes.
+
+## Do Not Suggest
+
+- `helm upgrade --install` without running `make helm-update-dependencies` first
+- Adding a new sub-chart to `requirements.yaml` for custom resources — add templates to `charts/mlrun-ce/templates/<component>/` instead
+- `kubectl apply` for resources managed by this chart
+- `Chart.yaml` apiVersion v2 dependency blocks (this chart uses apiVersion v1 + `requirements.yaml`)
+- Creating a second credentials Secret — mount the existing `storage-credentials` Secret via `envFrom`
+- Hardcoding namespace names in templates — use `{{ .Release.Namespace }}`
+- Using `kafka.enabled + strimzi-kafka-operator.enabled` as a combined condition — the template guard is only `kafka.enabled`; Strimzi is a prerequisite, not a co-guard
+- Treating `seaweedfs-s3-config` as a SeaweedFS dependency — SeaweedFS *creates* it; Pipelines and MLRun *consume* it
+
+## Workflow (from CONTRIBUTING.md)
+
+- Fork-based workflow: PRs target `upstream/development`, not `origin/development`
+- Branch naming: `<scope>/<short-description-or-ticket>` — e.g. `feature/add-redis-support`, `fix/CE-111`
+- Always bump `charts/mlrun-ce/Chart.yaml` version before opening a PR

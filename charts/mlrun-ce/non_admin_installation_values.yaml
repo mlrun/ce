@@ -82,3 +82,19 @@ kafka:
 
 kube-prometheus-stack:
   enabled: false
+
+# OpenTelemetry Operator - disabled, CRDs installed at controller level
+opentelemetry-operator:
+  enabled: false
+
+# OpenTelemetry CRs - enabled for user namespace
+# The namespace will be labeled and annotated for OTel deployment-mode collection
+# and namespace-wide Python auto-instrumentation.
+opentelemetry:
+  namespaceLabel:
+    enabled: true
+  collector:
+    enabled: true
+  instrumentation:
+    enabled: true
+
