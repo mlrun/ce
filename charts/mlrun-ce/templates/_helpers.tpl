@@ -151,24 +151,45 @@ S3 Service Port - returns the port for pipeline config
 {{- end -}}
 
 {{/*
-S3 Access Key - uses top-level s3.storage.accessKey for all components (MLRun, Jupyter, Pipelines)
+S3 Access Key - uses top-level storage.s3.accessKey for MLRun and Jupyter
 */}}
 {{- define "mlrun-ce.s3.accessKey" -}}
 {{- .Values.storage.s3.accessKey -}}
 {{- end -}}
 
 {{/*
-S3 Secret Key - uses top-level s3.storage.secretKey for all components (MLRun, Jupyter, Pipelines)
+S3 Secret Key - uses top-level storage.s3.secretKey for MLRun and Jupyter
 */}}
 {{- define "mlrun-ce.s3.secretKey" -}}
 {{- .Values.storage.s3.secretKey -}}
 {{- end -}}
 
 {{/*
-S3 Bucket - uses top-level s3.storage.bucket for all components
+S3 Bucket - uses top-level storage.s3.bucket for MLRun and Jupyter
 */}}
 {{- define "mlrun-ce.s3.bucket" -}}
 {{- .Values.storage.s3.bucket -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Access Key - configured independently from storage.s3.accessKey (MLRun/Jupyter)
+*/}}
+{{- define "mlrun-ce.pipelines.s3.accessKey" -}}
+{{- .Values.pipelines.storage.s3.accessKey -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Secret Key - configured independently from storage.s3.secretKey (MLRun/Jupyter)
+*/}}
+{{- define "mlrun-ce.pipelines.s3.secretKey" -}}
+{{- .Values.pipelines.storage.s3.secretKey -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Bucket - configured independently from storage.s3.bucket (MLRun/Jupyter)
+*/}}
+{{- define "mlrun-ce.pipelines.s3.bucket" -}}
+{{- .Values.pipelines.storage.s3.bucket -}}
 {{- end -}}
 
 {{/*
@@ -197,7 +218,7 @@ s3://
 {{- end -}}
 
 {{- define "mlrun-ce.artifactPath" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := coalesce .Values.global.infrastructure.aws.bucketName .Values.storage.s3.bucket "mlrun" -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/projects/{{ `{{run.project}}` }}/artifacts
@@ -207,7 +228,7 @@ s3://{{ $bucket }}/projects/{{ `{{run.project}}` }}/artifacts
 {{- end -}}
 
 {{- define "mlrun-ce.featureStore.dataPrefix" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := coalesce .Values.global.infrastructure.aws.bucketName .Values.storage.s3.bucket "mlrun" -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/projects/{project}/FeatureStore/{name}/{kind}
@@ -217,7 +238,7 @@ s3://{{ $bucket }}/projects/{project}/FeatureStore/{name}/{kind}
 {{- end -}}
 
 {{- define "mlrun-ce.model-endpoint.monitoring.userSpace" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := coalesce .Values.global.infrastructure.aws.bucketName .Values.storage.s3.bucket "mlrun" -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
@@ -227,7 +248,7 @@ s3://{{ $bucket }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
 {{- end -}}
 
 {{- define "mlrun-ce.model-endpoint.monitoring.application" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := coalesce .Values.global.infrastructure.aws.bucketName .Values.storage.s3.bucket "mlrun" -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
@@ -237,7 +258,7 @@ s3://{{ $bucket }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
 {{- end -}}
 
 {{- define "mlrun-ce.model-endpoint.monitoring.default" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := coalesce .Values.global.infrastructure.aws.bucketName .Values.storage.s3.bucket "mlrun" -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}

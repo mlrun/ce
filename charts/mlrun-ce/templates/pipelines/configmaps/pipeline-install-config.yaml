@@ -7,7 +7,7 @@ data:
   appName: pipeline
   appVersion: {{ .Values.pipelines.images.apiServer.tag }}
   autoUpdatePipelineDefaultVersion: "false"
-  bucketName: "{{ include "mlrun-ce.s3.bucket" . }}"
+  bucketName: "{{ include "mlrun-ce.pipelines.s3.bucket" . }}"
   cacheDb: cachedb
   cacheImage: {{ .Values.pipelines.images.cacheImage.repository }}:{{ .Values.pipelines.images.cacheImage.tag }}
   cacheNodeRestrictions: "false"
