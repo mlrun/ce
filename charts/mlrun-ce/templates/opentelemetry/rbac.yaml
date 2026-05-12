@@ -1,0 +1,157 @@
+{{- if .Values.opentelemetry.collector.enabled }}
+---
+# ServiceAccount for OpenTelemetry collector sidecar
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+---
+# ServiceAccount for the CR creator job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-otel-cr-creator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+---
+# Role for OpenTelemetry collector to access Kubernetes resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+rules:
+  # Allow reading pod metadata for resource detection
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  # Allow reading configmaps for collector configuration
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+---
+# RoleBinding for OpenTelemetry collector
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: {{ .Release.Namespace }}
+---
+# ClusterRole for the CR creator job to read CRDs and label namespaces (cluster-scoped)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-otel-crd-reader
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+rules:
+  # Allow reading CRDs to check availability (CRDs are cluster-scoped)
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+  # Allow labeling namespaces for OTEL injection
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - patch
+      - update
+---
+# ClusterRoleBinding for the CR creator job
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-otel-crd-reader
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-otel-crd-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-otel-cr-creator
+    namespace: {{ .Release.Namespace }}
+---
+# Role for the CR creator job to create OpenTelemetry CRs (namespace-scoped)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-otel-cr-creator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+rules:
+  # Allow creating/updating OpenTelemetry CRs
+  - apiGroups:
+      - opentelemetry.io
+    resources:
+      - opentelemetrycollectors
+      - instrumentations
+    verbs:
+      - create
+      - get
+      - patch
+      - update
+      - list
+  # Allow rollout restart of instrumented deployments/statefulsets after webhook is ready
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - patch
+---
+# RoleBinding for the CR creator job
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-otel-cr-creator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-otel-cr-creator
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-otel-cr-creator
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+

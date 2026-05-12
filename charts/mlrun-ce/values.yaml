@@ -94,6 +94,30 @@ nuclio:
       kind: mlrun
       synchronizationInterval: 10m
       apiAddress: http://mlrun-api-chief:8080/api
+    # Default labels/env applied to all Nuclio function deployments.
+    # NOTE: functionDefaults.metadata.* sets values on the NuclioFunction CR object itself,
+    # NOT on the pod template. Therefore:
+    #   - mlrun.io/otel label below is on the CR, not the pod (informational only).
+    #   - OTel Python auto-instrumentation requires the inject-python annotation on the POD.
+    #     Users must add this explicitly when deploying a function:
+    #
+    #       fn.with_annotations({
+    #           "instrumentation.opentelemetry.io/inject-python": "mlrun-otel-instrumentation"
+    #       })
+    #
+    #     See: charts/mlrun-ce/templates/NOTES.txt for post-install instructions.
+    # OTEL_SERVICE_NAME uses the stable function name (nuclio.io/function-name label)
+    # so metrics survive function redeployments without creating new Prometheus series.
+    functionDefaults:
+      metadata:
+        labels:
+          mlrun.io/otel: "true"
+      spec:
+        env:
+          - name: OTEL_SERVICE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: "metadata.labels['nuclio.io/function-name']"
 
 mlrun:
   # set the type of filesystem to use: filesystem, s3
@@ -562,6 +586,20 @@ kube-prometheus-stack:
     service:
       type: NodePort
       nodePort: 30020
+    prometheusSpec:
+      # Enable OTLP write receiver so the OTel collector can push metrics directly
+      # to Prometheus at /api/v1/otlp/v1/metrics instead of Prometheus scraping the collector.
+      # Prometheus v3 requires both the feature flag AND --web.enable-otlp-receiver.
+      #
+      # NOTE: These flags are always set regardless of opentelemetry.collector.enabled.
+      # There is no Helm-native way to conditionally configure sub-chart values.
+      # The risk is minimal: the OTLP endpoint (/api/v1/otlp) shares port 9090 with the
+      # Prometheus query API which is already unauthenticated in CE.
+      enableFeatures:
+        - otlp-write-receiver
+      additionalArgs:
+        - name: web.enable-otlp-receiver
+          value: ""
   kube-state-metrics:
     fullnameOverride: state-metrics
   prometheus-node-exporter:
@@ -690,3 +728,229 @@ kafka:
 # In multi-NS user mode, spark.enabled is true (ConfigMap needed for MLRun)
 spark:
   enabled: true
+
+# =============================================================================
+# OpenTelemetry Operator configuration
+# Installs the OpenTelemetry Operator for managing collectors and instrumentation
+# =============================================================================
+opentelemetry-operator:
+  enabled: false
+  # CRDs are managed by the operator sub-chart (crds.create: true).
+  # The otel-cr-installer job polls kubectl wait --for=condition=Established
+  # on each CRD before applying CRs, so there is no race condition on fresh install.
+  # CRDs are automatically kept in sync with the operator chart version on every upgrade.
+  crds:
+    create: true
+  # Admission webhooks configuration
+  admissionWebhooks:
+    certManager:
+      enabled: false
+    autoGenerateCert:
+      enabled: true
+    # Only apply webhooks to namespaces with the opentelemetry label
+    # This ensures the operator only monitors labeled namespaces
+    namespaceSelector:
+      matchLabels:
+        opentelemetry.io/inject: "enabled"
+  manager:
+    # Collector image used by the operator when creating collectors
+    collectorImage:
+      repository: otel/opentelemetry-collector-contrib
+      tag: 0.145.0
+    # Auto-instrumentation images (all fields required by the sub-chart schema)
+    autoInstrumentationImage:
+      python:
+        repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python
+        tag: 0.60b1
+      java:
+        repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+        tag: 2.10.0
+      nodejs:
+        repository: ""
+        tag: ""
+      dotnet:
+        repository: ""
+        tag: ""
+      go:
+        repository: ""
+        tag: ""
+      apacheHttpd:
+        repository: ""
+        tag: ""
+    # Feature gates as string (comma-separated)
+    featureGates: ""
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+# =============================================================================
+# OpenTelemetry Collector and Instrumentation CRs
+# These are managed separately from the operator for admin/non-admin split
+# =============================================================================
+opentelemetry:
+  # Namespace label for enabling OpenTelemetry monitoring.
+  # When enabled, the post-install job labels the namespace and also annotates it with
+  # instrumentation.opentelemetry.io/inject-python so all Python pods are auto-instrumented.
+  namespaceLabel:
+    enabled: false
+    key: "opentelemetry.io/inject"
+    value: "enabled"
+
+  # OpenTelemetry Collector configuration (DEPLOYMENT mode)
+  # A single collector Deployment runs per namespace, receiving OTLP from instrumented pods
+  # and exporting metrics to Prometheus.
+  collector:
+    enabled: false
+    nameOverride: ""
+    fullnameOverride: ""
+    # DEPLOYMENT mode - one collector pod per namespace, not injected as a sidecar
+    mode: deployment
+    # "none" keeps the collector at the image version specified below, preventing the operator
+    # from auto-upgrading it on operator upgrades (which can introduce breaking config changes).
+    upgradeStrategy: none
+    # Collector sidecar container resources
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    # OTLP receiver port references — used by the Instrumentation CR endpoint and NOTES output.
+    # If you change these, update the matching ports in collector.config.receivers.otlp as well.
+    otlp:
+      grpcPort: 4317
+      httpPort: 4318
+    # Full OpenTelemetry Collector pipeline configuration.
+    # This is passed verbatim to the OpenTelemetryCollector CR spec.config field.
+    # Override any section to customize receivers, processors, exporters, or pipelines.
+    config:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+      processors:
+        batch:
+          send_batch_size: 10000
+          timeout: 10s
+        memory_limiter:
+          check_interval: 1s
+          limit_percentage: 80
+          spike_limit_percentage: 25
+        resourcedetection:
+          detectors:
+            - env
+            - system
+          timeout: 5s
+          override: false
+      exporters:
+        otlphttp/prometheus:
+          # Short DNS works within the same namespace; no namespace interpolation needed.
+          endpoint: http://prometheus-operated:9090/api/v1/otlp
+          tls:
+            insecure: true
+        debug:
+          verbosity: basic
+          sampling_initial: 5
+          sampling_thereafter: 200
+      extensions:
+        health_check:
+          endpoint: 0.0.0.0:13133
+      service:
+        extensions:
+          - health_check
+        pipelines:
+          metrics:
+            receivers:
+              - otlp
+            processors:
+              - memory_limiter
+              - resourcedetection
+              - batch
+            exporters:
+              - otlphttp/prometheus
+              - debug
+          traces:
+            receivers:
+              - otlp
+            processors:
+              - memory_limiter
+              - resourcedetection
+              - batch
+            exporters:
+              - debug
+        telemetry:
+          logs:
+            level: info
+
+  # Instrumentation configuration for auto-instrumentation
+  instrumentation:
+    enabled: false
+    nameOverride: ""
+    # Fixed name so Nuclio functionDefaults.podAnnotations can reference it without Helm templating
+    fullnameOverride: "mlrun-otel-instrumentation"
+    # Propagators for distributed tracing context
+    propagators:
+      - tracecontext
+      - baggage
+    # Sampler configuration
+    sampler:
+      type: parentbased_traceidratio
+      argument: "1"
+    # Python auto-instrumentation
+    python:
+      enabled: true
+      image:
+        repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python
+        tag: 0.60b1
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+    # Java auto-instrumentation (disabled by default, enable if needed)
+    java:
+      enabled: false
+      image:
+        repository: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java
+        tag: 2.10.0
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+  # kubectl image used by the otelCrInstaller and namespaceLabelJob
+  kubectlImage:
+    repository: bitnami/kubectl
+    tag: "latest"
+
+  # OTel CR installer job resources (kubectl-only container)
+  otelCrInstaller:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  # Namespace label job resources (kubectl-only container)
+  namespaceLabelJob:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi

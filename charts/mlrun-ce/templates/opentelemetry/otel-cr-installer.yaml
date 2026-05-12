@@ -1,0 +1,132 @@
+{{- if .Values.opentelemetry.collector.enabled }}
+---
+# Job to create OpenTelemetry CRs after CRDs are established and the operator webhook is ready.
+#
+# NOTE: The OpenTelemetryCollector and Instrumentation CRs are NOT created as standalone
+# Helm-managed resources. Instead they are applied by this job, which:
+# 1. Waits for OTel CRDs to be Established (the sub-chart renders them as regular templates)
+# 2. Retries kubectl apply until the operator webhook is ready to accept the CR
+# - CR manifests are defined in templates/_helpers.tpl (mlrun-ce.otel.collector.manifest,
+#   mlrun-ce.otel.instrumentation.manifest)
+# - Configuration lives in values.yaml under opentelemetry.collector and opentelemetry.instrumentation
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-otel-cr-installer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+  annotations:
+    # Run as a post-install and post-upgrade hook
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook-timeout": "300s"
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.otel.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ .Release.Name }}-otel-cr-creator
+      containers:
+        - name: cr-creator
+          image: {{ .Values.opentelemetry.kubectlImage.repository }}:{{ .Values.opentelemetry.kubectlImage.tag }}
+          resources:
+            requests:
+              cpu: {{ .Values.opentelemetry.otelCrInstaller.resources.requests.cpu }}
+              memory: {{ .Values.opentelemetry.otelCrInstaller.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.opentelemetry.otelCrInstaller.resources.limits.cpu }}
+              memory: {{ .Values.opentelemetry.otelCrInstaller.resources.limits.memory }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              # Wait for the OTel CRDs to be fully established before applying CRs.
+              # The operator sub-chart renders CRDs as regular templates (not in crds/),
+              # so they may not exist yet when this post-install hook fires.
+              echo "Waiting for OpenTelemetry CRDs to be established..."
+              for crd in \
+                opentelemetrycollectors.opentelemetry.io \
+                instrumentations.opentelemetry.io \
+                opampbridges.opentelemetry.io; do
+                until kubectl wait --for=condition=Established crd/${crd} --timeout=10s &>/dev/null; do
+                  echo "  ${crd} not established yet, retrying..."
+                  sleep 5
+                done
+                echo "  ${crd} ready."
+              done
+
+              # Write the OpenTelemetryCollector CR to a temp file and retry applying it
+              # until the operator webhook is ready to accept it (fresh install timing fix).
+              cat > /tmp/collector-cr.yaml <<'EOF'
+              {{- include "mlrun-ce.otel.collector.manifest" . | nindent 14 }}
+              EOF
+              echo "Creating/updating OpenTelemetryCollector CR (with webhook readiness retry)..."
+              retries=0; max_retries=30  # 30 × 5s = 150s max, well within 300s hook-timeout
+              until kubectl apply -f /tmp/collector-cr.yaml 2>&1; do
+                retries=$((retries + 1))
+                if [ $retries -ge $max_retries ]; then
+                  echo "ERROR: Webhook did not become ready after $((max_retries * 5))s. Check operator logs."
+                  exit 1
+                fi
+                echo "Webhook not ready yet, retrying in 5s... ($retries/$max_retries)"
+                sleep 5
+              done
+              echo "OpenTelemetryCollector CR created/updated!"
+
+              {{- if .Values.opentelemetry.instrumentation.enabled }}
+              # Write the Instrumentation CR to a temp file and retry applying it
+              # (same pattern as the Collector CR — avoids heredoc-in-until-condition bash issues)
+              cat > /tmp/instrumentation-cr.yaml <<'EOF'
+              {{- include "mlrun-ce.otel.instrumentation.manifest" . | nindent 14 }}
+              EOF
+              echo "Creating/updating Instrumentation CR..."
+              retries=0; max_retries=30
+              until kubectl apply -f /tmp/instrumentation-cr.yaml 2>&1; do
+                retries=$((retries + 1))
+                if [ $retries -ge $max_retries ]; then
+                  echo "ERROR: Webhook did not become ready after $((max_retries * 5))s. Check operator logs."
+                  exit 1
+                fi
+                echo "Webhook not ready yet, retrying in 5s... ($retries/$max_retries)"
+                sleep 5
+              done
+              echo "Instrumentation CR created/updated!"
+              {{- end }}
+
+              echo "All OpenTelemetry CRs have been created successfully!"
+
+              # Wait for the operator webhook to be fully ready before restarting pods
+              echo "Waiting for OpenTelemetry operator webhook to be ready..."
+              until kubectl -n {{ .Release.Namespace }} rollout status deployment \
+                -l app.kubernetes.io/name=opentelemetry-operator --timeout=60s &>/dev/null; do
+                sleep 5
+              done
+
+              # Restart pods labeled mlrun.io/otel=true so they go through the webhook
+              # and receive OTel auto-instrumentation injection — skipped if pods already have
+              # the OTel init container (i.e. OTel was enabled in a previous install/upgrade).
+              # Affected pods: Nuclio function pods labeled mlrun.io/otel=true (only exist after user deploys functions).
+              # Primarily useful on upgrade when functions are already running and need to pick up OTel injection.
+              # This increases installation time when OTel is enabled.
+              if ! kubectl -n {{ .Release.Namespace }} get pods -l mlrun.io/otel=true \
+                  -o jsonpath='{.items[0].spec.initContainers[0].name}' 2>/dev/null \
+                  | grep -q opentelemetry; then
+                echo "Restarting instrumented deployments and statefulsets..."
+                kubectl -n {{ .Release.Namespace }} rollout restart deployment \
+                  -l mlrun.io/otel=true 2>/dev/null || true
+                kubectl -n {{ .Release.Namespace }} rollout restart statefulset \
+                  -l mlrun.io/otel=true 2>/dev/null || true
+                echo "Rollout restarts triggered — pods will be re-created with OTel injection."
+              else
+                echo "OTel already injected, skipping rollout restart."
+              fi
+{{- end }}
+

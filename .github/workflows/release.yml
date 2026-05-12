@@ -63,6 +63,7 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo add strimzi https://strimzi.io/charts/
           helm repo add seaweedfs https://seaweedfs.github.io/seaweedfs/helm
+          helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
 
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@cae68fefc6b5f367a0275617c9f83181ba54714f

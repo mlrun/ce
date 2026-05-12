@@ -77,3 +77,28 @@ strimzi-kafka-operator:
   
 kafka:
   enabled: false
+
+# OpenTelemetry Operator - enabled for CRD installation at cluster level
+opentelemetry-operator:
+  enabled: true
+  admissionWebhooks:
+    certManager:
+      enabled: false
+    autoGenerateCert:
+      enabled: true
+    # Only apply webhooks to namespaces with the opentelemetry label
+    namespaceSelector:
+      matchLabels:
+        opentelemetry.io/inject: "enabled"
+
+# OpenTelemetry CRs - disabled at admin level, enabled in user namespaces
+# Note: Controller namespace does NOT need the opentelemetry label since
+# no workloads are instrumented here - only the operator runs here
+opentelemetry:
+  namespaceLabel:
+    enabled: false
+  collector:
+    enabled: false
+  instrumentation:
+    enabled: false
+

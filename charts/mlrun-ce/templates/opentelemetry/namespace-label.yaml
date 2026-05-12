@@ -1,0 +1,42 @@
+{{- if and .Values.opentelemetry.collector.enabled .Values.opentelemetry.namespaceLabel.enabled -}}
+# This template uses a post-install/post-upgrade hook to label the namespace
+# for OpenTelemetry operator webhook injection, avoiding Helm ownership conflicts
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-namespace-label
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.otel.labels" . | nindent 4 }}
+  annotations:
+    # post-install/post-upgrade so regular RBAC resources (otel-cr-creator SA/Role) exist before this runs
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook-timeout": "120s"
+spec:
+  ttlSecondsAfterFinished: 60
+  template:
+    metadata:
+      name: {{ .Release.Name }}-namespace-label
+    spec:
+      serviceAccountName: {{ .Release.Name }}-otel-cr-creator
+      restartPolicy: OnFailure
+      containers:
+      - name: label-namespace
+        image: {{ .Values.opentelemetry.kubectlImage.repository }}:{{ .Values.opentelemetry.kubectlImage.tag }}
+        resources:
+          requests:
+            cpu: {{ .Values.opentelemetry.namespaceLabelJob.resources.requests.cpu }}
+            memory: {{ .Values.opentelemetry.namespaceLabelJob.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.opentelemetry.namespaceLabelJob.resources.limits.cpu }}
+            memory: {{ .Values.opentelemetry.namespaceLabelJob.resources.limits.memory }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Labeling namespace {{ .Release.Namespace }} for OpenTelemetry..."
+          kubectl label namespace {{ .Release.Namespace }} {{ .Values.opentelemetry.namespaceLabel.key }}={{ .Values.opentelemetry.namespaceLabel.value }} --overwrite
+          echo "Namespace configured for OpenTelemetry successfully!"
+{{- end -}}
