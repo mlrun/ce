@@ -189,7 +189,7 @@ Pipelines S3 Secret Key - falls back to storage.s3.secretKey when not explicitly
 Pipelines S3 Bucket - falls back to storage.s3.bucket when not explicitly set.
 */}}
 {{- define "mlrun-ce.pipelines.s3.bucket" -}}
-{{- coalesce .Values.pipelines.storage.s3.bucket .Values.storage.s3.bucket "mlrun" -}}
+{{- coalesce .Values.pipelines.storage.s3.bucket "mlrun" -}}
 {{- end -}}
 
 {{/*
