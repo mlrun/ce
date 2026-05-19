@@ -461,11 +461,17 @@ pipelines:
   # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
   logLevel: INFO
   # S3 storage config for Kubeflow Pipelines artifacts.
+  # accessKey/secretKey/bucket fall back to storage.s3.* when left empty, so by default
+  # pipelines share the same SeaweedFS credentials as MLRun and Jupyter.
+  # host/port default to the in-cluster SeaweedFS endpoint (local mode) or s3.amazonaws.com:443 (s3 mode).
+  # Set any field explicitly to override for a pipelines-specific backend.
   storage:
     s3:
-      bucket: "mlrun"
-      accessKey: "seaweed"
-      secretKey: "seaweed123"
+      accessKey: ""
+      secretKey: ""
+      bucket: ""
+      host: ""
+      port: ""
   ui:
     enabled: false
   metadata:

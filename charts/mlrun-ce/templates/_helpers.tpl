@@ -172,24 +172,64 @@ S3 Bucket - uses top-level storage.s3.bucket for MLRun and Jupyter
 {{- end -}}
 
 {{/*
-Pipelines S3 Access Key - configured independently from storage.s3.accessKey (MLRun/Jupyter)
+Pipelines S3 Access Key - falls back to storage.s3.accessKey when not explicitly set.
 */}}
 {{- define "mlrun-ce.pipelines.s3.accessKey" -}}
-{{- .Values.pipelines.storage.s3.accessKey -}}
+{{- coalesce .Values.pipelines.storage.s3.accessKey .Values.storage.s3.accessKey -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Secret Key - configured independently from storage.s3.secretKey (MLRun/Jupyter)
+Pipelines S3 Secret Key - falls back to storage.s3.secretKey when not explicitly set.
 */}}
 {{- define "mlrun-ce.pipelines.s3.secretKey" -}}
-{{- .Values.pipelines.storage.s3.secretKey -}}
+{{- coalesce .Values.pipelines.storage.s3.secretKey .Values.storage.s3.secretKey -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Bucket - configured independently from storage.s3.bucket (MLRun/Jupyter)
+Pipelines S3 Bucket - falls back to storage.s3.bucket when not explicitly set.
 */}}
 {{- define "mlrun-ce.pipelines.s3.bucket" -}}
-{{- .Values.pipelines.storage.s3.bucket -}}
+{{- coalesce .Values.pipelines.storage.s3.bucket .Values.storage.s3.bucket "mlrun" -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Host - SeaweedFS in-cluster for local mode, s3.amazonaws.com for s3 mode.
+Override via pipelines.storage.s3.host for custom endpoints.
+*/}}
+{{- define "mlrun-ce.pipelines.s3.host" -}}
+{{- if .Values.pipelines.storage.s3.host -}}
+{{- .Values.pipelines.storage.s3.host -}}
+{{- else if eq .Values.storage.mode "local" -}}
+{{- include "mlrun-ce.s3.service.host" . -}}
+{{- else -}}
+s3.amazonaws.com
+{{- end -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Port - SeaweedFS port for local mode, 443 for s3 mode.
+Override via pipelines.storage.s3.port for custom endpoints.
+*/}}
+{{- define "mlrun-ce.pipelines.s3.port" -}}
+{{- if .Values.pipelines.storage.s3.port -}}
+{{- .Values.pipelines.storage.s3.port | toString -}}
+{{- else if eq .Values.storage.mode "local" -}}
+{{- include "mlrun-ce.s3.service.port" . -}}
+{{- else -}}
+443
+{{- end -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Secure / Insecure - local mode uses plain HTTP (insecure=true), all other modes use HTTPS.
+secure returns "true"/"false"; insecure returns the inverse (for workflow-controller artifactRepository).
+*/}}
+{{- define "mlrun-ce.pipelines.s3.secure" -}}
+{{- if eq .Values.storage.mode "local" -}}false{{- else -}}true{{- end -}}
+{{- end -}}
+
+{{- define "mlrun-ce.pipelines.s3.insecure" -}}
+{{- if eq (include "mlrun-ce.pipelines.s3.secure" .) "true" -}}false{{- else -}}true{{- end -}}
 {{- end -}}
 
 {{/*

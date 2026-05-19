@@ -33,9 +33,9 @@ spec:
         - name: VIEWER_TENSORBOARD_POD_TEMPLATE_SPEC_PATH
           value: /etc/config/viewer-pod-template.json
         - name: MINIO_HOST
-          value: {{ include "mlrun-ce.s3.service.host" . }}
+          value: {{ include "mlrun-ce.pipelines.s3.host" . }}
         - name: MINIO_PORT
-          value: {{ include "mlrun-ce.s3.service.port" . | quote }}
+          value: {{ include "mlrun-ce.pipelines.s3.port" . | quote }}
         - name: MINIO_NAMESPACE
           # This is required because otherwise the namespace is appended to the MinIO hostname used to fetch artifacts, causing the fetch to fail
           value: ""

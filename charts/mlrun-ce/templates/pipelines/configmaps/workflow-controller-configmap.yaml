@@ -9,9 +9,9 @@ data:
   artifactRepository: |
     archiveLogs: {{ .Values.pipelines.archiveLogs }}
     s3:
-      endpoint: "{{ include "mlrun-ce.s3.service.host" . }}:{{ include "mlrun-ce.s3.service.port" . }}"
-      bucket: "{{ include "mlrun-ce.s3.bucket" . }}"
-      insecure: true
+      endpoint: "{{ include "mlrun-ce.pipelines.s3.host" . }}:{{ include "mlrun-ce.pipelines.s3.port" . }}"
+      bucket: "{{ include "mlrun-ce.pipelines.s3.bucket" . }}"
+      insecure: {{ include "mlrun-ce.pipelines.s3.insecure" . }}
       accessKeySecret:
         name: mlpipeline-seaweedfs-artifact
         key: accesskey
