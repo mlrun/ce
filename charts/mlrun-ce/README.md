@@ -136,6 +136,29 @@ helm --namespace mlrun upgrade my-mlrun \
 
 > **Note:** The above assumes a single-namespace installation. For multi-namespace (admin/non-admin) deployments, refer to the MLRun documentation.
 
+#### Producer-side telemetry for mlrun-api
+
+The top-level `telemetry` block exposes OpenTelemetry producer-side config that mlrun-api consumes as `MLRUN_TELEMETRY__*` env vars. By default `telemetry.enabled: ""` inherits from `opentelemetry.collector.enabled` — so enabling the in-cluster collector also turns mlrun-api telemetry on without any extra flag.
+
+| Value | Default | Purpose |
+|---|---|---|
+| `telemetry.enabled` | `""` (inherits collector state) | `"true"`/`"false"` to override explicitly |
+| `telemetry.otlpEndpoint` | `""` (derives in-cluster) | Override with an external endpoint (e.g. SaaS) |
+| `telemetry.insecure` | `"true"` | Set `"false"` for TLS-terminated endpoints |
+| `telemetry.headersSecretName` | `""` | K8s Secret with OTLP auth headers (file-mount wiring is future work) |
+
+When `telemetry.otlpEndpoint` is blank and the in-cluster collector is on, the endpoint resolves to `otel-collector.<release-namespace>.svc.cluster.local:<grpcPort>`. As a safety check, `telemetry.enabled=true` with no in-cluster collector AND no `otlpEndpoint` is forced to `false` to avoid silently dropping spans.
+
+Example — point mlrun-api at an external OTLP endpoint without enabling the in-cluster collector:
+
+```bash
+helm --namespace mlrun upgrade my-mlrun \
+    --set telemetry.enabled=true \
+    --set telemetry.otlpEndpoint=otlp.example.com:4317 \
+    --set telemetry.insecure=false \
+    mlrun/mlrun-ce
+```
+
 ### Working with ECR
 
 To work with ECR, you must create a secret with your AWS credentials and a secret with ECR Token while providing both secret names to the helm install command.
