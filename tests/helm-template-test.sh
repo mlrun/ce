@@ -464,6 +464,82 @@ test_otel_cr_installer_restart_guard() {
 
 
 # ============================================================================
+# Telemetry Env Var Tests (CEML-708)
+# ============================================================================
+
+# Defaults: telemetry.enabled is "" and collector is off → ENABLED=false,
+# no other MLRUN_TELEMETRY__* keys emitted.
+test_telemetry_default_inherits_collector_disabled() {
+    log_test "Telemetry - defaults inherit collector=disabled"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml")
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "false"' "Telemetry disabled by default"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__OTLP_ENDPOINT" "No endpoint emitted when disabled"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__INSECURE" "No insecure key when disabled"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__HEADERS_SECRET_NAME" "No headers secret key when disabled"
+}
+
+# Empty telemetry.enabled inherits from opentelemetry.collector.enabled; with
+# collector on, ENABLED resolves to true and endpoint derives from the release
+# namespace + configured grpc port.
+test_telemetry_inherits_collector_enabled() {
+    log_test "Telemetry - inherits collector=enabled"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set opentelemetry.collector.enabled=true)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "true"' "Telemetry inherits enabled=true"
+    assert_contains "$output" 'MLRUN_TELEMETRY__OTLP_ENDPOINT: "otel-collector.default.svc.cluster.local:4317"' "Endpoint derived from in-cluster collector"
+    assert_contains "$output" 'MLRUN_TELEMETRY__INSECURE: "true"' "Insecure default emitted"
+}
+
+# User-supplied otlpEndpoint always wins, even with the in-cluster collector
+# off — supports pointing mlrun-api at an external SaaS endpoint.
+test_telemetry_external_endpoint() {
+    log_test "Telemetry - user external endpoint honored"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set telemetry.enabled=true \
+        --set telemetry.otlpEndpoint=external.com:4317 \
+        --set opentelemetry.collector.enabled=false)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "true"' "User opt-in honored despite collector off"
+    assert_contains "$output" 'MLRUN_TELEMETRY__OTLP_ENDPOINT: "external.com:4317"' "User endpoint passed through verbatim"
+}
+
+# Safety override: enabled=true with no in-cluster collector AND no user
+# otlpEndpoint must force ENABLED=false to avoid silently dropping spans.
+test_telemetry_safety_force_disable() {
+    log_test "Telemetry - safety forces disable when no listener"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set telemetry.enabled=true \
+        --set opentelemetry.collector.enabled=false)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "false"' "Safety override forces false"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__OTLP_ENDPOINT" "No endpoint emitted when force-disabled"
+}
+
+# headersSecretName must not be rendered as an env var when telemetry is off —
+# downstream consumers shouldn't see a stale auth-headers reference.
+test_telemetry_headers_secret_emitted_only_when_enabled() {
+    log_test "Telemetry - headers secret skipped when disabled"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set telemetry.headersSecretName=my-secret \
+        --set telemetry.enabled=false)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "false"' "Explicit disable honored"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__HEADERS_SECRET_NAME" "Headers secret skipped when disabled"
+}
+
+# ============================================================================
 # Full Chart Render Test
 # ============================================================================
 
@@ -562,6 +638,16 @@ main() {
     echo "========================================"
     test_otel_cr_installer_retry_counter
     test_otel_cr_installer_restart_guard
+
+    echo ""
+    echo "========================================"
+    echo "Telemetry Env Var Tests"
+    echo "========================================"
+    test_telemetry_default_inherits_collector_disabled
+    test_telemetry_inherits_collector_enabled
+    test_telemetry_external_endpoint
+    test_telemetry_safety_force_disable
+    test_telemetry_headers_secret_emitted_only_when_enabled
 
     echo ""
     echo "========================================"
