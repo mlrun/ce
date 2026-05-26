@@ -172,62 +172,73 @@ S3 Bucket - uses top-level storage.s3.bucket for MLRun and Jupyter
 {{- end -}}
 
 {{/*
-Pipelines S3 Access Key - falls back to storage.s3.accessKey when not explicitly set.
+SeaweedFS S3 Access Key - dedicated credential for the in-cluster SeaweedFS IAM.
+Used by: SeaweedFS IAM config, bucket-init job, and KFP pipelines.
+Never changes with storage.mode — always points at the local SeaweedFS instance.
+*/}}
+{{- define "mlrun-ce.seaweedfs.s3.accessKey" -}}
+{{- .Values.seaweedfs.s3.accessKey -}}
+{{- end -}}
+
+{{/*
+SeaweedFS S3 Secret Key - dedicated credential for the in-cluster SeaweedFS IAM.
+*/}}
+{{- define "mlrun-ce.seaweedfs.s3.secretKey" -}}
+{{- .Values.seaweedfs.s3.secretKey -}}
+{{- end -}}
+
+{{/*
+SeaweedFS S3 Bucket - the bucket created and managed within the in-cluster SeaweedFS.
+*/}}
+{{- define "mlrun-ce.seaweedfs.s3.bucket" -}}
+{{- .Values.seaweedfs.s3.bucket -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Access Key - always uses the in-cluster SeaweedFS credentials.
+KFP always uses SeaweedFS regardless of storage.mode.
 */}}
 {{- define "mlrun-ce.pipelines.s3.accessKey" -}}
-{{- coalesce .Values.pipelines.storage.s3.accessKey .Values.storage.s3.accessKey -}}
+{{- include "mlrun-ce.seaweedfs.s3.accessKey" . -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Secret Key - falls back to storage.s3.secretKey when not explicitly set.
+Pipelines S3 Secret Key - always uses the in-cluster SeaweedFS credentials.
 */}}
 {{- define "mlrun-ce.pipelines.s3.secretKey" -}}
-{{- coalesce .Values.pipelines.storage.s3.secretKey .Values.storage.s3.secretKey -}}
+{{- include "mlrun-ce.seaweedfs.s3.secretKey" . -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Bucket - falls back to storage.s3.bucket, then "mlrun".
-KFP artifact storage is independent from storage.mode.
+Pipelines S3 Bucket - always uses the SeaweedFS bucket.
 */}}
 {{- define "mlrun-ce.pipelines.s3.bucket" -}}
-{{- coalesce .Values.pipelines.storage.s3.bucket .Values.storage.s3.bucket "mlrun" -}}
+{{- include "mlrun-ce.seaweedfs.s3.bucket" . -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Host - always defaults to in-cluster SeaweedFS.
-KFP artifact storage is independent from storage.mode; set pipelines.storage.s3.host to override.
+Pipelines S3 Host - always in-cluster SeaweedFS.
 */}}
 {{- define "mlrun-ce.pipelines.s3.host" -}}
-{{- if .Values.pipelines.storage.s3.host -}}
-{{- .Values.pipelines.storage.s3.host -}}
-{{- else -}}
 {{- include "mlrun-ce.s3.service.host" . -}}
 {{- end -}}
-{{- end -}}
 
 {{/*
-Pipelines S3 Port - always defaults to SeaweedFS port.
-Set pipelines.storage.s3.port to override.
+Pipelines S3 Port - always SeaweedFS port.
 */}}
 {{- define "mlrun-ce.pipelines.s3.port" -}}
-{{- if .Values.pipelines.storage.s3.port -}}
-{{- .Values.pipelines.storage.s3.port | toString -}}
-{{- else -}}
 {{- include "mlrun-ce.s3.service.port" . -}}
-{{- end -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Secure / Insecure - plain HTTP (insecure) when using the default SeaweedFS endpoint,
-HTTPS (secure) when a custom host is explicitly set.
-secure returns "true"/"false"; insecure returns the inverse (for workflow-controller artifactRepository).
+Pipelines S3 Secure / Insecure - always plain HTTP (in-cluster SeaweedFS).
 */}}
 {{- define "mlrun-ce.pipelines.s3.secure" -}}
-{{- if .Values.pipelines.storage.s3.host -}}true{{- else -}}false{{- end -}}
+false
 {{- end -}}
 
 {{- define "mlrun-ce.pipelines.s3.insecure" -}}
-{{- if eq (include "mlrun-ce.pipelines.s3.secure" .) "true" -}}false{{- else -}}true{{- end -}}
+true
 {{- end -}}
 
 {{/*

@@ -22,9 +22,8 @@ global:
 
 # =============================================================================
 # S3-compatible storage configuration for MLRun and Jupyter.
-# Kubeflow Pipelines has its own independent storage block at pipelines.storage.s3.
-# Both default to the bundled SeaweedFS. Change only the block(s) you want to
-# move to an external backend — each component is configured independently.
+# Kubeflow Pipelines always uses the bundled SeaweedFS — storage.mode only
+# affects MLRun and Jupyter.
 # =============================================================================
 
 # storage.mode selects which backend credentials are injected into the 'storage-credentials' Secret.
@@ -371,9 +370,15 @@ seaweedfs:
   # S3 auth config - enableAuth gates the seaweedfs-s3-config Secret creation in
   # templates/seaweedfs/seaweedfs-s3-config.yaml even though the dedicated s3 pod
   # is disabled. The secret is consumed by allInOne.s3.existingConfigSecret below.
+  # accessKey/secretKey/bucket are the dedicated SeaweedFS IAM credentials used by
+  # SeaweedFS itself, the bucket-init job, and KFP pipelines. They are independent
+  # of storage.s3.* so that changing storage.mode to "s3" does not affect pipelines.
   s3:
     port: 8333
     enableAuth: true
+    accessKey: "seaweed"
+    secretKey: "seaweed123"
+    bucket: "mlrun"
 
   # Single-pod mode: master + volume + filer + S3 gateway in one deployment.
   # Reduces from 4 component pods down to 1, cutting CPU/memory footprint significantly.
@@ -460,18 +465,6 @@ pipelines:
   name: pipelines
   # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
   logLevel: INFO
-  # S3 storage config for Kubeflow Pipelines artifacts.
-  # accessKey/secretKey/bucket fall back to storage.s3.* when left empty, so by default
-  # pipelines share the same SeaweedFS credentials as MLRun and Jupyter.
-  # host/port default to the in-cluster SeaweedFS endpoint (local mode) or s3.amazonaws.com:443 (s3 mode).
-  # Set any field explicitly to override for a pipelines-specific backend.
-  storage:
-    s3:
-      accessKey: ""
-      secretKey: ""
-      bucket: ""
-      host: ""
-      port: ""
   ui:
     enabled: false
   metadata:
