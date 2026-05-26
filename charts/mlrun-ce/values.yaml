@@ -30,19 +30,30 @@ global:
 # Options:
 #   local (default) - bundled SeaweedFS; injects AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
 #                     and AWS_ENDPOINT_URL_S3 pointing at the in-cluster SeaweedFS S3 service.
-#                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
-#                     storage.s3.bucket.
+#                     Credentials come from storage.local.accessKey/secretKey; artifact path from
+#                     storage.local.bucket.
+#                     SeaweedFS IAM, bucket-init job, and KFP Pipelines always use storage.local.*
+#                     regardless of storage.mode.
 #   s3              - external AWS S3; injects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY only
-#                     (no custom endpoint — the SDK uses the standard AWS endpoint).
+#                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
 #                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
 #                     storage.s3.bucket (or global.infrastructure.aws.bucketName).
+#                     SeaweedFS and KFP Pipelines continue to use storage.local.* unchanged.
 #   azure-blob      - Azure Blob Storage; injects AZURE_STORAGE_* fields from storage.azure.*
 storage:
   mode: local
-  s3:
+  # Single source of truth for the in-cluster SeaweedFS.
+  # Always used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines.
+  # Also used by MLRun and Jupyter when mode is "local".
+  local:
     accessKey: "seaweed"
     secretKey: "seaweed123"
     bucket: "mlrun"
+  # External AWS S3 credentials — only applied to MLRun and Jupyter when mode is "s3".
+  s3:
+    accessKey: ""
+    secretKey: ""
+    bucket: ""
   azure:
     containerName: ""
     connectionString: ""
@@ -370,15 +381,10 @@ seaweedfs:
   # S3 auth config - enableAuth gates the seaweedfs-s3-config Secret creation in
   # templates/seaweedfs/seaweedfs-s3-config.yaml even though the dedicated s3 pod
   # is disabled. The secret is consumed by allInOne.s3.existingConfigSecret below.
-  # accessKey/secretKey/bucket are the dedicated SeaweedFS IAM credentials used by
-  # SeaweedFS itself, the bucket-init job, and KFP pipelines. They are independent
-  # of storage.s3.* so that changing storage.mode to "s3" does not affect pipelines.
+  # Credentials are sourced from storage.local.* — for the in-cluster SeaweedFS.
   s3:
     port: 8333
     enableAuth: true
-    accessKey: "seaweed"
-    secretKey: "seaweed123"
-    bucket: "mlrun"
 
   # Single-pod mode: master + volume + filer + S3 gateway in one deployment.
   # Reduces from 4 component pods down to 1, cutting CPU/memory footprint significantly.
