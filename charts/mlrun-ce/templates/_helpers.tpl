@@ -186,46 +186,44 @@ Pipelines S3 Secret Key - falls back to storage.s3.secretKey when not explicitly
 {{- end -}}
 
 {{/*
-Pipelines S3 Bucket - falls back to storage.s3.bucket when not explicitly set.
+Pipelines S3 Bucket - falls back to storage.s3.bucket, then "mlrun".
+KFP artifact storage is independent from storage.mode.
 */}}
 {{- define "mlrun-ce.pipelines.s3.bucket" -}}
-{{- coalesce .Values.pipelines.storage.s3.bucket "mlrun" -}}
+{{- coalesce .Values.pipelines.storage.s3.bucket .Values.storage.s3.bucket "mlrun" -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Host - SeaweedFS in-cluster for local mode, s3.amazonaws.com for s3 mode.
-Override via pipelines.storage.s3.host for custom endpoints.
+Pipelines S3 Host - always defaults to in-cluster SeaweedFS.
+KFP artifact storage is independent from storage.mode; set pipelines.storage.s3.host to override.
 */}}
 {{- define "mlrun-ce.pipelines.s3.host" -}}
 {{- if .Values.pipelines.storage.s3.host -}}
 {{- .Values.pipelines.storage.s3.host -}}
-{{- else if eq .Values.storage.mode "local" -}}
-{{- include "mlrun-ce.s3.service.host" . -}}
 {{- else -}}
-s3.amazonaws.com
+{{- include "mlrun-ce.s3.service.host" . -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Port - SeaweedFS port for local mode, 443 for s3 mode.
-Override via pipelines.storage.s3.port for custom endpoints.
+Pipelines S3 Port - always defaults to SeaweedFS port.
+Set pipelines.storage.s3.port to override.
 */}}
 {{- define "mlrun-ce.pipelines.s3.port" -}}
 {{- if .Values.pipelines.storage.s3.port -}}
 {{- .Values.pipelines.storage.s3.port | toString -}}
-{{- else if eq .Values.storage.mode "local" -}}
-{{- include "mlrun-ce.s3.service.port" . -}}
 {{- else -}}
-443
+{{- include "mlrun-ce.s3.service.port" . -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Secure / Insecure - local mode uses plain HTTP (insecure=true), all other modes use HTTPS.
+Pipelines S3 Secure / Insecure - plain HTTP (insecure) when using the default SeaweedFS endpoint,
+HTTPS (secure) when a custom host is explicitly set.
 secure returns "true"/"false"; insecure returns the inverse (for workflow-controller artifactRepository).
 */}}
 {{- define "mlrun-ce.pipelines.s3.secure" -}}
-{{- if eq .Values.storage.mode "local" -}}false{{- else -}}true{{- end -}}
+{{- if .Values.pipelines.storage.s3.host -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
 {{- define "mlrun-ce.pipelines.s3.insecure" -}}
