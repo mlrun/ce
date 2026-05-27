@@ -158,7 +158,7 @@ mlrun:
       enabled: false
       annotations: {}
     sidecars:
-        enabled: true
+      enabled: true
     fullnameOverride: mlrun-api
     functionSpecServiceAccountDefault: ~
     service:
