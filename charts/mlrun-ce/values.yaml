@@ -153,6 +153,7 @@ mlrun:
     create: true
   v3io:
     enabled: false
+  api:
     ingress:
       enabled: false
       annotations: {}
@@ -205,7 +206,7 @@ mlrun:
       # services:
       # - name: alerts
 
-
+  ui:
     fullnameOverride: mlrun-ui
     ingress:
       enabled: false
