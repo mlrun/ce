@@ -274,6 +274,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
+    tag: 1.11.0
     pullPolicy: IfNotPresent
     pullSecrets: []
   busybox:
