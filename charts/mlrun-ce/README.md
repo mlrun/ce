@@ -340,6 +340,7 @@ $ kubectl --namespace mlrun delete pvc <pv-name>
 $ rm -rf my-mlrun-mlrun-ce-mlrun
 ```
 
+
 ### Using Kubeflow Pipelines
 
 MLRun enables you to run your functions while saving outputs and artifacts in a way that is visible to Kubeflow Pipelines.
@@ -351,6 +352,6 @@ Refer to the [**Kubeflow documentation**](https://www.kubeflow.org/docs/started/
 
 This table shows the versions of the main components in the MLRun CE chart:
 
-| MLRun CE   | MLRun  | Nuclio | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack | OpenTelemetry Operator |
-|------------|--------|--------|---------|--------------|-----------|----------------|-----------|-----------------------|------------------------|
-| **0.11.0** | 1.11.0 | 1.15.9 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |
+| MLRun CE   | MLRun  | Nuclio  | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack | OpenTelemetry Operator |
+|------------|--------|---------|---------|--------------|-----------|----------------|-----------|-----------------------|------------------------|
+| **0.11.0** | 1.11.0 | 1.15.27 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |
