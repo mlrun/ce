@@ -1,10 +1,10 @@
 dependencies:
 - name: nuclio
   repository: https://nuclio.github.io/nuclio/charts
-  version: 0.21.9
+  version: 0.21.27
 - name: mlrun
   repository: https://v3io.github.io/helm-charts/stable
-  version: 0.11.18
+  version: 0.11.23
 - name: mpi-operator
   repository: https://v3io.github.io/helm-charts/stable
   version: 0.6.0
@@ -23,5 +23,5 @@ dependencies:
 - name: opentelemetry-operator
   repository: https://open-telemetry.github.io/opentelemetry-helm-charts
   version: 0.105.0
-digest: sha256:ffa30cab1c7fdc60950e1184741bf359b1b0f8487192cffedae7209f85a4fadc
-generated: "2026-04-30T16:39:21.63182+03:00"
+digest: sha256:c0dd11f7ede02b836b2adf65ee2de0d93f839b4cfd9c962f5832cf589977dfae
+generated: "2026-05-27T12:41:48.19826+03:00"
