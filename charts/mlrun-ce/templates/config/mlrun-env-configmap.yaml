@@ -45,7 +45,7 @@ data:
   {{- if $userEndpoint }}
   MLRUN_TELEMETRY__OTLP_ENDPOINT: {{ $userEndpoint | quote }}
   {{- else }}
-  MLRUN_TELEMETRY__OTLP_ENDPOINT: {{ printf "otel-collector.%s.svc.cluster.local:%v" .Release.Namespace .Values.opentelemetry.collector.otlp.grpcPort | quote }}
+  MLRUN_TELEMETRY__OTLP_ENDPOINT: {{ printf "%s-collector.%s.svc.cluster.local:%v" (include "mlrun-ce.otel.collector.fullname" .) .Release.Namespace .Values.opentelemetry.collector.otlp.grpcPort | quote }}
   {{- end }}
   {{- if ne ($tel.insecure | toString) "" }}
   MLRUN_TELEMETRY__INSECURE: {{ $tel.insecure | quote }}

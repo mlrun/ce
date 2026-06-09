@@ -494,7 +494,7 @@ test_telemetry_inherits_collector_enabled() {
         --set opentelemetry.collector.enabled=true)
 
     assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "true"' "Telemetry inherits enabled=true"
-    assert_contains "$output" 'MLRUN_TELEMETRY__OTLP_ENDPOINT: "otel-collector.default.svc.cluster.local:4317"' "Endpoint derived from in-cluster collector"
+    assert_contains "$output" 'MLRUN_TELEMETRY__OTLP_ENDPOINT: "test-otel-collector.default.svc.cluster.local:4317"' "Endpoint derived from in-cluster collector (uses fullname helper)"
     assert_not_contains "$output" "MLRUN_TELEMETRY__INSECURE" "Insecure not emitted by default (mlrun-api default = true)"
 }
 
