@@ -139,7 +139,7 @@ test_otel_collector_default() {
     assert_contains "$output" "otlp:" "Has OTLP receiver"
     assert_contains "$output" "helm.sh/hook" "Has Helm hooks"
     assert_contains "$output" "post-install,post-upgrade" "Has correct hook triggers"
-    assert_contains "$output" "upgradeStrategy: automatic" "Has upgradeStrategy"
+    assert_contains "$output" "upgradeStrategy: none" "Has upgradeStrategy"
     assert_contains "$output" "managementState: managed" "Has managementState"
 }
 
@@ -187,6 +187,7 @@ test_otel_instrumentation_default() {
     local output
     output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true \
         --set opentelemetry.instrumentation.enabled=true)
 
     assert_renders "$output" "CRD Readiness Job renders for Instrumentation"
@@ -212,6 +213,7 @@ test_otel_instrumentation_java_enabled() {
     local output
     output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true \
         --set opentelemetry.instrumentation.enabled=true \
         --set opentelemetry.instrumentation.java.enabled=true)
 
@@ -244,7 +246,7 @@ test_otel_rbac_disabled() {
 }
 
 test_jupyter_otel_labels() {
-    log_test "Jupyter Deployment - OTel label applied when enabled"
+    log_test "Jupyter Deployment - No OTel injection even when OTel enabled (per design)"
 
     local output
     output=$(render_template "templates/jupyter-notebook/deployment.yaml" \
@@ -252,7 +254,7 @@ test_jupyter_otel_labels() {
         --set opentelemetry.collector.enabled=true \
         --set opentelemetry.instrumentation.enabled=true)
 
-    assert_contains "$output" 'mlrun.io/otel: "true"' "Has OTel pod label"
+    assert_not_contains "$output" 'mlrun.io/otel' "No OTel pod label (Jupyter not auto-instrumented)"
     assert_not_contains "$output" "sidecar.opentelemetry.io/inject:" "No sidecar annotation (deployment mode)"
     assert_not_contains "$output" "prometheus.io/scrape:" "No per-pod Prometheus annotation (collector scrapes)"
 }
@@ -307,20 +309,6 @@ test_namespace_label_enabled() {
     assert_contains "$output" "helm.sh/hook" "Has post-install hook annotation"
     assert_contains "$output" "kubectl label namespace" "Has kubectl label command"
     assert_contains "$output" "opentelemetry.io/inject" "Has OTEL inject label key"
-}
-
-test_namespace_label_with_instrumentation_annotation() {
-    log_test "Namespace Label - Instrumentation annotation added when instrumentation enabled"
-
-    local output
-    output=$(render_template "templates/opentelemetry/namespace-label.yaml" \
-        --set global.registry.url=test.io \
-        --set opentelemetry.namespaceLabel.enabled=true \
-        --set opentelemetry.collector.enabled=true \
-        --set opentelemetry.instrumentation.enabled=true)
-
-    assert_contains "$output" "kubectl annotate namespace" "Has kubectl annotate command"
-    assert_contains "$output" "instrumentation.opentelemetry.io/inject-python" "Has Python instrumentation namespace annotation"
 }
 
 test_namespace_label_disabled() {
@@ -539,7 +527,6 @@ main() {
     test_namespace_label_disabled
     test_admin_namespace_label_disabled
     test_non_admin_namespace_label_enabled
-    test_namespace_label_with_instrumentation_annotation
     test_otel_operator_namespace_selector
 
 
