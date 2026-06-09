@@ -138,16 +138,21 @@ helm --namespace mlrun upgrade my-mlrun \
 
 #### Producer-side telemetry for mlrun-api
 
-The top-level `telemetry` block exposes OpenTelemetry producer-side config that mlrun-api consumes as `MLRUN_TELEMETRY__*` env vars. By default `telemetry.enabled: ""` inherits from `opentelemetry.collector.enabled` — so enabling the in-cluster collector also turns mlrun-api telemetry on without any extra flag.
+The top-level `telemetry` block exposes OpenTelemetry producer-side config that mlrun-api consumes as `MLRUN_TELEMETRY__*` env vars. **Out of the box, telemetry is OFF**; enabling the in-cluster collector (`opentelemetry.collector.enabled=true`) is enough to turn mlrun-api telemetry on with in-cluster defaults — no other flags required.
 
-| Value | Default | Purpose |
+All four knobs default to `""`, which means "fall back to MLRun's own default". Override only the values you want to change.
+
+| Value | Chart default | Effective default at mlrun-api |
 |---|---|---|
-| `telemetry.enabled` | `""` (inherits collector state) | `"true"`/`"false"` to override explicitly |
-| `telemetry.otlpEndpoint` | `""` (derives in-cluster) | Override with an external endpoint (e.g. SaaS) |
-| `telemetry.insecure` | `"true"` | Set `"false"` for TLS-terminated endpoints |
-| `telemetry.headersSecretName` | `""` | K8s Secret with OTLP auth headers (file-mount wiring is future work) |
+| `telemetry.enabled` | `""` (inherits collector state) | `false` when collector is off, `true` when on |
+| `telemetry.otlpEndpoint` | `""` (derives in-cluster) | `otel-collector.<release-ns>.svc.cluster.local:<grpcPort>` |
+| `telemetry.insecure` | `""` (auto by endpoint) | `true` for in-cluster (plaintext); `false` when `otlpEndpoint` is user-supplied (TLS) |
+| `telemetry.headersSecretName` | `""` | `""` (no auth headers) |
 
-When `telemetry.otlpEndpoint` is blank and the in-cluster collector is on, the endpoint resolves to `otel-collector.<release-namespace>.svc.cluster.local:<grpcPort>`. As a safety check, `telemetry.enabled=true` with no in-cluster collector AND no `otlpEndpoint` is forced to `false` to avoid silently dropping spans.
+Resolution rules:
+- `telemetry.otlpEndpoint` blank + collector on → in-cluster endpoint above.
+- `telemetry.enabled=true` with no in-cluster collector AND no `otlpEndpoint` → forced to `false` (safety: no listener means spans would silently drop).
+- A user-supplied `otlpEndpoint` always wins over the in-cluster derivation, and flips `insecure` to `false` by default (override with `--set telemetry.insecure=true` for a plaintext external listener).
 
 Example — point mlrun-api at an external OTLP endpoint without enabling the in-cluster collector:
 
@@ -155,7 +160,6 @@ Example — point mlrun-api at an external OTLP endpoint without enabling the in
 helm --namespace mlrun upgrade my-mlrun \
     --set telemetry.enabled=true \
     --set telemetry.otlpEndpoint=otlp.example.com:4317 \
-    --set telemetry.insecure=false \
     mlrun/mlrun-ce
 ```
 

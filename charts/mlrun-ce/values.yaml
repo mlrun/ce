@@ -736,11 +736,17 @@ spark:
 #     "false" (no listener — exporting would silently drop).
 #   - otlpEndpoint: "" derives otel-collector.<release-ns>.svc.cluster.local:<grpcPort>
 #     from the in-cluster collector; user-supplied value wins (e.g. external SaaS).
+#   - insecure: "" auto-resolves based on the endpoint — plaintext for the
+#     in-cluster collector (falls back to MLRun's true default), "false" when
+#     a user-supplied otlpEndpoint is in play (external endpoints are
+#     TLS-terminated by default). Explicit "true"/"false" always overrides.
+#   - headersSecretName: "" falls back to MLRun's own default (no auth headers).
+#     Only emitted as MLRUN_TELEMETRY__* env var when a value is supplied.
 # =============================================================================
 telemetry:
   enabled: ""
   otlpEndpoint: ""
-  insecure: "true"
+  insecure: ""
   headersSecretName: ""
 
 # =============================================================================

@@ -483,7 +483,9 @@ test_telemetry_default_inherits_collector_disabled() {
 
 # Empty telemetry.enabled inherits from opentelemetry.collector.enabled; with
 # collector on, ENABLED resolves to true and endpoint derives from the release
-# namespace + configured grpc port.
+# namespace + configured grpc port. INSECURE is NOT emitted by default —
+# mlrun-api falls back to its own default (true, plaintext gRPC, correct for
+# the in-cluster collector).
 test_telemetry_inherits_collector_enabled() {
     log_test "Telemetry - inherits collector=enabled"
 
@@ -493,11 +495,12 @@ test_telemetry_inherits_collector_enabled() {
 
     assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "true"' "Telemetry inherits enabled=true"
     assert_contains "$output" 'MLRUN_TELEMETRY__OTLP_ENDPOINT: "otel-collector.default.svc.cluster.local:4317"' "Endpoint derived from in-cluster collector"
-    assert_contains "$output" 'MLRUN_TELEMETRY__INSECURE: "true"' "Insecure default emitted"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__INSECURE" "Insecure not emitted by default (mlrun-api default = true)"
 }
 
 # User-supplied otlpEndpoint always wins, even with the in-cluster collector
-# off — supports pointing mlrun-api at an external SaaS endpoint.
+# off — supports pointing mlrun-api at an external SaaS endpoint. The chart
+# auto-defaults insecure=false in this path so users don't silently break TLS.
 test_telemetry_external_endpoint() {
     log_test "Telemetry - user external endpoint honored"
 
@@ -509,6 +512,21 @@ test_telemetry_external_endpoint() {
 
     assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "true"' "User opt-in honored despite collector off"
     assert_contains "$output" 'MLRUN_TELEMETRY__OTLP_ENDPOINT: "external.com:4317"' "User endpoint passed through verbatim"
+    assert_contains "$output" 'MLRUN_TELEMETRY__INSECURE: "false"' "Insecure auto-defaults to false for user endpoint (TLS)"
+}
+
+# Explicit user override always wins over the auto-default — covers the edge
+# case of a plaintext external listener (insecure=true with otlpEndpoint set).
+test_telemetry_insecure_explicit_override() {
+    log_test "Telemetry - explicit insecure overrides auto-default"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set telemetry.enabled=true \
+        --set telemetry.otlpEndpoint=external.com:4317 \
+        --set telemetry.insecure=true)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__INSECURE: "true"' "User-supplied insecure=true wins over auto-default"
 }
 
 # Safety override: enabled=true with no in-cluster collector AND no user
@@ -646,6 +664,7 @@ main() {
     test_telemetry_default_inherits_collector_disabled
     test_telemetry_inherits_collector_enabled
     test_telemetry_external_endpoint
+    test_telemetry_insecure_explicit_override
     test_telemetry_safety_force_disable
     test_telemetry_headers_secret_emitted_only_when_enabled
 
