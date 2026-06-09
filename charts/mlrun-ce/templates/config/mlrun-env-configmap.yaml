@@ -49,8 +49,6 @@ data:
   {{- end }}
   {{- if ne ($tel.insecure | toString) "" }}
   MLRUN_TELEMETRY__INSECURE: {{ $tel.insecure | quote }}
-  {{- else if $userEndpoint }}
-  MLRUN_TELEMETRY__INSECURE: "false"
   {{- end }}
   {{- if $tel.headersSecretName }}
   MLRUN_TELEMETRY__HEADERS_SECRET_NAME: {{ $tel.headersSecretName | quote }}

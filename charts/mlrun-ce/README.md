@@ -146,13 +146,13 @@ All four knobs default to `""`, which means "fall back to MLRun's own default". 
 |---|---|---|
 | `telemetry.enabled` | `""` (inherits collector state) | `false` when collector is off, `true` when on |
 | `telemetry.otlpEndpoint` | `""` (derives in-cluster) | `otel-collector.<release-ns>.svc.cluster.local:<grpcPort>` |
-| `telemetry.insecure` | `""` (auto by endpoint) | `true` for in-cluster (plaintext); `false` when `otlpEndpoint` is user-supplied (TLS) |
+| `telemetry.insecure` | `""` | `true` (MLRun default — plaintext gRPC, correct for in-cluster) |
 | `telemetry.headersSecretName` | `""` | `""` (no auth headers) |
 
 Resolution rules:
 - `telemetry.otlpEndpoint` blank + collector on → in-cluster endpoint above.
 - `telemetry.enabled=true` with no in-cluster collector AND no `otlpEndpoint` → forced to `false` (safety: no listener means spans would silently drop).
-- A user-supplied `otlpEndpoint` always wins over the in-cluster derivation, and flips `insecure` to `false` by default (override with `--set telemetry.insecure=true` for a plaintext external listener).
+- A user-supplied `otlpEndpoint` always wins over the in-cluster derivation.
 
 Example — point mlrun-api at an external OTLP endpoint without enabling the in-cluster collector:
 
@@ -160,8 +160,13 @@ Example — point mlrun-api at an external OTLP endpoint without enabling the in
 helm --namespace mlrun upgrade my-mlrun \
     --set telemetry.enabled=true \
     --set telemetry.otlpEndpoint=otlp.example.com:4317 \
+    --set telemetry.insecure=false \
     mlrun/mlrun-ce
 ```
+
+> 💡 **Using a SaaS or HTTPS endpoint?** Most cloud observability providers (Grafana Cloud, Honeycomb, Datadog, etc.) require TLS. Add `--set telemetry.insecure=false` so mlrun-api negotiates HTTPS instead of plaintext — without it, the connection fails silently in the background and your dashboard stays empty (mlrun-api itself keeps working normally).
+>
+> SaaS providers usually also require auth headers (Bearer token, `X-Scope-OrgID`, etc.). Create a K8s Secret with one key per header, then point the chart at it with `--set telemetry.headersSecretName=my-otlp-headers`.
 
 ### Working with ECR
 
