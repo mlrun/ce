@@ -23,6 +23,7 @@ jobs:
   trigger-deployment:
     name: Trigger Deployment in Private Repo
     runs-on: ubuntu-latest
+    timeout-minutes: 420   # 360-min Jenkins job + buffer
     steps:
       - name: Resolve target repository
         id: repo-info
@@ -49,10 +50,14 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           owner: ${{ steps.repo-info.outputs.owner }}
           repositories: ${{ steps.repo-info.outputs.repo }}
+          permission-contents: write
+          permission-actions: read
 
       - name: Send Repository Dispatch to Private Deployment Repo
+        id: dispatch
         run: |
           DEPLOYMENT_REPO="${{ steps.repo-info.outputs.full_name }}"
+          DISPATCH_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           curl -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: token ${{ steps.app-token.outputs.token }}" \
@@ -70,5 +75,75 @@ jobs:
                   triggered_by: "${{ github.actor }}"
                 }
               }')"
-          
+
+          echo "dispatch_time=$DISPATCH_TIME" >> $GITHUB_OUTPUT
           echo "Deployment triggered in private repository"
+
+      - name: Wait for private deployment workflow
+        env:
+          APP_ID: ${{ secrets.GH_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          INSTALLATION_ID: ${{ steps.app-token.outputs.installation-id }}
+          REPO: ${{ steps.repo-info.outputs.full_name }}
+          DISPATCH_TIME: ${{ steps.dispatch.outputs.dispatch_time }}
+        run: |
+          set -euo pipefail
+
+          # Mint a short-lived installation token from the App JWT.
+          mint_token() {
+            local now iat exp header payload unsigned sig jwt
+            now=$(date +%s); iat=$((now - 60)); exp=$((now + 540))
+            b64() { openssl base64 -e -A | tr '+/' '-_' | tr -d '='; }
+            header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64)
+            payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$iat" "$exp" "$APP_ID" | b64)
+            unsigned="${header}.${payload}"
+            sig=$(printf '%s' "$unsigned" \
+              | openssl dgst -sha256 -sign <(printf '%s' "$APP_PRIVATE_KEY") -binary | b64)
+            jwt="${unsigned}.${sig}"
+            curl -sf -X POST \
+              -H "Authorization: Bearer $jwt" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/app/installations/${INSTALLATION_ID}/access_tokens" \
+              | jq -r '.token'
+          }
+
+          TOKEN=$(mint_token)
+
+          # Find the run triggered after our dispatch (eventual consistency).
+          RUN_ID=""
+          for attempt in $(seq 1 10); do
+            RUN_ID=$(curl -sf \
+              -H "Authorization: token $TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/actions/runs?event=repository_dispatch&created=>=${DISPATCH_TIME}&per_page=5" \
+              | jq -r '.workflow_runs | sort_by(.created_at) | last | .id // empty')
+            [ -n "$RUN_ID" ] && break
+            echo "Waiting for workflow run to appear (attempt $attempt)..."
+            sleep 30
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Could not find a triggered workflow run after dispatch."
+            exit 1
+          fi
+          echo "Tracking run ${RUN_ID}"
+
+          # Poll until complete, re-minting the token each loop so it never expires.
+          while true; do
+            TOKEN=$(mint_token)
+            RUN=$(curl -sf \
+              -H "Authorization: token $TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}")
+            STATUS=$(echo "$RUN" | jq -r '.status')
+            CONCLUSION=$(echo "$RUN" | jq -r '.conclusion // empty')
+            echo "  status=$STATUS conclusion=${CONCLUSION:-pending}"
+            [ "$STATUS" = "completed" ] && break
+            sleep 60
+          done
+
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::Private deployment workflow concluded: $CONCLUSION"
+            exit 1
+          fi
+          echo "Deployment workflow succeeded."

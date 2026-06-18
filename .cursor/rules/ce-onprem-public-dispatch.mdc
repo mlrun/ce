@@ -1,0 +1,25 @@
+---
+description: Maintain CE public-to-private on-prem deployment dispatch contract
+globs: .github/workflows/*.y*ml
+alwaysApply: false
+---
+
+# CE On-Prem Public Dispatch Contract
+
+- Scope: this rule applies when editing CE release and on-prem dispatch workflows.
+- Treat this path as a contract chain: `release.yml` -> `deploy_ce_onprem_public.yaml` -> `ce-deployment` `repository_dispatch` -> Jenkins `mlrunce_deploy_onprem_v2/dev`.
+
+## Contract Rules
+
+- Keep the dispatch `event_type` as `deploy-ce-onprem` unless both repos are updated together.
+- Keep payload keys stable (`version`, `system_id`, `run_naipi`, `source_repo`, `triggered_by`) or update the private workflow extractor in the same change.
+- Preserve release tag expectations (`mlrun-ce-<version>`) and the chart-version handoff from `release.yml`.
+- Preserve repository resolution guard (`owner/repo`) for `DEPLOYMENT_REPO`.
+- Keep run tracking robust: dispatch-time correlation is required; if changing polling logic, guard against selecting an unrelated `repository_dispatch` run.
+
+## Review Checklist Before Merging
+
+- Validate that new/renamed payload keys are consumed in `ce-deployment/.github/workflows/deploy_ce_onprem.yaml`.
+- Validate `version` transformation remains consistent with chart release tags.
+- Validate failures in private workflow propagation fail the public workflow (do not silently pass).
+- Validate timeout and retry values still cover long Jenkins runs (up to ~6h).
