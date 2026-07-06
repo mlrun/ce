@@ -38,7 +38,7 @@ global:
 #                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
 #                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
 #                     storage.s3.bucket (or global.infrastructure.aws.bucketName).
-#                     SeaweedFS and KFP Pipelines continue to use storage.local.* unchanged.
+#                     KFP Pipelines continue to use storage.local.* unchanged.
 #   azure-blob      - Azure Blob Storage; injects AZURE_STORAGE_* fields from storage.azure.*
 storage:
   mode: local
