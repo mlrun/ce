@@ -28,4 +28,30 @@ data:
   MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__LIMITS__MEMORY: "{{ .Values.mlrun.defaultFunctionPodResources.limits.memory | default "" }}"
   MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__REQUESTS__CPU: "{{ .Values.mlrun.defaultFunctionPodResources.requests.cpu | default "" }}"
   MLRUN_DEFAULT_FUNCTION_POD_RESOURCES__REQUESTS__MEMORY: "{{ .Values.mlrun.defaultFunctionPodResources.requests.memory | default "" }}"
+  # OpenTelemetry producer-side env vars (CEML-708). See top-level `telemetry`
+  # block in values.yaml. ENABLED is always emitted; others only when ENABLED=true.
+  {{- $tel := .Values.telemetry }}
+  {{- $collectorEnabled := .Values.opentelemetry.collector.enabled }}
+  {{- $userEndpoint := $tel.otlpEndpoint }}
+  {{- $enabled := $tel.enabled | toString }}
+  {{- if eq $enabled "" }}
+  {{- $enabled = $collectorEnabled | toString }}
+  {{- end }}
+  {{- if and (eq $enabled "true") (not $collectorEnabled) (not $userEndpoint) }}
+  {{- $enabled = "false" }}
+  {{- end }}
+  MLRUN_TELEMETRY__ENABLED: {{ $enabled | quote }}
+  {{- if eq $enabled "true" }}
+  {{- if $userEndpoint }}
+  MLRUN_TELEMETRY__OTLP_ENDPOINT: {{ $userEndpoint | quote }}
+  {{- else }}
+  MLRUN_TELEMETRY__OTLP_ENDPOINT: {{ printf "%s-collector.%s.svc.cluster.local:%v" (include "mlrun-ce.otel.collector.fullname" .) .Release.Namespace .Values.opentelemetry.collector.otlp.grpcPort | quote }}
+  {{- end }}
+  {{- if ne ($tel.insecure | toString) "" }}
+  MLRUN_TELEMETRY__INSECURE: {{ $tel.insecure | quote }}
+  {{- end }}
+  {{- if $tel.headersSecretName }}
+  MLRUN_TELEMETRY__HEADERS_SECRET_NAME: {{ $tel.headersSecretName | quote }}
+  {{- end }}
+  {{- end }}
 {{- end}}

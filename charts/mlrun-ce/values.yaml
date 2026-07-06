@@ -743,6 +743,31 @@ spark:
   enabled: true
 
 # =============================================================================
+# Shared OpenTelemetry producer-side configuration (CEML-708)
+# Top-level so any service in the bundle (mlrun-api today; Nuclio and future
+# components later) reads the same OTel knobs. Wired into mlrun-api via
+# MLRUN_TELEMETRY__* env vars in templates/config/mlrun-env-configmap.yaml.
+#
+# Resolution at render time:
+#   - enabled: "" inherits from .Values.opentelemetry.collector.enabled;
+#     explicit "true"/"false" overrides. Safety: enabled="true" with no
+#     in-cluster collector AND no user-supplied otlpEndpoint is forced to
+#     "false" (no listener — exporting would silently drop).
+#   - otlpEndpoint: "" derives otel-collector.<release-ns>.svc.cluster.local:<grpcPort>
+#     from the in-cluster collector; user-supplied value wins (e.g. external SaaS).
+#   - insecure: "" falls back to MLRun's own default (true, plaintext gRPC —
+#     correct for the in-cluster collector). Set "false" when pointing
+#     otlpEndpoint at a TLS-terminated endpoint (most SaaS providers).
+#   - headersSecretName: "" falls back to MLRun's own default (no auth headers).
+#     Only emitted as MLRUN_TELEMETRY__* env var when a value is supplied.
+# =============================================================================
+telemetry:
+  enabled: ""
+  otlpEndpoint: ""
+  insecure: ""
+  headersSecretName: ""
+
+# =============================================================================
 # OpenTelemetry Operator configuration
 # Installs the OpenTelemetry Operator for managing collectors and instrumentation
 # =============================================================================
