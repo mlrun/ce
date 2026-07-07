@@ -11,5 +11,5 @@ data:
   # It does NOT refer to the MinIO product - it works with ANY S3-compliant storage including SeaweedFS.
   # This is the official KFP convention as per: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
   # Format: minio://<bucket>/<path>
-  defaultPipelineRoot: "minio://{{ include "mlrun-ce.s3.bucket" . }}/v2/artifacts"
+  defaultPipelineRoot: "minio://{{ include "mlrun-ce.pipelines.s3.bucket" . }}/v2/artifacts"
 {{- end -}}
