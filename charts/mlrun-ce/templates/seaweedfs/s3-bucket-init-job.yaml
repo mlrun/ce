@@ -37,13 +37,13 @@ spec:
         image: amazon/aws-cli:2.15.0
         env:
         - name: AWS_ACCESS_KEY_ID
-          value: {{ include "mlrun-ce.s3.accessKey" . | quote }}
+          value: {{ include "mlrun-ce.seaweedfs.s3.accessKey" . | quote }}
         - name: AWS_SECRET_ACCESS_KEY
-          value: {{ include "mlrun-ce.s3.secretKey" . | quote }}
+          value: {{ include "mlrun-ce.seaweedfs.s3.secretKey" . | quote }}
         - name: AWS_ENDPOINT_URL
           value: {{ include "mlrun-ce.s3.service.url" . | quote }}
         - name: BUCKET_NAME
-          value: {{ include "mlrun-ce.s3.bucket" . | quote }}
+          value: {{ include "mlrun-ce.seaweedfs.s3.bucket" . | quote }}
         command:
         - /bin/sh
         - -c

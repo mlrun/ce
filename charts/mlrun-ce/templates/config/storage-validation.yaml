@@ -1,6 +1,15 @@
 {{- if and (eq .Values.storage.mode "s3") (not .Values.storage.s3.bucket) }}
 {{ fail "storage.mode is set to \"s3\" but storage.s3.bucket is not provided. Please set storage.s3.bucket." }}
 {{- end }}
+{{- if and (eq .Values.storage.mode "s3") (not .Values.global.infrastructure.aws.s3NonAnonymous) (not .Values.storage.s3.accessKey) }}
+{{ fail "storage.mode is set to \"s3\" but storage.s3.accessKey is empty. Set storage.s3.accessKey, or set global.infrastructure.aws.s3NonAnonymous=true to use IAM role-based access." }}
+{{- end }}
+{{- if and (eq .Values.storage.mode "s3") (not .Values.global.infrastructure.aws.s3NonAnonymous) (not .Values.storage.s3.secretKey) }}
+{{ fail "storage.mode is set to \"s3\" but storage.s3.secretKey is empty. Set storage.s3.secretKey, or set global.infrastructure.aws.s3NonAnonymous=true to use IAM role-based access." }}
+{{- end }}
+{{- if and (eq .Values.storage.mode "local") (not .Values.storage.local.bucket) }}
+{{ fail "storage.mode is set to \"local\" but storage.local.bucket is not provided. Please set storage.local.bucket." }}
+{{- end }}
 {{- if and (eq .Values.storage.mode "azure-blob") (not .Values.storage.azure.containerName) }}
 {{ fail "storage.mode is set to \"azure-blob\" but storage.azure.containerName is not provided. Please set storage.azure.containerName." }}
 {{- end }}
