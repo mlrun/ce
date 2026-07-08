@@ -173,13 +173,14 @@ mlrun:
     enabled: false
   api:
     image:
-      repository: quay.io/mlrun/mlrun-api
-      tag: 1.12.1-rc16
+      tag: 1.12.0-rc16
     ingress:
       enabled: false
       annotations: {}
     sidecars:
       logCollector:
+        image:
+          tag: 1.12.0-rc16
         enabled: true
     fullnameOverride: mlrun-api
     functionSpecServiceAccountDefault: ~
@@ -230,8 +231,7 @@ mlrun:
 
   ui:
     image:
-      repository: quay.io/mlrun/mlrun-ui
-      tag: 1.12.1-rc16
+      tag: 1.12.0-rc16
     fullnameOverride: mlrun-ui
     ingress:
       enabled: false
@@ -300,7 +300,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.12.1-rc16
+    tag: 1.12.0-rc16
     pullPolicy: IfNotPresent
     pullSecrets: []
   busybox:
