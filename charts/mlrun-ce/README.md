@@ -136,6 +136,38 @@ helm --namespace mlrun upgrade my-mlrun \
 
 > **Note:** The above assumes a single-namespace installation. For multi-namespace (admin/non-admin) deployments, refer to the MLRun documentation.
 
+#### Producer-side telemetry for mlrun-api
+
+The top-level `telemetry` block exposes OpenTelemetry producer-side config that mlrun-api consumes as `MLRUN_TELEMETRY__*` env vars. **Out of the box, telemetry is OFF**; enabling the in-cluster collector (`opentelemetry.collector.enabled=true`) is enough to turn mlrun-api telemetry on with in-cluster defaults — no other flags required.
+
+All four knobs default to `""`, which means "fall back to MLRun's own default". Override only the values you want to change.
+
+| Value | Chart default | Effective default at mlrun-api |
+|---|---|---|
+| `telemetry.enabled` | `""` (inherits collector state) | `false` when collector is off, `true` when on |
+| `telemetry.otlpEndpoint` | `""` (derives in-cluster) | `otel-collector.<release-ns>.svc.cluster.local:<grpcPort>` |
+| `telemetry.insecure` | `""` | `true` (MLRun default — plaintext gRPC, correct for in-cluster) |
+| `telemetry.headersSecretName` | `""` | `""` (no auth headers) |
+
+Resolution rules:
+- `telemetry.otlpEndpoint` blank + collector on → in-cluster endpoint above.
+- `telemetry.enabled=true` with no in-cluster collector AND no `otlpEndpoint` → forced to `false` (safety: no listener means spans would silently drop).
+- A user-supplied `otlpEndpoint` always wins over the in-cluster derivation.
+
+Example — point mlrun-api at an external OTLP endpoint without enabling the in-cluster collector:
+
+```bash
+helm --namespace mlrun upgrade my-mlrun \
+    --set telemetry.enabled=true \
+    --set telemetry.otlpEndpoint=otlp.example.com:4317 \
+    --set telemetry.insecure=false \
+    mlrun/mlrun-ce
+```
+
+> 💡 **Using a SaaS or HTTPS endpoint?** Most cloud observability providers (Grafana Cloud, Honeycomb, Datadog, etc.) require TLS. Add `--set telemetry.insecure=false` so mlrun-api negotiates HTTPS instead of plaintext — without it, the connection fails silently in the background and your dashboard stays empty (mlrun-api itself keeps working normally).
+>
+> SaaS providers usually also require auth headers (Bearer token, `X-Scope-OrgID`, etc.). Create a K8s Secret with one key per header, then point the chart at it with `--set telemetry.headersSecretName=my-otlp-headers`.
+
 ### Working with ECR
 
 To work with ECR, you must create a secret with your AWS credentials and a secret with ECR Token while providing both secret names to the helm install command.

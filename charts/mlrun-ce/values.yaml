@@ -21,21 +21,39 @@ global:
       domainNameCertificate: ~
 
 # =============================================================================
-# S3-compatible storage configuration
-# These credentials are used by MLRun, Jupyter, and Kubeflow Pipelines
-# to access the storage backend.
+# S3-compatible storage configuration for MLRun and Jupyter.
+# Kubeflow Pipelines always uses the bundled SeaweedFS — storage.mode only
+# affects MLRun and Jupyter.
 # =============================================================================
 
 # storage.mode selects which backend credentials are injected into the 'storage-credentials' Secret.
 # Options:
-#   s3 (default) - uses storage.s3.accessKey/secretKey/bucket with SeaweedFS endpoint
-#   azure-blob   - uses storage.azure.* fields
+#   local (default) - bundled SeaweedFS; injects AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+#                     and AWS_ENDPOINT_URL_S3 pointing at the in-cluster SeaweedFS S3 service.
+#                     Credentials come from storage.local.accessKey/secretKey; artifact path from
+#                     storage.local.bucket.
+#                     SeaweedFS IAM, bucket-init job, and KFP Pipelines always use storage.local.*
+#                     regardless of storage.mode.
+#   s3              - external AWS S3; injects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY only
+#                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
+#                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
+#                     storage.s3.bucket (or global.infrastructure.aws.bucketName).
+#                     KFP Pipelines continue to use storage.local.* unchanged.
+#   azure-blob      - Azure Blob Storage; injects AZURE_STORAGE_* fields from storage.azure.*
 storage:
-  mode: s3
-  s3:
+  mode: local
+  # Single source of truth for the in-cluster SeaweedFS.
+  # Always used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines.
+  # Also used by MLRun and Jupyter when mode is "local".
+  local:
     accessKey: "seaweed"
     secretKey: "seaweed123"
     bucket: "mlrun"
+  # External AWS S3 credentials — only applied to MLRun and Jupyter when mode is "s3".
+  s3:
+    accessKey: ""
+    secretKey: ""
+    bucket: ""
   azure:
     containerName: ""
     connectionString: ""
@@ -154,6 +172,9 @@ mlrun:
   v3io:
     enabled: false
   api:
+    image:
+      repository: quay.io/mlrun/mlrun-api
+      tag: 1.12.1-rc16
     ingress:
       enabled: false
       annotations: {}
@@ -208,6 +229,9 @@ mlrun:
       # - name: alerts
 
   ui:
+    image:
+      repository: quay.io/mlrun/mlrun-ui
+      tag: 1.12.1-rc16
     fullnameOverride: mlrun-ui
     ingress:
       enabled: false
@@ -276,7 +300,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.11.0
+    tag: 1.12.1-rc16
     pullPolicy: IfNotPresent
     pullSecrets: []
   busybox:
@@ -357,6 +381,7 @@ seaweedfs:
   # S3 auth config - enableAuth gates the seaweedfs-s3-config Secret creation in
   # templates/seaweedfs/seaweedfs-s3-config.yaml even though the dedicated s3 pod
   # is disabled. The secret is consumed by allInOne.s3.existingConfigSecret below.
+  # Credentials are sourced from storage.local.* — for the in-cluster SeaweedFS.
   s3:
     port: 8333
     enableAuth: true
@@ -722,6 +747,31 @@ kafka:
 # In multi-NS user mode, spark.enabled is true (ConfigMap needed for MLRun)
 spark:
   enabled: true
+
+# =============================================================================
+# Shared OpenTelemetry producer-side configuration (CEML-708)
+# Top-level so any service in the bundle (mlrun-api today; Nuclio and future
+# components later) reads the same OTel knobs. Wired into mlrun-api via
+# MLRUN_TELEMETRY__* env vars in templates/config/mlrun-env-configmap.yaml.
+#
+# Resolution at render time:
+#   - enabled: "" inherits from .Values.opentelemetry.collector.enabled;
+#     explicit "true"/"false" overrides. Safety: enabled="true" with no
+#     in-cluster collector AND no user-supplied otlpEndpoint is forced to
+#     "false" (no listener — exporting would silently drop).
+#   - otlpEndpoint: "" derives otel-collector.<release-ns>.svc.cluster.local:<grpcPort>
+#     from the in-cluster collector; user-supplied value wins (e.g. external SaaS).
+#   - insecure: "" falls back to MLRun's own default (true, plaintext gRPC —
+#     correct for the in-cluster collector). Set "false" when pointing
+#     otlpEndpoint at a TLS-terminated endpoint (most SaaS providers).
+#   - headersSecretName: "" falls back to MLRun's own default (no auth headers).
+#     Only emitted as MLRUN_TELEMETRY__* env var when a value is supplied.
+# =============================================================================
+telemetry:
+  enabled: ""
+  otlpEndpoint: ""
+  insecure: ""
+  headersSecretName: ""
 
 # =============================================================================
 # OpenTelemetry Operator configuration

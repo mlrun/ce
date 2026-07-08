@@ -81,7 +81,7 @@ SeaweedFS Admin UI is available at:
 {{ .Values.global.externalHostAddress }}:{{ .Values.seaweedfs.adminService.nodePort | default 30093 }}
 {{- end }}
 {{- end }}
--  S3 credentials: {{ .Values.storage.s3.accessKey }} / {{ .Values.storage.s3.secretKey }}
+-  S3 credentials: {{ .Values.storage.local.accessKey }} / {{ .Values.storage.local.secretKey }}
 {{- end }}
 {{- end }}
 

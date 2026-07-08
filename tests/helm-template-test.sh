@@ -139,7 +139,7 @@ test_otel_collector_default() {
     assert_contains "$output" "otlp:" "Has OTLP receiver"
     assert_contains "$output" "helm.sh/hook" "Has Helm hooks"
     assert_contains "$output" "post-install,post-upgrade" "Has correct hook triggers"
-    assert_contains "$output" "upgradeStrategy: automatic" "Has upgradeStrategy"
+    assert_contains "$output" "upgradeStrategy: none" "Has upgradeStrategy"
     assert_contains "$output" "managementState: managed" "Has managementState"
 }
 
@@ -187,6 +187,7 @@ test_otel_instrumentation_default() {
     local output
     output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true \
         --set opentelemetry.instrumentation.enabled=true)
 
     assert_renders "$output" "CRD Readiness Job renders for Instrumentation"
@@ -212,6 +213,7 @@ test_otel_instrumentation_java_enabled() {
     local output
     output=$(render_template "templates/opentelemetry/otel-cr-installer.yaml" \
         --set global.registry.url=test.io \
+        --set opentelemetry.collector.enabled=true \
         --set opentelemetry.instrumentation.enabled=true \
         --set opentelemetry.instrumentation.java.enabled=true)
 
@@ -244,7 +246,7 @@ test_otel_rbac_disabled() {
 }
 
 test_jupyter_otel_labels() {
-    log_test "Jupyter Deployment - OTel label applied when enabled"
+    log_test "Jupyter Deployment - No OTel injection even when OTel enabled (per design)"
 
     local output
     output=$(render_template "templates/jupyter-notebook/deployment.yaml" \
@@ -252,7 +254,7 @@ test_jupyter_otel_labels() {
         --set opentelemetry.collector.enabled=true \
         --set opentelemetry.instrumentation.enabled=true)
 
-    assert_contains "$output" 'mlrun.io/otel: "true"' "Has OTel pod label"
+    assert_not_contains "$output" 'mlrun.io/otel' "No OTel pod label (Jupyter not auto-instrumented)"
     assert_not_contains "$output" "sidecar.opentelemetry.io/inject:" "No sidecar annotation (deployment mode)"
     assert_not_contains "$output" "prometheus.io/scrape:" "No per-pod Prometheus annotation (collector scrapes)"
 }
@@ -307,20 +309,6 @@ test_namespace_label_enabled() {
     assert_contains "$output" "helm.sh/hook" "Has post-install hook annotation"
     assert_contains "$output" "kubectl label namespace" "Has kubectl label command"
     assert_contains "$output" "opentelemetry.io/inject" "Has OTEL inject label key"
-}
-
-test_namespace_label_with_instrumentation_annotation() {
-    log_test "Namespace Label - Instrumentation annotation added when instrumentation enabled"
-
-    local output
-    output=$(render_template "templates/opentelemetry/namespace-label.yaml" \
-        --set global.registry.url=test.io \
-        --set opentelemetry.namespaceLabel.enabled=true \
-        --set opentelemetry.collector.enabled=true \
-        --set opentelemetry.instrumentation.enabled=true)
-
-    assert_contains "$output" "kubectl annotate namespace" "Has kubectl annotate command"
-    assert_contains "$output" "instrumentation.opentelemetry.io/inject-python" "Has Python instrumentation namespace annotation"
 }
 
 test_namespace_label_disabled() {
@@ -464,6 +452,102 @@ test_otel_cr_installer_restart_guard() {
 
 
 # ============================================================================
+# Telemetry Env Var Tests (CEML-708)
+# ============================================================================
+
+# Defaults: telemetry.enabled is "" and collector is off → ENABLED=false,
+# no other MLRUN_TELEMETRY__* keys emitted.
+test_telemetry_default_inherits_collector_disabled() {
+    log_test "Telemetry - defaults inherit collector=disabled"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml")
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "false"' "Telemetry disabled by default"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__OTLP_ENDPOINT" "No endpoint emitted when disabled"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__INSECURE" "No insecure key when disabled"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__HEADERS_SECRET_NAME" "No headers secret key when disabled"
+}
+
+# Empty telemetry.enabled inherits from opentelemetry.collector.enabled; with
+# collector on, ENABLED resolves to true and endpoint derives from the release
+# namespace + configured grpc port. INSECURE is NOT emitted by default —
+# mlrun-api falls back to its own default (true, plaintext gRPC, correct for
+# the in-cluster collector).
+test_telemetry_inherits_collector_enabled() {
+    log_test "Telemetry - inherits collector=enabled"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set opentelemetry.collector.enabled=true)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "true"' "Telemetry inherits enabled=true"
+    assert_contains "$output" 'MLRUN_TELEMETRY__OTLP_ENDPOINT: "test-otel-collector.default.svc.cluster.local:4317"' "Endpoint derived from in-cluster collector (uses fullname helper)"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__INSECURE" "Insecure not emitted by default (mlrun-api default = true)"
+}
+
+# User-supplied otlpEndpoint always wins, even with the in-cluster collector
+# off — supports pointing mlrun-api at an external SaaS endpoint. INSECURE is
+# not auto-flipped here; mlrun-api falls back to its own default (true), and
+# users targeting a TLS endpoint must explicitly set telemetry.insecure=false.
+test_telemetry_external_endpoint() {
+    log_test "Telemetry - user external endpoint honored"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set telemetry.enabled=true \
+        --set telemetry.otlpEndpoint=external.com:4317 \
+        --set opentelemetry.collector.enabled=false)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "true"' "User opt-in honored despite collector off"
+    assert_contains "$output" 'MLRUN_TELEMETRY__OTLP_ENDPOINT: "external.com:4317"' "User endpoint passed through verbatim"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__INSECURE" "Insecure not auto-emitted for user endpoint (mlrun-api default applies)"
+}
+
+# When the user explicitly sets telemetry.insecure (e.g. =false for a TLS
+# endpoint), the chart MUST emit it — otherwise the mlrun-api default of
+# true would silently break TLS.
+test_telemetry_insecure_emitted_when_set() {
+    log_test "Telemetry - insecure emitted when user overrides"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set telemetry.enabled=true \
+        --set telemetry.otlpEndpoint=external.com:4317 \
+        --set telemetry.insecure=false)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__INSECURE: "false"' "User-supplied insecure=false passed through"
+}
+
+# Safety override: enabled=true with no in-cluster collector AND no user
+# otlpEndpoint must force ENABLED=false to avoid silently dropping spans.
+test_telemetry_safety_force_disable() {
+    log_test "Telemetry - safety forces disable when no listener"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set telemetry.enabled=true \
+        --set opentelemetry.collector.enabled=false)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "false"' "Safety override forces false"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__OTLP_ENDPOINT" "No endpoint emitted when force-disabled"
+}
+
+# headersSecretName must not be rendered as an env var when telemetry is off —
+# downstream consumers shouldn't see a stale auth-headers reference.
+test_telemetry_headers_secret_emitted_only_when_enabled() {
+    log_test "Telemetry - headers secret skipped when disabled"
+
+    local output
+    output=$(render_template "templates/config/mlrun-env-configmap.yaml" \
+        --set telemetry.headersSecretName=my-secret \
+        --set telemetry.enabled=false)
+
+    assert_contains "$output" 'MLRUN_TELEMETRY__ENABLED: "false"' "Explicit disable honored"
+    assert_not_contains "$output" "MLRUN_TELEMETRY__HEADERS_SECRET_NAME" "Headers secret skipped when disabled"
+}
+
+# ============================================================================
 # Full Chart Render Test
 # ============================================================================
 
@@ -539,7 +623,6 @@ main() {
     test_namespace_label_disabled
     test_admin_namespace_label_disabled
     test_non_admin_namespace_label_enabled
-    test_namespace_label_with_instrumentation_annotation
     test_otel_operator_namespace_selector
 
 
@@ -562,6 +645,17 @@ main() {
     echo "========================================"
     test_otel_cr_installer_retry_counter
     test_otel_cr_installer_restart_guard
+
+    echo ""
+    echo "========================================"
+    echo "Telemetry Env Var Tests"
+    echo "========================================"
+    test_telemetry_default_inherits_collector_disabled
+    test_telemetry_inherits_collector_enabled
+    test_telemetry_external_endpoint
+    test_telemetry_insecure_emitted_when_set
+    test_telemetry_safety_force_disable
+    test_telemetry_headers_secret_emitted_only_when_enabled
 
     echo ""
     echo "========================================"

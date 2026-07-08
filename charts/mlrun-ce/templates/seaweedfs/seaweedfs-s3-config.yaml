@@ -15,8 +15,8 @@ stringData:
           "name": "admin",
           "credentials": [
             {
-              "accessKey": "{{ include "mlrun-ce.s3.accessKey" . }}",
-              "secretKey": "{{ include "mlrun-ce.s3.secretKey" . }}"
+              "accessKey": "{{ include "mlrun-ce.seaweedfs.s3.accessKey" . }}",
+              "secretKey": "{{ include "mlrun-ce.seaweedfs.s3.secretKey" . }}"
             }
           ],
           "actions": [

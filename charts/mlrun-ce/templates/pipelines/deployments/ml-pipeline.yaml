@@ -75,7 +75,7 @@ spec:
                   name: pipeline-install-config
                   key: objectStoreServicePort
             - name: OBJECTSTORECONFIG_SECURE
-              value: "false"
+              value: {{ include "mlrun-ce.pipelines.s3.secure" . | quote }}
             - name: OBJECTSTORECONFIG_BUCKETNAME
               valueFrom:
                 configMapKeyRef:

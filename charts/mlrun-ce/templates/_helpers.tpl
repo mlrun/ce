@@ -151,24 +151,107 @@ S3 Service Port - returns the port for pipeline config
 {{- end -}}
 
 {{/*
-S3 Access Key - uses top-level s3.storage.accessKey for all components (MLRun, Jupyter, Pipelines)
+S3 Access Key - for MLRun and Jupyter.
+In "local" mode uses the internal SeaweedFS credential (storage.local.accessKey).
+In "s3" mode uses the external AWS credential (storage.s3.accessKey).
 */}}
 {{- define "mlrun-ce.s3.accessKey" -}}
+{{- if eq .Values.storage.mode "local" -}}
+{{- .Values.storage.local.accessKey -}}
+{{- else -}}
 {{- .Values.storage.s3.accessKey -}}
 {{- end -}}
-
-{{/*
-S3 Secret Key - uses top-level s3.storage.secretKey for all components (MLRun, Jupyter, Pipelines)
-*/}}
-{{- define "mlrun-ce.s3.secretKey" -}}
-{{- .Values.storage.s3.secretKey -}}
 {{- end -}}
 
 {{/*
-S3 Bucket - uses top-level s3.storage.bucket for all components
+S3 Secret Key - for MLRun and Jupyter.
+*/}}
+{{- define "mlrun-ce.s3.secretKey" -}}
+{{- if eq .Values.storage.mode "local" -}}
+{{- .Values.storage.local.secretKey -}}
+{{- else -}}
+{{- .Values.storage.s3.secretKey -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+S3 Bucket - for MLRun and Jupyter.
 */}}
 {{- define "mlrun-ce.s3.bucket" -}}
-{{- .Values.storage.s3.bucket -}}
+{{- if eq .Values.storage.mode "local" -}}
+{{- .Values.storage.local.bucket -}}
+{{- else -}}
+{{- coalesce .Values.global.infrastructure.aws.bucketName .Values.storage.s3.bucket "mlrun" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines.
+Always points at the in-cluster SeaweedFS regardless of storage.mode.
+*/}}
+{{- define "mlrun-ce.seaweedfs.s3.accessKey" -}}
+{{- .Values.storage.local.accessKey -}}
+{{- end -}}
+
+{{/*
+SeaweedFS S3 Secret Key - sourced from storage.local.secretKey.
+*/}}
+{{- define "mlrun-ce.seaweedfs.s3.secretKey" -}}
+{{- .Values.storage.local.secretKey -}}
+{{- end -}}
+
+{{/*
+SeaweedFS S3 Bucket - sourced from storage.local.bucket.
+*/}}
+{{- define "mlrun-ce.seaweedfs.s3.bucket" -}}
+{{- .Values.storage.local.bucket -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Access Key - always uses the in-cluster SeaweedFS credentials.
+KFP always uses SeaweedFS regardless of storage.mode.
+*/}}
+{{- define "mlrun-ce.pipelines.s3.accessKey" -}}
+{{- include "mlrun-ce.seaweedfs.s3.accessKey" . -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Secret Key - always uses the in-cluster SeaweedFS credentials.
+*/}}
+{{- define "mlrun-ce.pipelines.s3.secretKey" -}}
+{{- include "mlrun-ce.seaweedfs.s3.secretKey" . -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Bucket - always uses the SeaweedFS bucket.
+*/}}
+{{- define "mlrun-ce.pipelines.s3.bucket" -}}
+{{- include "mlrun-ce.seaweedfs.s3.bucket" . -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Host - always in-cluster SeaweedFS.
+*/}}
+{{- define "mlrun-ce.pipelines.s3.host" -}}
+{{- include "mlrun-ce.s3.service.host" . -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Port - always SeaweedFS port.
+*/}}
+{{- define "mlrun-ce.pipelines.s3.port" -}}
+{{- include "mlrun-ce.s3.service.port" . -}}
+{{- end -}}
+
+{{/*
+Pipelines S3 Secure / Insecure - always plain HTTP (in-cluster SeaweedFS).
+*/}}
+{{- define "mlrun-ce.pipelines.s3.secure" -}}
+false
+{{- end -}}
+
+{{- define "mlrun-ce.pipelines.s3.insecure" -}}
+true
 {{- end -}}
 
 {{/*
@@ -197,7 +280,7 @@ s3://
 {{- end -}}
 
 {{- define "mlrun-ce.artifactPath" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := include "mlrun-ce.s3.bucket" . -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/projects/{{ `{{run.project}}` }}/artifacts
@@ -207,7 +290,7 @@ s3://{{ $bucket }}/projects/{{ `{{run.project}}` }}/artifacts
 {{- end -}}
 
 {{- define "mlrun-ce.featureStore.dataPrefix" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := include "mlrun-ce.s3.bucket" . -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/projects/{project}/FeatureStore/{name}/{kind}
@@ -217,7 +300,7 @@ s3://{{ $bucket }}/projects/{project}/FeatureStore/{name}/{kind}
 {{- end -}}
 
 {{- define "mlrun-ce.model-endpoint.monitoring.userSpace" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := include "mlrun-ce.s3.bucket" . -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
@@ -227,7 +310,7 @@ s3://{{ $bucket }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
 {{- end -}}
 
 {{- define "mlrun-ce.model-endpoint.monitoring.application" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := include "mlrun-ce.s3.bucket" . -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
@@ -237,7 +320,7 @@ s3://{{ $bucket }}/users/pipelines/{{ `{{project}}` }}/monitoring-apps/
 {{- end -}}
 
 {{- define "mlrun-ce.model-endpoint.monitoring.default" -}}
-{{- $bucket := .Values.global.infrastructure.aws.bucketName | default "mlrun" -}}
+{{- $bucket := include "mlrun-ce.s3.bucket" . -}}
 {{- $container := .Values.storage.azure.containerName | default "" -}}
 {{- if eq .Values.storage.mode "azure-blob" -}}
 az://{{ $container }}/projects/{{ `{{project}}` }}/model-endpoints/{{ `{{kind}}` }}
