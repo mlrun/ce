@@ -385,6 +385,9 @@ seaweedfs:
   s3:
     port: 8333
     enableAuth: true
+    # Region for the s3-bucket-init job's AWS CLI calls. SeaweedFS ignores the
+    # region, but the AWS CLI requires one
+    region: us-east-1
 
   # Single-pod mode: master + volume + filer + S3 gateway in one deployment.
   # Reduces from 4 component pods down to 1, cutting CPU/memory footprint significantly.
