@@ -48,8 +48,6 @@ spec:
         # Without it, botocore attempts IMDS region discovery and crashes 
         - name: AWS_DEFAULT_REGION
           value: {{ include "mlrun-ce.s3.region" . | quote }}
-        - name: AWS_REGION
-          value: {{ include "mlrun-ce.s3.region" . | quote }}
         # Fully disable IMDS lookups as defense-in-depth, independent of region.
         - name: AWS_EC2_METADATA_DISABLED
           value: "true"
