@@ -151,13 +151,6 @@ S3 Service Port - returns the port for pipeline config
 {{- end -}}
 
 {{/*
-S3 Region - required by the AWS CLI in the s3-bucket-init job
-*/}}
-{{- define "mlrun-ce.s3.region" -}}
-{{- .Values.seaweedfs.s3.region -}}
-{{- end -}}
-
-{{/*
 S3 Access Key - for MLRun and Jupyter.
 In "local" mode uses the internal SeaweedFS credential (storage.local.accessKey).
 In "s3" mode uses the external AWS credential (storage.s3.accessKey).
