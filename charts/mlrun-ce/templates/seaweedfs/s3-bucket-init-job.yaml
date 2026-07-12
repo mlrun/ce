@@ -54,5 +54,5 @@ spec:
         command:
         - /bin/sh
         - -c
-        - "aws s3 mb s3://$BUCKET_NAME 2>&1 || aws s3 ls s3://$BUCKET_NAME 2>&1 || exit 1"
+        - "aws s3 mb s3://$BUCKET_NAME 2>&1 || aws s3 ls s3://$BUCKET_NAME 2>&1 || { echo \"ERROR: Failed to create or verify bucket $BUCKET_NAME\"; exit 1; }"
 {{- end }}
