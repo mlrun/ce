@@ -690,6 +690,34 @@ kafka:
     # Name for the bootstrap service alias (only used if enabled is true)
     name: kafka-stream
 
+  # Pin a constant Kafka cluster ID so re-installs and upgrades reuse the data on the
+  # existing PersistentVolumeClaims instead of failing with InconsistentClusterIdException.
+  # In KRaft mode the operator otherwise generates a fresh random ID on every (re)install,
+  # which no longer matches the ID stored in the retained PVC (meta.properties).
+  #
+  # clusterId is a status-only field in the Strimzi CRDs, so it cannot be set via a normal
+  # Helm/kubectl apply. When this value is non-empty, the Kafka and KafkaNodePool CRs are
+  # created with reconciliation paused and the clusterIdInit hook Job patches
+  # status.clusterId on both resources before resuming reconciliation.
+  #
+  # Must be a 22-character URL-safe base64 string (a base64url-encoded 16-byte UUID).
+  # Set to "" to keep the previous behaviour (operator generates a random ID each install).
+  clusterId: "ByHirbmSVDCwP7YDBt3V2A"
+
+  # clusterId-init hook Job: patches status.clusterId and resumes reconciliation.
+  # Only rendered when kafka.clusterId is set.
+  clusterIdInit:
+    kubectlImage:
+      repository: alpine/kubectl
+      tag: "1.33.4"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
   replicas: 1
 
   listeners:

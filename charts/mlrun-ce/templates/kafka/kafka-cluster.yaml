@@ -12,6 +12,11 @@ metadata:
     # Delay Kafka CR creation until after CRDs are installed
     helm.sh/hook: post-install,post-upgrade
     helm.sh/hook-weight: "5"
+    {{- if .Values.kafka.clusterId }}
+    # Born paused so the operator does not format storage with a random cluster ID before
+    # the clusterId-init Job pins status.clusterId. The Job resumes reconciliation afterwards.
+    strimzi.io/pause-reconciliation: "true"
+    {{- end }}
 spec:
   kafka:
     listeners:
