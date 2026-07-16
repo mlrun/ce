@@ -25,6 +25,20 @@ jobs:
           python-version: "3.x"
           check-latest: true
       - name: Set up chart-testing
+        id: chart-testing-setup
+        uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f #v2.8.0
+        with:
+          version: v3.10.1
+        continue-on-error: true
+      - name: Clean partial chart-testing cache
+        # ct.sh creates the cache dir before verifying the download's
+        # signature, so a failed cosign/Rekor check (transient upstream
+        # flake) leaves a stale empty dir that would make a bare retry
+        # skip reinstalling and fail differently. Clear it before retrying.
+        if: steps.chart-testing-setup.outcome == 'failure'
+        run: rm -rf "${RUNNER_TOOL_CACHE}/ct"
+      - name: Retry chart-testing setup
+        if: steps.chart-testing-setup.outcome == 'failure'
         uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f #v2.8.0
         with:
           version: v3.10.1

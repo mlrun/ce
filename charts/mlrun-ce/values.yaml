@@ -173,13 +173,14 @@ mlrun:
     enabled: false
   api:
     image:
-      repository: quay.io/mlrun/mlrun-api
-      tag: 1.12.1-rc16
+      tag: 1.12.0-rc18
     ingress:
       enabled: false
       annotations: {}
     sidecars:
       logCollector:
+        image:
+          tag: 1.12.0-rc18
         enabled: true
     fullnameOverride: mlrun-api
     functionSpecServiceAccountDefault: ~
@@ -230,8 +231,7 @@ mlrun:
 
   ui:
     image:
-      repository: quay.io/mlrun/mlrun-ui
-      tag: 1.12.1-rc16
+      tag: 1.12.0-rc18
     fullnameOverride: mlrun-ui
     ingress:
       enabled: false
@@ -300,7 +300,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.12.1-rc16
+    tag: 1.12.0-rc18
     pullPolicy: IfNotPresent
     pullSecrets: []
   busybox:
@@ -644,6 +644,10 @@ timescaledb:
     username: postgres
     password: postgres
     database: postgres
+  startupProbe:
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30  # 30 × 10 s = 5-min window for initdb on slow storage
   persistence:
     enabled: true
     size: "10Gi"

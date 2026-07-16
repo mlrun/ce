@@ -44,8 +44,15 @@ spec:
           value: {{ include "mlrun-ce.s3.service.url" . | quote }}
         - name: BUCKET_NAME
           value: {{ include "mlrun-ce.seaweedfs.s3.bucket" . | quote }}
+        # Region is required by the AWS CLI even though SeaweedFS ignores it.
+        # Without it, botocore attempts IMDS region discovery and crashes (CEML-721).
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        # Fully disable IMDS lookups as defense-in-depth, independent of region.
+        - name: AWS_EC2_METADATA_DISABLED
+          value: "true"
         command:
         - /bin/sh
         - -c
-        - "aws s3 mb s3://$BUCKET_NAME || aws s3 ls s3://$BUCKET_NAME || exit 1"
+        - "aws s3 mb s3://$BUCKET_NAME 2>&1 || aws s3 ls s3://$BUCKET_NAME 2>&1 || { echo \"ERROR: Failed to create or verify bucket $BUCKET_NAME\"; exit 1; }"
 {{- end }}

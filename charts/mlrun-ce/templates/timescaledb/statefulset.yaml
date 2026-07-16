@@ -54,15 +54,29 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
-          livenessProbe:
+          startupProbe:
             exec:
               command:
                 - pg_isready
+                - -h
+                - 127.0.0.1
                 - -U
                 - {{ .Values.timescaledb.auth.username }}
                 - -d
                 - {{ .Values.timescaledb.auth.database }}
-            initialDelaySeconds: 30
+            periodSeconds: {{ .Values.timescaledb.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.timescaledb.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.timescaledb.startupProbe.failureThreshold }}
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - 127.0.0.1
+                - -U
+                - {{ .Values.timescaledb.auth.username }}
+                - -d
+                - {{ .Values.timescaledb.auth.database }}
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
@@ -70,11 +84,12 @@ spec:
             exec:
               command:
                 - pg_isready
+                - -h
+                - 127.0.0.1
                 - -U
                 - {{ .Values.timescaledb.auth.username }}
                 - -d
                 - {{ .Values.timescaledb.auth.database }}
-            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 6
