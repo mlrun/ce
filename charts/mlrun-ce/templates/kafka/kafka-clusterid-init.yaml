@@ -1,0 +1,157 @@
+{{- if and .Values.kafka.enabled .Values.kafka.clusterId }}
+# Pins a constant Kafka cluster ID.
+#
+# clusterId is a status-only field in the Strimzi Kafka and KafkaNodePool CRDs (both enable
+# the status subresource), so it CANNOT be set through a normal Helm/kubectl apply — the API
+# server drops any status block on create/update. The only supported way to fix the cluster ID
+# is to write it to the /status subresource while reconciliation is paused, then resume.
+#
+# The Kafka and KafkaNodePool CRs are therefore created with the
+# strimzi.io/pause-reconciliation="true" annotation (see kafka-cluster.yaml / kafka-nodepool.yaml)
+# and this Job:
+#   1. Waits for the CRs to exist.
+#   2. Patches status.clusterId on both to .Values.kafka.clusterId (idempotent).
+#   3. Removes the pause annotation so the operator reconciles using the pinned ID.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.kafka.name }}-clusterid-init
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: clusterid-init
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.kafka.name }}-clusterid-init
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: clusterid-init
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+rules:
+  # Read the CRs and patch their annotations (pause/resume reconciliation)
+  - apiGroups:
+      - kafka.strimzi.io
+    resources:
+      - kafkas
+      - kafkanodepools
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+      - update
+  # Patch the clusterId on the status subresource
+  - apiGroups:
+      - kafka.strimzi.io
+    resources:
+      - kafkas/status
+      - kafkanodepools/status
+    verbs:
+      - get
+      - patch
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.kafka.name }}-clusterid-init
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: clusterid-init
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Values.kafka.name }}-clusterid-init
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.kafka.name }}-clusterid-init
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.kafka.name }}-clusterid-init
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: clusterid-init
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+  annotations:
+    # Run after the Kafka and KafkaNodePool CRs are created (hook-weight "5")
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    helm.sh/hook-timeout: "300s"
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka
+        app.kubernetes.io/component: clusterid-init
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ .Values.kafka.name }}-clusterid-init
+      containers:
+        - name: clusterid-init
+          image: {{ .Values.kafka.clusterIdInit.kubectlImage.repository }}:{{ .Values.kafka.clusterIdInit.kubectlImage.tag }}
+          resources:
+            requests:
+              cpu: {{ .Values.kafka.clusterIdInit.resources.requests.cpu }}
+              memory: {{ .Values.kafka.clusterIdInit.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.kafka.clusterIdInit.resources.limits.cpu }}
+              memory: {{ .Values.kafka.clusterIdInit.resources.limits.memory }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+
+              NS="{{ .Release.Namespace }}"
+              CID="{{ .Values.kafka.clusterId }}"
+              RESOURCES="kafka/{{ .Values.kafka.name }} kafkanodepool/{{ .Values.kafka.name }}-pool"
+
+              echo "Pinning Kafka cluster ID '${CID}' in namespace '${NS}'"
+
+              # 1. Wait for the CRs to be created by the earlier post-install hooks.
+              for res in ${RESOURCES}; do
+                until kubectl -n "${NS}" get "${res}" >/dev/null 2>&1; do
+                  echo "  waiting for ${res} to be created..."
+                  sleep 3
+                done
+                echo "  ${res} found."
+              done
+
+              # 2. Pin status.clusterId on each resource via the /status subresource.
+              #    Idempotent: skip when already set to the desired value.
+              for res in ${RESOURCES}; do
+                current="$(kubectl -n "${NS}" get "${res}" -o jsonpath='{.status.clusterId}' 2>/dev/null || true)"
+                if [ "${current}" = "${CID}" ]; then
+                  echo "  ${res} already pinned to '${CID}', skipping."
+                  continue
+                fi
+                if [ -n "${current}" ]; then
+                  echo "  WARNING: ${res} has existing clusterId '${current}', overwriting with '${CID}'."
+                fi
+                echo "  setting clusterId on ${res}..."
+                kubectl -n "${NS}" patch "${res}" --type=merge --subresource status \
+                  --patch "{\"status\":{\"clusterId\":\"${CID}\"}}"
+              done
+
+              # 3. Resume reconciliation now that the cluster ID is pinned.
+              for res in ${RESOURCES}; do
+                kubectl -n "${NS}" annotate "${res}" strimzi.io/pause-reconciliation- 2>/dev/null || true
+                echo "  resumed reconciliation on ${res}."
+              done
+
+              echo "Kafka cluster ID pinned successfully."
+{{- end }}
