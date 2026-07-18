@@ -15,6 +15,7 @@ metadata:
     {{- if .Values.kafka.clusterId }}
     # Born paused so the operator does not format storage with a random cluster ID before
     # the clusterId-init Job pins status.clusterId. The Job resumes reconciliation afterwards.
+    # see also: https://strimzi.io/docs/operators/latest/deploying.html#assembly-pausing-reconciliation-str
     strimzi.io/pause-reconciliation: "true"
     {{- end }}
 spec:
