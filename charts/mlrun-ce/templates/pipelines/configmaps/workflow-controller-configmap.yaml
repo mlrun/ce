@@ -12,12 +12,14 @@ data:
       endpoint: "{{ include "mlrun-ce.pipelines.s3.host" . }}:{{ include "mlrun-ce.pipelines.s3.port" . }}"
       bucket: "{{ include "mlrun-ce.pipelines.s3.bucket" . }}"
       insecure: {{ include "mlrun-ce.pipelines.s3.insecure" . }}
+      {{- if eq (include "mlrun-ce.pipelines.usesStaticCredentials" . | toString) "true" }}
       accessKeySecret:
         name: mlpipeline-seaweedfs-artifact
         key: accesskey
       secretKeySecret:
         name: mlpipeline-seaweedfs-artifact
         key: secretkey
+      {{- end }}
   executor: |
     imagePullPolicy: IfNotPresent
     resources:

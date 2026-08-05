@@ -22,8 +22,11 @@ global:
 
 # =============================================================================
 # S3-compatible storage configuration for MLRun and Jupyter.
-# Kubeflow Pipelines always uses the bundled SeaweedFS — storage.mode only
-# affects MLRun and Jupyter.
+# Kubeflow Pipelines artifacts use in-cluster SeaweedFS (pipelines.storage.mode: local).
+# To persist KFP artifacts to external AWS S3 or Azure Blob, enable seaweedfs.remote below.
+# SeaweedFS acts as an S3 gateway and syncs the local bucket to the remote backend.
+# See: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
+# MLRun/Jupyter continue to use storage.mode independently.
 # =============================================================================
 
 # storage.mode selects which backend credentials are injected into the 'storage-credentials' Secret.
@@ -38,7 +41,7 @@ global:
 #                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
 #                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
 #                     storage.s3.bucket (or global.infrastructure.aws.bucketName).
-#                     KFP Pipelines continue to use storage.local.* unchanged.
+#                     KFP Pipelines use pipelines.storage.mode (default: local).
 #   azure-blob      - Azure Blob Storage; injects AZURE_STORAGE_* fields from storage.azure.*
 storage:
   mode: local
@@ -306,13 +309,22 @@ jupyterNotebook:
     size: "8Gi"
     annotations:
       helm.sh/resource-policy: "keep"
-  readinessProbe:
+  # mlce-start.sh can take a long time on first boot (conda env init); startupProbe
+  # keeps the pod NotReady until Jupyter listens; readinessProbe gates Service endpoints.
+  startupProbe:
     httpGet:
-      path: /lab
+      path: /api
       port: http
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 30  # 30 × 10 s = 5-min window for cold start on slow storage
+    failureThreshold: 360  # 360 × 10 s ≈ 60 min
+  readinessProbe:
+    httpGet:
+      path: /api
+      port: http
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
 
   nodeSelector:
     {}
@@ -436,6 +448,31 @@ seaweedfs:
     port: 8333
     nodePort: 30094
 
+  # Sync KFP pipeline artifacts to external AWS S3 or Azure Blob via SeaweedFS remote gateway.
+  # KFP stays on pipelines.storage.mode: local (in-cluster SeaweedFS S3); this layer mirrors
+  # the local bucket to cloud storage. See examples/seaweedfs-remote-*-overlay.yaml.
+  remote:
+    enabled: false
+    # Logical name for remote.configure / filer.remote.gateway -createBucketAt.
+    # Letters and numbers only — SeaweedFS rejects hyphens and other characters.
+    name: cloudstorage
+    # Remote backend: s3 (AWS or S3-compatible) or azure (Azure Blob native API)
+    provider: s3
+    # Remote bucket (AWS) or container (Azure). Local bucket name is storage.local.bucket.
+    bucket: ""
+    s3:
+      # Regional endpoint, e.g. s3.us-east-2.amazonaws.com (https:// added by the configure job)
+      endpoint: ""
+      region: us-east-1
+      forcePathStyle: true
+      storageClass: STANDARD
+    gateway:
+      # When false, local bucket name is mirrored to remote without a random suffix
+      createBucketWithRandomSuffix: false
+    mount:
+      # Mount an existing remote bucket/container into the local filer path before first use
+      mountExisting: true
+
 spark-operator:
   enabled: true
   fullnameOverride: spark-operator
@@ -454,6 +491,10 @@ pipelines:
   archiveLogs: false
   enabled: true
   name: pipelines
+  storage:
+    # KFP pipeline artifacts always use in-cluster SeaweedFS (local mode).
+    # External AWS/Azure persistence: enable seaweedfs.remote (not pipelines.storage.mode).
+    mode: local
   # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
   logLevel: INFO
   ui:
@@ -503,7 +544,7 @@ pipelines:
       tag: v3.4.17-license-compliance
     apiServer:
       repository: ghcr.io/kubeflow/kfp-api-server
-      tag: 2.15.0
+      tag: 2.16.0
       busybox:
         repository: busybox
         tag: 1.37

@@ -63,6 +63,8 @@ spark:
   enabled: true
 
 pipelines:
+  storage:
+    mode: local
   service:
     type : NodePort
     nodePort: 30010
