@@ -39,6 +39,7 @@ spec:
         - name: MINIO_NAMESPACE
           # This is required because otherwise the namespace is appended to the MinIO hostname used to fetch artifacts, causing the fetch to fail
           value: ""
+        {{- if eq (include "mlrun-ce.pipelines.usesStaticCredentials" . | toString) "true" }}
         - name: MINIO_ACCESS_KEY
           valueFrom:
             secretKeyRef:
@@ -49,6 +50,7 @@ spec:
             secretKeyRef:
               key: secretkey
               name: mlpipeline-seaweedfs-artifact
+        {{- end }}
         - name: ALLOW_CUSTOM_VISUALIZATIONS
           value: "true"
         image: {{ .Values.pipelines.images.ui.repository }}:{{ .Values.pipelines.images.ui.tag }}

@@ -1,0 +1,37 @@
+# Example overlay: persist KFP pipeline artifacts to Azure Blob via SeaweedFS remote gateway.
+#
+# Non-secret values below match testing/terraform/azure-blob (terraform output).
+# Pass accountKey at deploy time — do not commit secrets:
+#
+#   cd testing/terraform/azure-blob
+#   export AZURE_STORAGE_KEY=$(terraform output -raw primary_access_key)
+#
+#   helm upgrade --install mlrun-ce charts/mlrun-ce -n mlrun \
+#     -f <your-environment-values>.yaml \
+#     -f charts/mlrun-ce/examples/seaweedfs-remote-azure-overlay.yaml \
+#     --set storage.azure.accountKey="$AZURE_STORAGE_KEY"
+#
+# See: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
+
+storage:
+  mode: local
+  azure:
+    accountName: <ACCOUNT_NAME>
+    accountKey: <ACCOUNT_KEY>
+    containerName: <CONTAINER_NAME>
+
+seaweedfs:
+  remote:
+    enabled: true
+    name: cloudstorage
+    provider: azure
+    bucket: <BUCKET_NAME>
+    mount:
+      mountExisting: true
+
+pipelines:
+  storage:
+    mode: local
+  images:
+    mysql:
+      tag: "8.4"

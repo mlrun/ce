@@ -13,3 +13,33 @@
 {{- if and (eq .Values.storage.mode "azure-blob") (not .Values.storage.azure.containerName) }}
 {{ fail "storage.mode is set to \"azure-blob\" but storage.azure.containerName is not provided. Please set storage.azure.containerName." }}
 {{- end }}
+{{- if and .Values.pipelines.enabled (ne (.Values.pipelines.storage.mode | default "local") "local") }}
+{{ fail "pipelines.storage.mode must be \"local\". External AWS/Azure KFP artifacts use seaweedfs.remote — see examples/seaweedfs-remote-s3-overlay.yaml and examples/seaweedfs-remote-azure-overlay.yaml." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not .Values.seaweedfs.allInOne.enabled) }}
+{{ fail "seaweedfs.remote requires seaweedfs.allInOne.enabled=true." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not .Values.seaweedfs.remote.bucket) }}
+{{ fail "seaweedfs.remote.bucket is required when seaweedfs.remote.enabled is true." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not (regexMatch "^[a-zA-Z0-9]+$" (.Values.seaweedfs.remote.name | default ""))) }}
+{{ fail "seaweedfs.remote.name must contain only letters and numbers (SeaweedFS remote.configure rejects hyphens and other characters)." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "s3") (not .Values.seaweedfs.remote.s3.endpoint) }}
+{{ fail "seaweedfs.remote.s3.endpoint is required when seaweedfs.remote.provider is \"s3\" (e.g. s3.us-east-2.amazonaws.com)." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "s3") (not .Values.global.infrastructure.aws.s3NonAnonymous) (not .Values.storage.s3.accessKey) }}
+{{ fail "seaweedfs.remote with provider \"s3\" requires storage.s3.accessKey." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "s3") (not .Values.global.infrastructure.aws.s3NonAnonymous) (not .Values.storage.s3.secretKey) }}
+{{ fail "seaweedfs.remote with provider \"s3\" requires storage.s3.secretKey." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "azure") (not .Values.storage.azure.accountName) }}
+{{ fail "seaweedfs.remote with provider \"azure\" requires storage.azure.accountName." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "azure") (not .Values.storage.azure.accountKey) }}
+{{ fail "seaweedfs.remote with provider \"azure\" requires storage.azure.accountKey." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not (has .Values.seaweedfs.remote.provider (list "s3" "azure"))) }}
+{{ fail "seaweedfs.remote.provider must be \"s3\" or \"azure\"." }}
+{{- end }}

@@ -7,6 +7,7 @@ data:
         "containers": [
           {
             "env": [
+              {{- if eq (include "mlrun-ce.pipelines.usesStaticCredentials" . | toString) "true" }}
               {
                 "name": "AWS_ACCESS_KEY_ID",
                 "valueFrom": {
@@ -25,6 +26,7 @@ data:
                   }
                 }
               }
+              {{- end }}
             ]
           }
         ]

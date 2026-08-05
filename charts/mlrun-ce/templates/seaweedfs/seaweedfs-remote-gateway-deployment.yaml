@@ -1,0 +1,38 @@
+{{- if eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-seaweedfs-remote-gateway
+  labels:
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seaweedfs-remote-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mlrun-ce.common.labels" . | nindent 6 }}
+      app.kubernetes.io/component: seaweedfs-remote-gateway
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.common.labels" . | nindent 8 }}
+        app.kubernetes.io/component: seaweedfs-remote-gateway
+    spec:
+      containers:
+        - name: remote-gateway
+          image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/bin/weed
+            - filer.remote.gateway
+          args:
+            - -filer={{ include "mlrun-ce.seaweedfs.filerAddress" . }}
+            - -createBucketAt={{ .Values.seaweedfs.remote.name }}
+            - -createBucketWithRandomSuffix={{ .Values.seaweedfs.remote.gateway.createBucketWithRandomSuffix | default false }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+{{- end }}
