@@ -308,6 +308,10 @@ mlrun.get_run_db().trigger_migrations()
 helm --namespace mlrun uninstall my-mlrun
 ```
 
+### Kafka data retention
+
+The Kafka broker's KRaft cluster id lives on its persistent volume. By default (`kafka.storage.deleteClaim: false`) that PVC is **retained** on uninstall, so a reinstall reattaches the same data. A `helm upgrade` patches the `Kafka`/`KafkaNodePool` CRs in place and never touches this identity. To wipe Kafka data on a full reset, either set `kafka.storage.deleteClaim: true` before uninstalling, or delete the Kafka PVCs manually (see below) before reinstalling — otherwise a fresh install over stale data will crash-loop the broker on `Invalid cluster.id`.
+
 ### Terminating pods and hanging resources
 
 It is important to note that this chart generates several persistent volume claims and also provisions an NFS

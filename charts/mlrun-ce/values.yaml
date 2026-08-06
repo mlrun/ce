@@ -713,6 +713,17 @@ kafka:
     type: persistent-claim
     size: 8Gi
     class: ""
+    # Kafka is stateful: its KRaft cluster id lives on this PVC. deleteClaim
+    # controls whether Strimzi removes the PVC when the KafkaNodePool CR is
+    # deleted (e.g. on `helm uninstall`).
+    #   false (default) -> retain the PVC and its data across uninstall/reinstall.
+    #                      Safe default; a reinstall reattaches the same data.
+    #   true            -> delete the PVC with the CR. Use only for disposable
+    #                      environments where losing Kafka data is acceptable.
+    # Note: `helm upgrade` patches the CRs in place (they are ordinary
+    # release-managed manifests, not hooks), so the cluster id is preserved
+    # regardless of this setting.
+    deleteClaim: false
 
   resources:
     requests:
