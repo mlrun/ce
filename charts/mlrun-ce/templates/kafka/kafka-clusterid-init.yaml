@@ -22,6 +22,12 @@ metadata:
     app.kubernetes.io/name: kafka
     app.kubernetes.io/component: clusterid-init
     {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+  annotations:
+    # Created before and torn down after the clusterid-init Job so no standing RBAC
+    # (SA/Role/RoleBinding) lingers for the life of the release.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -32,29 +38,49 @@ metadata:
     app.kubernetes.io/name: kafka
     app.kubernetes.io/component: clusterid-init
     {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 rules:
-  # Read the CRs and patch their annotations (pause/resume reconciliation)
+  # Read the CRs and patch their annotations (pause/resume reconciliation).
+  # Scoped to the specific objects this chart creates; patch covers the annotate/un-pause.
   - apiGroups:
       - kafka.strimzi.io
     resources:
       - kafkas
-      - kafkanodepools
+    resourceNames:
+      - {{ .Values.kafka.name }}
     verbs:
       - get
-      - list
-      - watch
       - patch
-      - update
-  # Patch the clusterId on the status subresource
+  - apiGroups:
+      - kafka.strimzi.io
+    resources:
+      - kafkanodepools
+    resourceNames:
+      - {{ .Values.kafka.name }}-pool
+    verbs:
+      - get
+      - patch
+  # Patch the clusterId on the status subresource (separate resource in RBAC).
+  # get on the main resource above already returns .status.clusterId, so no get needed here.
   - apiGroups:
       - kafka.strimzi.io
     resources:
       - kafkas/status
-      - kafkanodepools/status
+    resourceNames:
+      - {{ .Values.kafka.name }}
     verbs:
-      - get
       - patch
-      - update
+  - apiGroups:
+      - kafka.strimzi.io
+    resources:
+      - kafkanodepools/status
+    resourceNames:
+      - {{ .Values.kafka.name }}-pool
+    verbs:
+      - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -65,6 +91,10 @@ metadata:
     app.kubernetes.io/name: kafka
     app.kubernetes.io/component: clusterid-init
     {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
