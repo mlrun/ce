@@ -554,7 +554,7 @@ pipelines:
       # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
       # https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_default_authentication_plugin
       repository: gcr.io/iguazio/mysql
-      tag: "8.0.26"
+      tag: "8.4"
     cacheImage:
       repository: gcr.io/google-containers/busybox
       tag: latest
