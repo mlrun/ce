@@ -71,13 +71,6 @@ spec:
         ports:
         - containerPort: 8888
           name: http
-        startupProbe:
-          httpGet:
-            path: {{ .Values.jupyterNotebook.startupProbe.httpGet.path }}
-            port: {{ .Values.jupyterNotebook.startupProbe.httpGet.port }}
-          periodSeconds: {{ .Values.jupyterNotebook.startupProbe.periodSeconds }}
-          timeoutSeconds: {{ .Values.jupyterNotebook.startupProbe.timeoutSeconds }}
-          failureThreshold: {{ .Values.jupyterNotebook.startupProbe.failureThreshold }}
         readinessProbe:
           httpGet:
             path: {{ .Values.jupyterNotebook.readinessProbe.httpGet.path }}
@@ -85,13 +78,6 @@ spec:
           periodSeconds: {{ .Values.jupyterNotebook.readinessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.jupyterNotebook.readinessProbe.timeoutSeconds }}
           failureThreshold: {{ .Values.jupyterNotebook.readinessProbe.failureThreshold }}
-        livenessProbe:
-          httpGet:
-            path: {{ .Values.jupyterNotebook.livenessProbe.httpGet.path }}
-            port: {{ .Values.jupyterNotebook.livenessProbe.httpGet.port }}
-          periodSeconds: {{ .Values.jupyterNotebook.livenessProbe.periodSeconds }}
-          timeoutSeconds: {{ .Values.jupyterNotebook.livenessProbe.timeoutSeconds }}
-          failureThreshold: {{ .Values.jupyterNotebook.livenessProbe.failureThreshold }}
         command: ["/bin/bash", "/usr/local/bin/mlce-start.sh"]
       {{- with .Values.jupyterNotebook.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
