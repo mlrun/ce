@@ -32,6 +32,10 @@ spec:
         - name: timescaledb
           image: "{{ .Values.timescaledb.image.repository }}:{{ .Values.timescaledb.image.tag }}"
           imagePullPolicy: {{ .Values.timescaledb.image.pullPolicy }}
+          args:
+            - postgres
+            - -c
+            - max_connections={{ .Values.timescaledb.maxConnections }}
           ports:
             - name: postgresql
               containerPort: 5432

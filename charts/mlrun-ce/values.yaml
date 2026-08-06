@@ -644,6 +644,9 @@ timescaledb:
     username: postgres
     password: postgres
     database: postgres
+  # Overrides the timescaledb-tune default (25), which a single monitored
+  # project exhausts at ~21 connections (ML-12857).
+  maxConnections: 100
   startupProbe:
     periodSeconds: 10
     timeoutSeconds: 5
@@ -660,7 +663,7 @@ timescaledb:
       memory: "256Mi"
       cpu: "100m"
     limits:
-      memory: "1Gi"
+      memory: "2Gi"  # sized for maxConnections=100
       cpu: "1"
   nodeSelector: {}
   tolerations: []
