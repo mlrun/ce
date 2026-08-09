@@ -328,6 +328,13 @@ jupyterNotebook:
     size: "8Gi"
     annotations:
       helm.sh/resource-policy: "keep"
+  readinessProbe:
+    httpGet:
+      path: /lab
+      port: http
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30  # 30 × 10 s = 5-min window for cold start on slow storage
 
   nodeSelector:
     {}
