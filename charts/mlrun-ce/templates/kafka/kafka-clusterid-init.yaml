@@ -72,6 +72,7 @@ rules:
     resourceNames:
       - {{ .Values.kafka.name }}
     verbs:
+      - get
       - patch
   - apiGroups:
       - kafka.strimzi.io
@@ -80,6 +81,7 @@ rules:
     resourceNames:
       - {{ .Values.kafka.name }}-pool
     verbs:
+      - get
       - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
