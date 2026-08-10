@@ -173,14 +173,14 @@ mlrun:
     enabled: false
   api:
     image:
-      tag: 1.12.0-rc18
+      tag: 1.12.0-rc25
     ingress:
       enabled: false
       annotations: {}
     sidecars:
       logCollector:
         image:
-          tag: 1.12.0-rc18
+          tag: 1.12.0-rc25
         enabled: true
     fullnameOverride: mlrun-api
     functionSpecServiceAccountDefault: ~
@@ -231,7 +231,7 @@ mlrun:
 
   ui:
     image:
-      tag: 1.12.0-rc18
+      tag: 1.12.0-rc25
     fullnameOverride: mlrun-ui
     ingress:
       enabled: false
@@ -300,7 +300,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.12.0-rc18
+    tag: 1.12.0-rc25
     pullPolicy: IfNotPresent
     pullSecrets: []
   busybox:
@@ -328,6 +328,13 @@ jupyterNotebook:
     size: "8Gi"
     annotations:
       helm.sh/resource-policy: "keep"
+  readinessProbe:
+    httpGet:
+      path: /lab
+      port: http
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30  # 30 × 10 s = 5-min window for cold start on slow storage
 
   nodeSelector:
     {}
@@ -550,11 +557,8 @@ pipelines:
       repository: ghcr.io/kubeflow/kfp-metadata-writer
       tag: 2.15.0
     mysql:
-      # MySQL 8.0.26 because >= 8.0.27 has deprecated the default_authentication_plugin option
-      # which is required by MLMD workloads (metadata-grpc-deployment and metadata-writer).
-      # https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_default_authentication_plugin
       repository: gcr.io/iguazio/mysql
-      tag: "8.0.26"
+      tag: "8.4"
     cacheImage:
       repository: gcr.io/google-containers/busybox
       tag: latest

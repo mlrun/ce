@@ -71,6 +71,13 @@ spec:
         ports:
         - containerPort: 8888
           name: http
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.jupyterNotebook.readinessProbe.httpGet.path }}
+            port: {{ .Values.jupyterNotebook.readinessProbe.httpGet.port }}
+          periodSeconds: {{ .Values.jupyterNotebook.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.jupyterNotebook.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.jupyterNotebook.readinessProbe.failureThreshold }}
         command: ["/bin/bash", "/usr/local/bin/mlce-start.sh"]
       {{- with .Values.jupyterNotebook.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
