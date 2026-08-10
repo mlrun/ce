@@ -138,7 +138,6 @@ nuclio:
                 fieldPath: "metadata.labels['nuclio.io/function-name']"
 
 mlrun:
-  # set the type of filesystem to use: filesystem, s3
   enabled: true
   global:
     registry: *userRegistry
@@ -149,21 +148,10 @@ mlrun:
     requests:
       cpu: "25m"
       memory: "1Mi"
-  storage: filesystem
   # Storage auto-mount configuration for SeaweedFS S3-compatible storage
   # This allows MLRun SDK to automatically mount storage without user-provided params
   storageAutoMountType: secret_env
   storageAutoMountParams: ~
-  secrets:
-    s3:
-      accessKey: ""
-      secretKey: ""
-  s3:
-    region: us-east-1
-    regionEndpoint: s3.us-east-1.amazonaws.com
-    bucket: mlrun
-    encrypt: false
-    secure: true
   fullnameOverride: mlrun
   nuclio:
     mode: enabled
@@ -275,7 +263,6 @@ jupyterNotebook:
   serviceAccount:
     create: true
     name: mlrun-jupyter
-  awsInstall: false
   fullnameOverride: mlrun-jupyter
   name: jupyter-notebook
   enabled: true
@@ -303,9 +290,6 @@ jupyterNotebook:
     tag: 1.12.0-rc25
     pullPolicy: IfNotPresent
     pullSecrets: []
-  busybox:
-    image: busybox
-    tag: 1.37
   ce:
     mode: full
 
@@ -490,8 +474,6 @@ pipelines:
   priority_class:
     enabled: true
   persistence:
-    enabled: true
-    existingClaim:
     storageClass:
     accessMode: "ReadWriteOnce"
     size: "20Gi"
