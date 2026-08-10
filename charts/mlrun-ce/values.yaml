@@ -161,14 +161,14 @@ mlrun:
     enabled: false
   api:
     image:
-      tag: 1.12.0-rc18
+      tag: 1.12.0-rc25
     ingress:
       enabled: false
       annotations: {}
     sidecars:
       logCollector:
         image:
-          tag: 1.12.0-rc18
+          tag: 1.12.0-rc25
         enabled: true
     fullnameOverride: mlrun-api
     functionSpecServiceAccountDefault: ~
@@ -219,7 +219,7 @@ mlrun:
 
   ui:
     image:
-      tag: 1.12.0-rc18
+      tag: 1.12.0-rc25
     fullnameOverride: mlrun-ui
     ingress:
       enabled: false
@@ -286,7 +286,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.12.0-rc18
+    tag: 1.12.0-rc25
     pullPolicy: IfNotPresent
     pullSecrets: []
   ce:
@@ -311,6 +311,13 @@ jupyterNotebook:
     size: "8Gi"
     annotations:
       helm.sh/resource-policy: "keep"
+  readinessProbe:
+    httpGet:
+      path: /lab
+      port: http
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30  # 30 × 10 s = 5-min window for cold start on slow storage
 
   nodeSelector:
     {}
