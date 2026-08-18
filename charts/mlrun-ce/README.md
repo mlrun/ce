@@ -168,6 +168,86 @@ helm --namespace mlrun upgrade my-mlrun \
 >
 > SaaS providers usually also require auth headers (Bearer token, `X-Scope-OrgID`, etc.). Create a K8s Secret with one key per header, then point the chart at it with `--set telemetry.headersSecretName=my-otlp-headers`.
 
+### KFP Pipeline Artifact Storage
+
+Kubeflow Pipelines (KFP) stores run artifacts (datasets, models, metrics files) in an object store. In MLRun CE, **KFP always uses the in-cluster SeaweedFS S3 gateway** (`pipelines.storage.mode: local`). Pipeline components read and write artifacts to the local SeaweedFS bucket (`storage.local.bucket`, default: `mlrun`).
+
+MLRun and Jupyter use `storage.mode` independently (`local`, `s3`, or `azure-blob`) for their own artifact paths. Changing `storage.mode` does not change where KFP stores pipeline artifacts.
+
+#### Default (local SeaweedFS only)
+
+No extra configuration is required. Artifacts stay on the SeaweedFS PVC inside the cluster.
+
+To be explicit, or to **turn off cloud sync** after testing remote overlays, apply `examples/seaweedfs-local-overlay.yaml`:
+
+```bash
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
+  -f charts/mlrun-ce/examples/seaweedfs-local-overlay.yaml
+```
+
+#### External AWS S3 or Azure Blob (SeaweedFS remote gateway)
+
+To persist KFP artifacts to cloud storage, enable **`seaweedfs.remote`**. SeaweedFS continues to serve KFP locally; a background gateway syncs the local bucket to AWS S3 or Azure Blob.
+
+The chart deploys:
+
+- A **config Job** (Helm post-install/upgrade hook) that runs `remote.configure` and mounts the remote bucket into the filer
+- A **gateway Deployment** (`filer.remote.gateway`) that keeps the local and remote buckets in sync
+
+Example overlays (copy and customize, or pass as `-f` values files):
+
+| Overlay | Purpose |
+|---|---|
+| `examples/seaweedfs-remote-s3-overlay.yaml` | Sync to AWS S3 |
+| `examples/seaweedfs-remote-azure-overlay.yaml` | Sync to Azure Blob |
+| `examples/seaweedfs-local-overlay.yaml` | Local only / disable remote sync |
+
+**AWS S3 example:**
+
+```bash
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
+  -f <your-environment-values>.yaml \
+  -f charts/mlrun-ce/examples/seaweedfs-remote-s3-overlay.yaml \
+  --set storage.s3.accessKey="$AWS_ACCESS_KEY_ID" \
+  --set storage.s3.secretKey="$AWS_SECRET_ACCESS_KEY"
+```
+
+**Azure Blob example** (pass the account key at deploy time — do not commit secrets):
+
+```bash
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
+  -f <your-environment-values>.yaml \
+  -f charts/mlrun-ce/examples/seaweedfs-remote-azure-overlay.yaml \
+  --set storage.azure.accountKey="$AZURE_STORAGE_KEY"
+```
+
+Key values under `seaweedfs.remote`:
+
+| Value | Description |
+|---|---|
+| `enabled` | Enable remote gateway sync (default: `false`) |
+| `provider` | `s3` or `azure` |
+| `name` | Remote name for SeaweedFS — letters and numbers only (default: `cloudstorage`) |
+| `bucket` | Remote AWS bucket or Azure container name |
+| `s3.endpoint` | Regional S3 endpoint (required when `provider: s3`) |
+| `mount.mountExisting` | Mount an existing remote bucket/container (default: `true`) |
+
+> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*`; for Azure from `storage.azure.*`.
+
+#### Migration from direct external KFP storage
+
+Earlier chart versions allowed `pipelines.storage.mode: s3` or `azure-blob` so KFP talked directly to external object storage. That mode is **no longer supported** — the chart fails at render time if `pipelines.storage.mode` is not `local`.
+
+To migrate:
+
+1. Set `pipelines.storage.mode: local`
+2. Enable `seaweedfs.remote` with the appropriate overlay (`examples/seaweedfs-remote-s3-overlay.yaml` or `examples/seaweedfs-remote-azure-overlay.yaml`)
+3. Upgrade the release
+
+Existing artifacts in the old external bucket are not migrated automatically; copy them separately if needed.
+
+See also: [Kubeflow Pipelines object store configuration](https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/).
+
 ### Working with ECR
 
 To work with ECR, you must create a secret with your AWS credentials and a secret with ECR Token while providing both secret names to the helm install command.
@@ -355,6 +435,8 @@ $ rm -rf my-mlrun-mlrun-ce-mlrun
 MLRun enables you to run your functions while saving outputs and artifacts in a way that is visible to Kubeflow Pipelines.
 If you wish to use this capability you will need to install Kubeflow on your cluster.
 Refer to the [**Kubeflow documentation**](https://www.kubeflow.org/docs/started/getting-started/) for more information.
+
+For where pipeline artifacts are stored (in-cluster SeaweedFS vs external AWS S3 / Azure Blob), see [KFP Pipeline Artifact Storage](#kfp-pipeline-artifact-storage).
 
 
 ## Version Matrix
