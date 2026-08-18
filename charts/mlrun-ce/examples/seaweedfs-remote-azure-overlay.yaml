@@ -25,7 +25,8 @@ seaweedfs:
     enabled: true
     name: cloudstorage
     provider: azure
-    bucket: <BUCKET_NAME>
+    # Must match storage.azure.containerName above.
+    bucket: <CONTAINER_NAME>
     mount:
       mountExisting: true
 

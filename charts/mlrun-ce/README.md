@@ -191,8 +191,8 @@ To persist KFP artifacts to cloud storage, enable **`seaweedfs.remote`**. Seawee
 
 The chart deploys:
 
-- A **config Job** (Helm post-install/upgrade hook) that runs `remote.configure` and mounts the remote bucket into the filer
-- A **gateway Deployment** (`filer.remote.gateway`) that keeps the local and remote buckets in sync
+- A **config Job** (Helm post-install/upgrade hook, weight 11) that runs `remote.configure` and mounts the remote bucket into the filer — after the local bucket-init Job (weight 10)
+- A **gateway Deployment** (Helm post-install/upgrade hook, weight 12) that keeps the local and remote buckets in sync — after remote configuration completes
 
 Example overlays (copy and customize, or pass as `-f` values files):
 
@@ -228,11 +228,11 @@ Key values under `seaweedfs.remote`:
 | `enabled` | Enable remote gateway sync (default: `false`) |
 | `provider` | `s3` or `azure` |
 | `name` | Remote name for SeaweedFS — letters and numbers only (default: `cloudstorage`) |
-| `bucket` | Remote AWS bucket or Azure container name |
+| `bucket` | Remote AWS bucket or Azure container name (for Azure, must match `storage.azure.containerName`) |
 | `s3.endpoint` | Regional S3 endpoint (required when `provider: s3`) |
 | `mount.mountExisting` | Mount an existing remote bucket/container (default: `true`) |
 
-> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*`; for Azure from `storage.azure.*`.
+> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*`; for Azure from `storage.azure.*`. When `provider` is `azure`, set `seaweedfs.remote.bucket` to the same value as `storage.azure.containerName`.
 
 #### Migration from direct external KFP storage
 
