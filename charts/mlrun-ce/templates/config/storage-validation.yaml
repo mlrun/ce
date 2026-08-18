@@ -40,6 +40,12 @@
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "azure") (not .Values.storage.azure.accountKey) }}
 {{ fail "seaweedfs.remote with provider \"azure\" requires storage.azure.accountKey." }}
 {{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "azure") (not .Values.storage.azure.containerName) }}
+{{ fail "seaweedfs.remote with provider \"azure\" requires storage.azure.containerName (must match seaweedfs.remote.bucket)." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "azure") (ne .Values.seaweedfs.remote.bucket .Values.storage.azure.containerName) }}
+{{ fail "seaweedfs.remote.bucket must match storage.azure.containerName when provider is \"azure\"." }}
+{{- end }}
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not (has .Values.seaweedfs.remote.provider (list "s3" "azure"))) }}
 {{ fail "seaweedfs.remote.provider must be \"s3\" or \"azure\"." }}
 {{- end }}
