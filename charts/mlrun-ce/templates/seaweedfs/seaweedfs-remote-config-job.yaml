@@ -8,8 +8,8 @@ metadata:
     app.kubernetes.io/component: seaweedfs-remote-config
   annotations:
     helm.sh/hook: post-install,post-upgrade
-    # After s3-bucket-init (weight 10) so the local SeaweedFS bucket exists before remote.mount.
-    helm.sh/hook-weight: "11"
+    # Before s3-bucket-init (weight 10): remote.mount requires /buckets/<local> to be empty.
+    helm.sh/hook-weight: "9"
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   ttlSecondsAfterFinished: 600
@@ -87,6 +87,12 @@ spec:
               REMOTE_PATH="${REMOTE_NAME}/${REMOTE_BUCKET}"
               MOUNT_DIR="/buckets/${LOCAL_BUCKET}"
 
+              EXISTING_MOUNT=$(printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1)
+              if echo "${EXISTING_MOUNT}" | grep -Fq "${MOUNT_DIR}"; then
+                echo "Unmounting stale remote mount at ${MOUNT_DIR} before reconfigure..."
+                printf 'remote.unmount -dir=%s\n' "${MOUNT_DIR}" | weed shell -filer="${FILER}" -master="${MASTER}"
+              fi
+
               {
               {{- if eq .Values.seaweedfs.remote.provider "s3" }}
                 echo "remote.configure -name=${REMOTE_NAME} -type=s3 -s3.access_key=${AWS_ACCESS_KEY_ID} -s3.secret_key=${AWS_SECRET_ACCESS_KEY} -s3.endpoint=https://${S3_ENDPOINT} -s3.region=${S3_REGION} -s3.force_path_style=${S3_FORCE_PATH_STYLE} -s3.storage_class=${S3_STORAGE_CLASS}"
@@ -97,6 +103,19 @@ spec:
                   echo "remote.mount -dir=${MOUNT_DIR} -remote=${REMOTE_PATH}"
                 fi
               } | weed shell -filer="${FILER}" -master="${MASTER}"
+              if [ "${MOUNT_EXISTING}" = "true" ]; then
+                MOUNT_OUT=$(printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1)
+                echo "remote mount status:"
+                echo "${MOUNT_OUT}"
+                echo "${MOUNT_OUT}" | grep -Fq "${MOUNT_DIR}" || {
+                  echo "ERROR: remote.mount did not attach ${MOUNT_DIR}"
+                  exit 1
+                }
+                echo "${MOUNT_OUT}" | grep -Fq "${REMOTE_BUCKET}" || {
+                  echo "ERROR: remote.mount did not target remote bucket ${REMOTE_BUCKET}"
+                  exit 1
+                }
+              fi
           resources:
             requests:
               cpu: 50m
