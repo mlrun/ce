@@ -191,7 +191,7 @@ To persist KFP artifacts to cloud storage, enable **`seaweedfs.remote`**. Seawee
 
 The chart deploys:
 
-- A **config Job** (Helm post-install/upgrade hook, weight 11) that runs `remote.configure` and mounts the remote bucket into the filer — after the local bucket-init Job (weight 10)
+- A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and mounts the remote bucket into the filer — **before** any local bucket is created (`s3-bucket-init` is skipped when remote is enabled, because `remote.mount` requires an empty `/buckets/<local>` path)
 - A **gateway Deployment** (Helm post-install/upgrade hook, weight 12) that keeps the local and remote buckets in sync — after remote configuration completes
 
 Example overlays (copy and customize, or pass as `-f` values files):

@@ -152,7 +152,7 @@ S3 Service Port - returns the port for pipeline config
 
 {{/*
 External S3 credentials (storage.s3.*).
-Shared by MLRun when storage.mode=s3 and KFP when pipelines.storage.mode=s3.
+Used by MLRun and Jupyter when storage.mode is s3, and by seaweedfs.remote when provider is s3.
 */}}
 {{- define "mlrun-ce.storage.s3.accessKey" -}}
 {{- .Values.storage.s3.accessKey -}}
@@ -198,8 +198,7 @@ S3 Bucket - for MLRun and Jupyter.
 {{- end -}}
 
 {{/*
-Used by: SeaweedFS IAM config and bucket-init job.
-When pipelines.storage.mode is "local", KFP also uses these via mlrun-ce.pipelines.s3.* helpers.
+Used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines (via mlrun-ce.pipelines.s3.* helpers).
 */}}
 {{- define "mlrun-ce.seaweedfs.s3.accessKey" -}}
 {{- .Values.storage.local.accessKey -}}
@@ -335,13 +334,6 @@ True when KFP should wait for the in-cluster SeaweedFS S3 gateway at startup.
 */}}
 {{- define "mlrun-ce.pipelines.usesLocalSeaweedFS" -}}
 {{- .Values.seaweedfs.enabled -}}
-{{- end -}}
-
-{{/*
-True when KFP pipeline object store credentials are injected via static secrets.
-*/}}
-{{- define "mlrun-ce.pipelines.usesStaticCredentials" -}}
-true
 {{- end -}}
 
 {{/*

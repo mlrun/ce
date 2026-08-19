@@ -54,7 +54,6 @@ spec:
                   fieldPath: metadata.namespace
 
             # Object store configuration
-            {{- if eq (include "mlrun-ce.pipelines.usesStaticCredentials" . | toString) "true" }}
             - name: OBJECTSTORECONFIG_ACCESSKEY
               valueFrom:
                 secretKeyRef:
@@ -65,7 +64,6 @@ spec:
                 secretKeyRef:
                   name: mlpipeline-seaweedfs-artifact
                   key: secretkey
-            {{- end }}
             - name: OBJECTSTORECONFIG_HOST
               valueFrom:
                 configMapKeyRef:
