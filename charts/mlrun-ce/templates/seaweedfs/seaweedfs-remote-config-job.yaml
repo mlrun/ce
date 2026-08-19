@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: seaweedfs-remote-config
   annotations:
     helm.sh/hook: post-install,post-upgrade
-    # Before s3-bucket-init (weight 10): remote.mount requires /buckets/<local> to be empty.
+    # Before s3-bucket-init (weight 10; skipped when remote is enabled).
     helm.sh/hook-weight: "9"
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
@@ -46,6 +46,8 @@ spec:
               value: {{ include "mlrun-ce.seaweedfs.remote.remoteBucket" . | quote }}
             - name: MOUNT_EXISTING
               value: {{ .Values.seaweedfs.remote.mount.mountExisting | default true | toString | quote }}
+            - name: MOUNT_NONEMPTY
+              value: {{ .Values.seaweedfs.remote.mount.nonempty | default true | toString | quote }}
             {{- if eq .Values.seaweedfs.remote.provider "s3" }}
             - name: S3_ENDPOINT
               value: {{ .Values.seaweedfs.remote.s3.endpoint | quote }}
@@ -100,7 +102,11 @@ spec:
                 echo "remote.configure -name=${REMOTE_NAME} -type=azure -azure.account_name=${AZURE_STORAGE_ACCOUNT} -azure.account_key=${AZURE_STORAGE_ACCESS_KEY}"
               {{- end }}
                 if [ "${MOUNT_EXISTING}" = "true" ]; then
-                  echo "remote.mount -dir=${MOUNT_DIR} -remote=${REMOTE_PATH}"
+                  MOUNT_CMD="remote.mount -dir=${MOUNT_DIR} -remote=${REMOTE_PATH}"
+                  if [ "${MOUNT_NONEMPTY}" = "true" ]; then
+                    MOUNT_CMD="${MOUNT_CMD} -nonempty"
+                  fi
+                  echo "${MOUNT_CMD}"
                 fi
               } | weed shell -filer="${FILER}" -master="${MASTER}"
               if [ "${MOUNT_EXISTING}" = "true" ]; then

@@ -473,6 +473,8 @@ seaweedfs:
     mount:
       # Mount an existing remote bucket/container into the local filer path before first use
       mountExisting: true
+      # Allow remote.mount when /buckets/<local> already has pipeline data (helm upgrades, overlay switches)
+      nonempty: true
 
 spark-operator:
   enabled: true
