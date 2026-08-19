@@ -580,6 +580,8 @@ pipelines:
     cacheImage:
       repository: gcr.io/google-containers/busybox
       tag: latest
+  remote:
+    enabled: false
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
