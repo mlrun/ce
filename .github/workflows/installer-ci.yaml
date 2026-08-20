@@ -1,17 +1,16 @@
 name: Installer CI
 
-# Kept separate from ci.yaml because `paths` filters apply to the whole
-# workflow trigger, not to individual jobs — putting this in ci.yaml would
-# either skip the helm jobs on chart-only PRs or run this on every PR.
+# Runs on every PR, not just those touching scripts/**. The unit tests are
+# hermetic and take about a minute, and always running them means the suite
+# can't sit broken unnoticed until the next installer change.
+#
+# Kept as its own workflow rather than a job in ci.yaml so it reports as an
+# independent status check, matching this repo's one-workflow-per-concern layout.
 on:
   pull_request:
     branches:
       - development
       - "[0-9]+.[0-9]+.x"
-    paths:
-      - "scripts/**"
-      - "tests/install_tests.bats"
-      - ".github/workflows/installer-ci.yaml"
   workflow_dispatch:
 
 permissions:
@@ -28,9 +27,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Syntax check
-        run: bash -n scripts/install.sh
-
       # shellcheck and yq (mikefarah) ship with the ubuntu-latest runner image.
       # yq is needed for real: the load_config tests parse actual YAML.
       - name: Show tool versions
@@ -38,8 +34,8 @@ jobs:
           shellcheck --version
           yq --version
 
-      - name: Run shellcheck
-        run: shellcheck scripts/install.sh
+      - name: Lint install.sh
+        run: make installer-lint
 
       - name: Install bats
         run: |
