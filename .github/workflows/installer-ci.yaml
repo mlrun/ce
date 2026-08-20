@@ -1,0 +1,89 @@
+name: Installer CI
+
+# Kept separate from ci.yaml because `paths` filters apply to the whole
+# workflow trigger, not to individual jobs — putting this in ci.yaml would
+# either skip the helm jobs on chart-only PRs or run this on every PR.
+on:
+  pull_request:
+    branches:
+      - development
+      - "[0-9]+.[0-9]+.x"
+    paths:
+      - "scripts/**"
+      - "tests/install_tests.bats"
+      - ".github/workflows/installer-ci.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BATS_VERSION: v1.13.0
+
+jobs:
+  lint-and-test:
+    name: Lint and unit-test install.sh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: bash -n scripts/install.sh
+
+      # shellcheck and yq (mikefarah) ship with the ubuntu-latest runner image.
+      # yq is needed for real: the load_config tests parse actual YAML.
+      - name: Show tool versions
+        run: |
+          shellcheck --version
+          yq --version
+
+      - name: Run shellcheck
+        run: shellcheck scripts/install.sh
+
+      - name: Install bats
+        run: |
+          git clone --depth 1 --branch "${BATS_VERSION}" \
+            https://github.com/bats-core/bats-core.git /tmp/bats-core
+          sudo /tmp/bats-core/install.sh /usr/local
+          bats --version
+
+      - name: Run installer unit tests
+        run: make installer-test
+
+  kind-install:
+    name: End-to-end install on kind
+    # Dispatch-only for the same reason ci.yaml's `test:` job is commented out:
+    # pulling the full MLRun CE image set takes too long for every PR.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # No node_image/kubectl_version pin: the installer enforces no Kubernetes floor, so
+      # the action's own default node image (matched to the kind release it bundles) is
+      # the safest choice.
+      - name: Set up Kubernetes cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          config: ./.github/assets/kind.yaml
+          wait: 180s
+
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+
+      - name: Install MLRun CE from the in-repo chart
+        # --local-registry deploys a registry in-cluster and derives the pull
+        # secret from it, so no external registry credentials are needed.
+        run: |
+          ./scripts/install.sh \
+            --chart-path ./charts/mlrun-ce \
+            --local-registry \
+            --non-interactive
+
+      - name: Dump cluster state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide
+          kubectl get events -A --sort-by=.lastTimestamp | tail -50

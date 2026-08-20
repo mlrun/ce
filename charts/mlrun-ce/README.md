@@ -29,6 +29,12 @@ The Open source MLRun ce chart includes the following stack:
 
 ## Installing the Chart
 
+> **Scripted alternative:** [`scripts/install.sh`](../../scripts/README.md) wraps everything
+> below — namespace creation, the registry secret, pre-install validation and the `helm
+> install` itself — behind one command, and can read its settings from a `ce-config.yaml`
+> for repeatable installs. It installs the published chart by default. The manual steps
+> below remain fully supported.
+
 Create a namespace for the deployed components:
 ```bash
 kubectl create namespace mlrun

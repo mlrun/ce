@@ -6,8 +6,14 @@
 |---|---|---|
 | helm | 3.6 | Chart rendering, linting, install |
 | kubectl | 1.24 | Cluster interaction |
+| bats-core | 1.5 | Only for `make installer-test` (the `scripts/install.sh` unit tests) |
+| shellcheck | any | Only for `make installer-lint` |
 
 For Kubernetes storage class setup and cluster prerequisites, see [charts/mlrun-ce/README.md](charts/mlrun-ce/README.md#prerequisites).
+
+`scripts/install.sh` enforces the same helm 3.6 floor at install time and imposes no
+Kubernetes floor, so a cluster you can develop against is one you can install against — see
+[scripts/docs/configuration.md](scripts/docs/configuration.md#version-floors).
 
 ## First-Time Setup
 

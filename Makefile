@@ -33,6 +33,15 @@ tests: ## Run tests
 package: ## Package the application
 	@./tests/package.sh
 
+.PHONY: installer-test
+installer-test: ## Run the scripts/install.sh unit tests (requires bats-core)
+	@bats tests/install_tests.bats
+
+.PHONY: installer-lint
+installer-lint: ## Syntax-check and shellcheck scripts/install.sh
+	@bash -n scripts/install.sh
+	@shellcheck scripts/install.sh
+
 .PHONY: helm-lint
 helm-lint: helm-repo-add ## Lint Helm Chart
 	@helm lint charts/mlrun-ce

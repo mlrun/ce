@@ -11,3 +11,7 @@ otlp-pro/
 
 # Claude Code local settings (machine-specific, not for commit)
 .claude/settings.local.json
+
+# Filled-in installer config (copied from scripts/ce-config.yaml.example).
+# Unanchored, so it matches at any depth; ce-config.yaml.example is unaffected.
+ce-config.yaml

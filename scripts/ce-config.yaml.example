@@ -1,0 +1,77 @@
+# Sample config for scripts/install.sh --config ce-config.yaml (or CONFIG_FILE=ce-config.yaml).
+# Only the reserved `installer:` block is read; everything else is ignored.
+# See docs/configuration.md's "Config file (ce-config.yaml)" section for the full field list.
+#
+# Copy this file, edit it, and do NOT commit real registry credentials into it —
+# the password is never read from this file in the first place (REGISTRY_PASSWORD env,
+# REGISTRY_PASSWORD_FILE env, or the interactive prompt, only).
+#
+# Precedence (highest wins): CLI flag > env var > this file (resolved to --set) >
+# -f/--values file (raw values) > chart defaults. --config can be combined with
+# -f/--values: helm applies --set after --values, so any field this file sets always
+# wins over the same key in a -f file, with no extra merge logic needed. -f used alone
+# (no --config) keeps its own self-contained behavior (you supply global.registry.*,
+# versions, everything, install.sh sets nothing on top, no secret creation).
+
+installer:
+  # kubectl/helm context to use. Blank = current local kubeconfig context (no SSH,
+  # no remote exec — install.sh always runs locally).
+  kubeContext: ""
+
+  # "auto" runs the existing local autodetect (minikube ip / docker-desktop / node IP).
+  # Pin a value (e.g. an IP or hostname) to skip autodetection.
+  externalHostAddress: auto
+
+  registry:
+    # Registry URL used for chart images (global.registry.url), e.g. index.docker.io/<user>.
+    # Required unless installing with --local-registry.
+    url: index.docker.io/myuser
+    secret:
+      # Required. Falls back to REGISTRY_USERNAME / the interactive prompt if unset here.
+      username: myuser
+      # Never set a password here — it is not read from this file. Set REGISTRY_PASSWORD,
+      # REGISTRY_PASSWORD_FILE (path to a file containing just the password), or answer
+      # the interactive prompt instead.
+      server: https://index.docker.io/v1/
+      email: me@example.com
+
+  chartSource:
+    # repo (default): install the published mlrun-ce/mlrun-ce chart, optionally pinned
+    #                  to chartVersion (same as --ce-version).
+    # path:           install from a local chart directory (chartPath is then required —
+    #                  same as --chart-path). Use ./charts/mlrun-ce for this repo's chart.
+    kind: repo
+    chartVersion: ""
+    chartPath: ""
+
+  # Pin individual service versions on top of the chart defaults (same as MLRUN_VERSION /
+  # NUCLIO_VERSION env vars). Independent of chartSource/chartVersion above, which pins the
+  # mlrun-ce umbrella chart as a whole.
+  versions:
+    mlrun: ""    # -> --set mlrun.{api,ui}.image.tag=..., mlrun.api.sidecars.logCollector.image.tag=...
+    nuclio: ""   # -> --set nuclio.{controller,dashboard}.image.tag=...
+
+  # Mirrors --disable-system-monitoring / --disable-spark / --disable-mpi /
+  # --disable-model-monitoring exactly: false disables (same --set flags), true/omitted
+  # leaves the component enabled. A --disable-* flag/env always wins — this file can only
+  # add a disable, never remove one set on the command line.
+  components:
+    monitoring: true       # false -> --set kube-prometheus-stack.enabled=false
+    spark: true             # false -> --set spark-operator.enabled=false
+    mpi: true               # false -> --set mpi-operator.{deployment,crd,rbac}.*=false
+    modelMonitoring: true   # false -> --set {strimzi-kafka-operator,kafka,timescaledb}.enabled=false
+
+  # OpenTelemetry — all 4 ship OFF in the chart, so each key here opts IN (mirrors
+  # --enable-otel-* / ENABLE_OTEL_* flags, not the --disable-* mirror above). Independent
+  # knobs, not one bundled toggle, so you can enable e.g. just the operator+collector
+  # without namespaceLabel/instrumentation's namespace-wide auto-instrumentation.
+  # A flag/env-set ENABLE_OTEL_* always wins — this file can only turn one on.
+  otel:
+    operator: false         # -> --set opentelemetry-operator.enabled=true (CRDs, webhook, manager)
+    collector: false        # -> --set opentelemetry.collector.enabled=true (Collector Deployment -> Prometheus)
+    namespaceLabel: false   # -> --set opentelemetry.namespaceLabel.enabled=true
+                             # Labels/annotates NAMESPACE so every Python pod in it gets
+                             # auto-instrumented once instrumentation is also on. Cluster-wide
+                             # blast radius within the namespace — review before enabling.
+    instrumentation: false  # -> --set opentelemetry.instrumentation.enabled=true (Instrumentation CR:
+                             # propagators, sampler, Python/Java agent images)
