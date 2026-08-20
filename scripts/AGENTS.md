@@ -150,15 +150,18 @@ the repo-root `AGENTS.md`/`CONTRIBUTING.md`. This file covers the installer only
   other original Phase 5 idea — reading the created Ingress back and printing its URL in
   the final access table) was not built; out of scope unless asked for separately.
 - **Phase 6 (done, as real CI rather than the originally planned samples):**
-  `.github/workflows/installer-ci.yaml` runs `bash -n`, shellcheck and the bats suite
-  (via `make installer-lint`/`make installer-test`) on PRs touching `scripts/**` or
-  `tests/install_tests.bats`, plus a `workflow_dispatch`-only kind end-to-end install
-  using `--chart-path ./charts/mlrun-ce --local-registry`. It's a separate workflow file
-  rather than a job inside `ci.yaml` because GitHub applies `paths:` filters at the
-  workflow trigger, not per job — folding it into `ci.yaml` would either run it on every
-  PR or skip the chart jobs on a scripts-only PR. The kind job is dispatch-only for the
-  same reason `ci.yaml`'s `test:` job is commented out (pulling the full image set is too
-  slow for every PR). No Jenkinsfile — this repo is GitHub Actions only.
+  `.github/workflows/installer-ci.yaml` runs `make installer-lint` (`bash -n` +
+  shellcheck) and `make installer-test` (the bats suite) via the Makefile targets rather
+  than duplicating the commands, so CI and local can't drift. It runs on **every** PR: an
+  earlier `paths: scripts/**` filter was dropped because the job takes about a minute and
+  a filtered job lets the suite rot unnoticed between installer changes. Note the unit
+  tests are hermetic (they stub `kubectl`/`helm`/`docker`), so running them on chart PRs
+  does *not* catch chart/installer drift — only the kind job would, and that's
+  `workflow_dispatch`-only, installing with `--chart-path ./charts/mlrun-ce
+  --local-registry`, for the same reason `ci.yaml`'s `test:` job is commented out (pulling
+  the full image set is too slow per-PR). It's a separate workflow file rather than a job
+  in `ci.yaml` so it reports as an independent status check. No Jenkinsfile — this repo is
+  GitHub Actions only.
 ## Phase 3 pre-work (resolved, see docs/design-proposal.md §6)
 
 Before implementing Phase 3 (`ce-config.yaml` + `yq`), these open questions were
