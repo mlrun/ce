@@ -16,3 +16,6 @@ The Open source MLRun CE chart includes the following stack:
 ## Installation
 
 Refer to the installation instructions in the [README](charts/mlrun-ce/README.md) of the `mlrun-ce` chart.
+
+For a scripted install, [`scripts/install.sh`](scripts/README.md) wraps those steps — registry
+secret, pre-install validation and `helm install` — behind a single command.
