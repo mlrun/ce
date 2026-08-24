@@ -27,8 +27,6 @@ seaweedfs:
       mountExisting: true
 
 pipelines:
-  storage:
-    mode: local
   images:
     mysql:
       tag: "8.4"

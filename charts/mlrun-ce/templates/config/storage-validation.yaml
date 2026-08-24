@@ -13,9 +13,6 @@
 {{- if and (eq .Values.storage.mode "azure-blob") (not .Values.storage.azure.containerName) }}
 {{ fail "storage.mode is set to \"azure-blob\" but storage.azure.containerName is not provided. Please set storage.azure.containerName." }}
 {{- end }}
-{{- if and .Values.pipelines.enabled (ne (.Values.pipelines.storage.mode | default "local") "local") }}
-{{ fail "pipelines.storage.mode must be \"local\". External AWS/Azure KFP artifacts use seaweedfs.remote — see examples/seaweedfs-remote-s3-overlay.yaml and examples/seaweedfs-remote-azure-overlay.yaml." }}
-{{- end }}
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not .Values.seaweedfs.allInOne.enabled) }}
 {{ fail "seaweedfs.remote requires seaweedfs.allInOne.enabled=true." }}
 {{- end }}
