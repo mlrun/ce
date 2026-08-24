@@ -64,8 +64,6 @@ spark:
 
 pipelines:
   enabled: false
-  storage:
-    mode: local
 
 kube-prometheus-stack:
   enabled: false

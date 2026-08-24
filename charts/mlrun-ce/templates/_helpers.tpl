@@ -248,13 +248,6 @@ seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local:9333
 {{- end -}}
 
 {{/*
-KFP pipeline artifacts use in-cluster SeaweedFS (local mode). External cloud sync uses seaweedfs.remote.
-*/}}
-{{- define "mlrun-ce.pipelines.storage.mode" -}}
-local
-{{- end -}}
-
-{{/*
 Pipelines S3 Access Key.
 */}}
 {{- define "mlrun-ce.pipelines.s3.accessKey" -}}
