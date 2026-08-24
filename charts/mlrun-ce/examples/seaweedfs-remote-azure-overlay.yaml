@@ -1,10 +1,6 @@
 # Example overlay: persist KFP pipeline artifacts to Azure Blob via SeaweedFS remote gateway.
 #
-# Non-secret values below match testing/terraform/azure-blob (terraform output).
-# Pass accountKey at deploy time — do not commit secrets:
-#
-#   cd testing/terraform/azure-blob
-#   export AZURE_STORAGE_KEY=$(terraform output -raw primary_access_key)
+# Pass credentials at deploy time — do not commit secrets:
 #
 #   helm upgrade --install mlrun-ce charts/mlrun-ce -n mlrun \
 #     -f <your-environment-values>.yaml \
