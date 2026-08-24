@@ -77,8 +77,6 @@ spark:
   enabled: true
 
 pipelines:
-  storage:
-    mode: local
   service:
     type: ClusterIP
     nodePort: ""

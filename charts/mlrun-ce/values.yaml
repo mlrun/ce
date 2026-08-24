@@ -22,7 +22,7 @@ global:
 
 # =============================================================================
 # S3-compatible storage configuration for MLRun and Jupyter.
-# Kubeflow Pipelines artifacts use in-cluster SeaweedFS (pipelines.storage.mode: local).
+# Kubeflow Pipelines artifacts always use in-cluster SeaweedFS.
 # To persist KFP artifacts to external AWS S3 or Azure Blob, enable seaweedfs.remote below.
 # SeaweedFS acts as an S3 gateway and syncs the local bucket to the remote backend.
 # See: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
@@ -41,7 +41,6 @@ global:
 #                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
 #                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
 #                     storage.s3.bucket (or global.infrastructure.aws.bucketName).
-#                     KFP Pipelines use pipelines.storage.mode (default: local).
 #   azure-blob      - Azure Blob Storage; injects AZURE_STORAGE_* fields from storage.azure.*
 storage:
   mode: local
@@ -445,8 +444,8 @@ seaweedfs:
     nodePort: 30094
 
   # Sync KFP pipeline artifacts to external AWS S3 or Azure Blob via SeaweedFS remote gateway.
-  # KFP stays on pipelines.storage.mode: local (in-cluster SeaweedFS S3); this layer mirrors
-  # the local bucket to cloud storage. See examples/seaweedfs-remote-*-overlay.yaml.
+  # KFP always uses in-cluster SeaweedFS S3; this layer mirrors the local bucket to cloud storage.
+  # See examples/seaweedfs-remote-*-overlay.yaml.
   remote:
     enabled: false
     # Logical name for remote.configure / filer.remote.gateway -createBucketAt.
@@ -490,10 +489,6 @@ pipelines:
   archiveLogs: false
   enabled: true
   name: pipelines
-  storage:
-    # KFP pipeline artifacts always use in-cluster SeaweedFS (local mode).
-    # External AWS/Azure persistence: enable seaweedfs.remote (not pipelines.storage.mode).
-    mode: local
   # Log level for KFP api-server (DEBUG, INFO, WARNING, ERROR)
   logLevel: INFO
   ui:
@@ -578,8 +573,6 @@ pipelines:
     cacheImage:
       repository: gcr.io/google-containers/busybox
       tag: latest
-  remote:
-    enabled: false
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
