@@ -193,19 +193,6 @@ Kubeflow Pipelines (KFP) stores run artifacts (datasets, models, metrics files) 
 
 MLRun and Jupyter use `storage.mode` independently (`local`, `s3`, or `azure-blob`) for their own artifact paths. Changing `storage.mode` does not change where KFP stores pipeline artifacts.
 
-#### Default (local SeaweedFS only)
-
-No extra configuration is required. Artifacts stay on the SeaweedFS PVC inside the cluster.
-
-To be explicit, or to **turn off cloud sync** after testing remote overlays, apply `examples/seaweedfs-local-overlay.yaml`:
-
-```bash
-helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
-  -f charts/mlrun-ce/examples/seaweedfs-local-overlay.yaml
-```
-
-
-
 #### External AWS S3 or Azure Blob (SeaweedFS remote gateway)
 
 To persist KFP artifacts to cloud storage, enable `seaweedfs.remote`. SeaweedFS continues to serve KFP locally; a background gateway syncs the local bucket to AWS S3 or Azure Blob.
@@ -213,16 +200,15 @@ To persist KFP artifacts to cloud storage, enable `seaweedfs.remote`. SeaweedFS 
 The chart deploys:
 
 - A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and mounts the remote bucket into the filer (`s3-bucket-init` is skipped when remote is enabled). By default the mount uses `-nonempty` so upgrades succeed even when `/buckets/<local>` already contains pipeline artifacts
-- A **gateway Deployment** (Helm post-install/upgrade hook, weight 12) that keeps the local and remote buckets in sync — after remote configuration completes
+- A **gateway Deployment** that keeps the local and remote buckets in sync — after remote configuration completes
 
 Example overlays (copy and customize, or pass as `-f` values files):
 
 
-| Overlay                                        | Purpose                          |
-| ---------------------------------------------- | -------------------------------- |
-| `examples/seaweedfs-remote-s3-overlay.yaml`    | Sync to AWS S3                   |
-| `examples/seaweedfs-remote-azure-overlay.yaml` | Sync to Azure Blob               |
-| `examples/seaweedfs-local-overlay.yaml`        | Local only / disable remote sync |
+| Overlay                                        | Purpose                |
+| ---------------------------------------------- | ---------------------- |
+| `examples/seaweedfs-remote-s3-overlay.yaml`    | Sync to AWS S3         |
+| `examples/seaweedfs-remote-azure-overlay.yaml` | Sync to Azure Blob     |
 
 
 **AWS S3 example:**
@@ -258,21 +244,7 @@ Key values under `seaweedfs.remote`:
 | `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
 
 
-> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.`*; for Azure from `storage.azure.*`. When `provider` is `azure`, set `seaweedfs.remote.bucket` to the same value as `storage.azure.containerName`.
-
-
-
-#### Migration from direct external KFP storage
-
-Earlier chart versions allowed `pipelines.storage.mode: s3` or `azure-blob` so KFP talked directly to external object storage. That mode is **no longer supported** — the chart fails at render time if `pipelines.storage.mode` is not `local`.
-
-To migrate:
-
-1. Set `pipelines.storage.mode: local`
-2. Enable `seaweedfs.remote` with the appropriate overlay (`examples/seaweedfs-remote-s3-overlay.yaml` or `examples/seaweedfs-remote-azure-overlay.yaml`)
-3. Upgrade the release
-
-Existing artifacts in the old external bucket are not migrated automatically; copy them separately if needed.
+> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*`; for Azure from `storage.azure.accountName` and `storage.azure.accountKey` (SeaweedFS reads `AZURE_STORAGE_ACCOUNT` / `AZURE_STORAGE_ACCESS_KEY`). Connection string, SAS token, and client-secret auth are not supported for the remote gateway — use those only with MLRun/Jupyter `storage.mode: azure-blob`. When `provider` is `azure`, set `seaweedfs.remote.bucket` to the same value as `storage.azure.containerName`.
 
 See also: [Kubeflow Pipelines object store configuration](https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/).
 

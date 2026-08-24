@@ -59,11 +59,16 @@ storage:
     bucket: ""
   azure:
     containerName: ""
+    # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.
     connectionString: ""
+    # Required for seaweedfs.remote provider azure (SeaweedFS reads AZURE_STORAGE_ACCOUNT / AZURE_STORAGE_ACCESS_KEY).
     accountName: ""
     accountKey: ""
+    # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.
     sasToken: ""
+    # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.
     clientSecret: ""
+    # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.
     tenantId: ""
 
 nuclio:
@@ -315,22 +320,13 @@ jupyterNotebook:
     size: "8Gi"
     annotations:
       helm.sh/resource-policy: "keep"
-  # mlce-start.sh can take a long time on first boot (conda env init); startupProbe
-  # keeps the pod NotReady until Jupyter listens; readinessProbe gates Service endpoints.
-  startupProbe:
-    httpGet:
-      path: /api
-      port: http
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 360  # 360 × 10 s ≈ 60 min
   readinessProbe:
     httpGet:
-      path: /api
+      path: /lab
       port: http
     periodSeconds: 10
     timeoutSeconds: 5
-    failureThreshold: 3
+    failureThreshold: 30  # 30 × 10 s = 5-min window for cold start on slow storage
 
   nodeSelector:
     {}
@@ -467,7 +463,7 @@ seaweedfs:
     # Letters and numbers only — SeaweedFS rejects hyphens and other characters.
     name: cloudstorage
     # Remote backend: s3 (AWS or S3-compatible) or azure (Azure Blob native API)
-    provider: s3
+    provider: ""
     # Remote bucket (AWS) or container (Azure). Local bucket name is storage.local.bucket.
     # For provider azure, must match storage.azure.containerName.
     bucket: ""
