@@ -6,11 +6,6 @@ metadata:
   labels:
     {{- include "mlrun-ce.common.labels" . | nindent 4 }}
     app.kubernetes.io/component: seaweedfs-remote-gateway
-  annotations:
-    helm.sh/hook: post-install,post-upgrade
-    # After seaweedfs-remote-config (weight 9) so remote.configure / remote.mount finish first.
-    helm.sh/hook-weight: "12"
-    helm.sh/hook-delete-policy: before-hook-creation
 spec:
   replicas: 1
   selector:
@@ -25,7 +20,7 @@ spec:
     spec:
       initContainers:
         - name: wait-for-filer
-          image: busybox:1.36
+          image: busybox:1.37
           env:
             - name: FILER_HOST
               value: seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local

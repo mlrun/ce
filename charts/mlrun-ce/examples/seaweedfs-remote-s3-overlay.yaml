@@ -1,7 +1,6 @@
 # Example overlay: persist KFP pipeline artifacts to AWS S3 via SeaweedFS remote gateway.
 #
-# Bucket/region/endpoint from testing/terraform/s3-bucket (terraform output).
-# That module creates the bucket only — pass AWS IAM keys at deploy time (e.g. 1Password):
+# Pass AWS IAM keys at deploy time — do not commit secrets:
 #
 #   helm upgrade --install mlrun-ce charts/mlrun-ce -n mlrun \
 #     -f <your-environment-values>.yaml \

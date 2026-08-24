@@ -71,13 +71,6 @@ spec:
         ports:
         - containerPort: 8888
           name: http
-        startupProbe:
-          httpGet:
-            path: {{ .Values.jupyterNotebook.startupProbe.httpGet.path }}
-            port: {{ .Values.jupyterNotebook.startupProbe.httpGet.port }}
-          periodSeconds: {{ .Values.jupyterNotebook.startupProbe.periodSeconds }}
-          timeoutSeconds: {{ .Values.jupyterNotebook.startupProbe.timeoutSeconds }}
-          failureThreshold: {{ .Values.jupyterNotebook.startupProbe.failureThreshold }}
         readinessProbe:
           httpGet:
             path: {{ .Values.jupyterNotebook.readinessProbe.httpGet.path }}
