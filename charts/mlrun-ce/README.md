@@ -244,7 +244,7 @@ Key values under `seaweedfs.remote`:
 | `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
 
 
-> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*`; for Azure from `storage.azure.accountName` and `storage.azure.accountKey` (SeaweedFS reads `AZURE_STORAGE_ACCOUNT` / `AZURE_STORAGE_ACCESS_KEY`). Connection string, SAS token, and client-secret auth are not supported for the remote gateway — use those only with MLRun/Jupyter `storage.mode: azure-blob`. When `provider` is `azure`, set `seaweedfs.remote.bucket` to the same value as `storage.azure.containerName`.
+> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*`; for Azure from `storage.azure.accountName`+`accountKey`, or `storage.azure.connectionString` (parsed into account name and key by the remote-config Job). SAS token and client-secret auth are not supported for the remote gateway. When `provider` is `azure`, set `seaweedfs.remote.bucket` to the same value as `storage.azure.containerName`.
 
 See also: [Kubeflow Pipelines object store configuration](https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/).
 

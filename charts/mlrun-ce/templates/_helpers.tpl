@@ -248,6 +248,40 @@ seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local:9333
 {{- end -}}
 
 {{/*
+Shell snippet: export AZURE_STORAGE_ACCOUNT / AZURE_STORAGE_ACCESS_KEY from AZURE_STORAGE_CONNECTION_STRING when unset.
+Used by seaweedfs-remote-config Job and seaweedfs-remote-gateway Deployment (filer.remote.gateway reads env at sync time).
+*/}}
+{{- define "mlrun-ce.seaweedfs.remote.azureCredentialBootstrap" -}}
+if [ -z "${AZURE_STORAGE_ACCOUNT:-}" ] || [ -z "${AZURE_STORAGE_ACCESS_KEY:-}" ]; then
+  if [ -z "${AZURE_STORAGE_CONNECTION_STRING:-}" ]; then
+    echo "ERROR: set storage.azure.accountName+accountKey or connectionString."
+    exit 1
+  fi
+  if echo "${AZURE_STORAGE_CONNECTION_STRING}" | grep -q 'SharedAccessSignature='; then
+    echo "ERROR: SAS-only connection strings are not supported."
+    exit 1
+  fi
+  _parsed_account=""
+  _parsed_key=""
+  _old_ifs="${IFS}"
+  IFS=';'
+  for _part in ${AZURE_STORAGE_CONNECTION_STRING}; do
+    case "${_part}" in
+      AccountName=*) _parsed_account="${_part#AccountName=}" ;;
+      AccountKey=*) _parsed_key="${_part#AccountKey=}" ;;
+    esac
+  done
+  IFS="${_old_ifs}"
+  if [ -z "${_parsed_account}" ] || [ -z "${_parsed_key}" ]; then
+    echo "ERROR: could not parse AccountName/AccountKey from connectionString."
+    exit 1
+  fi
+  export AZURE_STORAGE_ACCOUNT="${_parsed_account}"
+  export AZURE_STORAGE_ACCESS_KEY="${_parsed_key}"
+fi
+{{- end -}}
+
+{{/*
 Pipelines S3 Access Key.
 */}}
 {{- define "mlrun-ce.pipelines.s3.accessKey" -}}
