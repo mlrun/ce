@@ -58,9 +58,9 @@ storage:
     bucket: ""
   azure:
     containerName: ""
-    # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.
+    # seaweedfs.remote: parsed into AZURE_STORAGE_ACCOUNT / AZURE_STORAGE_ACCESS_KEY by the remote-config Job.
+    # Also used by MLRun/Jupyter when storage.mode is azure-blob.
     connectionString: ""
-    # Required for seaweedfs.remote provider azure (SeaweedFS reads AZURE_STORAGE_ACCOUNT / AZURE_STORAGE_ACCESS_KEY).
     accountName: ""
     accountKey: ""
     # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.

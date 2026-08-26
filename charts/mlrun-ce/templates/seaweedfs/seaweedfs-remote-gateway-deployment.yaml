@@ -34,13 +34,21 @@ spec:
         - name: remote-gateway
           image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
           imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: seaweedfs-remote-credentials
           command:
-            - /usr/bin/weed
-            - filer.remote.gateway
-          args:
-            - -filer={{ include "mlrun-ce.seaweedfs.filerAddress" . }}
-            - -createBucketAt={{ .Values.seaweedfs.remote.name }}
-            - -createBucketWithRandomSuffix={{ .Values.seaweedfs.remote.gateway.createBucketWithRandomSuffix | default false }}
+            - /bin/sh
+            - -ec
+            - |
+              set -e
+              {{- if eq .Values.seaweedfs.remote.provider "azure" }}
+              {{ include "mlrun-ce.seaweedfs.remote.azureCredentialBootstrap" . | nindent 14 }}
+              {{- end }}
+              exec /usr/bin/weed filer.remote.gateway \
+                -filer={{ include "mlrun-ce.seaweedfs.filerAddress" . }} \
+                -createBucketAt={{ .Values.seaweedfs.remote.name }} \
+                -createBucketWithRandomSuffix={{ .Values.seaweedfs.remote.gateway.createBucketWithRandomSuffix | default false }}
           resources:
             requests:
               cpu: 50m
