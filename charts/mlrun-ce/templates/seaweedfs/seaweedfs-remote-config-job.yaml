@@ -68,16 +68,24 @@ spec:
                   name: seaweedfs-remote-credentials
                   key: AWS_SECRET_ACCESS_KEY
             {{- else if eq .Values.seaweedfs.remote.provider "azure" }}
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: seaweedfs-remote-credentials
+                  key: AZURE_STORAGE_CONNECTION_STRING
+                  optional: true
             - name: AZURE_STORAGE_ACCOUNT
               valueFrom:
                 secretKeyRef:
                   name: seaweedfs-remote-credentials
                   key: AZURE_STORAGE_ACCOUNT
+                  optional: true
             - name: AZURE_STORAGE_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: seaweedfs-remote-credentials
                   key: AZURE_STORAGE_ACCESS_KEY
+                  optional: true
             {{- end }}
           command:
             - /bin/sh
@@ -95,10 +103,10 @@ spec:
                 printf 'remote.unmount -dir=%s\n' "${MOUNT_DIR}" | weed shell -filer="${FILER}" -master="${MASTER}"
               fi
 
-              # S3 credentials are embedded in the remote.configure line (SeaweedFS has no env fallback for S3 keys).
-              # Azure credentials are read from AZURE_STORAGE_ACCOUNT / AZURE_STORAGE_ACCESS_KEY env vars by weed shell.
-              # Connection string, SAS token, and client-secret auth are not supported for seaweedfs.remote.
-              # If a credential value contains spaces or shell metacharacters, configuration may fail — test edge-case keys.
+              # Azure: weed shell reads AZURE_STORAGE_ACCOUNT/ACCESS_KEY; parse connectionString when unset.
+              {{- if eq .Values.seaweedfs.remote.provider "azure" }}
+              {{ include "mlrun-ce.seaweedfs.remote.azureCredentialBootstrap" . | nindent 14 }}
+              {{- end }}
               {
               {{- if eq .Values.seaweedfs.remote.provider "s3" }}
                 echo "remote.configure -name=${REMOTE_NAME} -type=s3 -s3.access_key=${AWS_ACCESS_KEY_ID} -s3.secret_key=${AWS_SECRET_ACCESS_KEY} -s3.endpoint=https://${S3_ENDPOINT} -s3.region=${S3_REGION} -s3.force_path_style=${S3_FORCE_PATH_STYLE} -s3.storage_class=${S3_STORAGE_CLASS}"

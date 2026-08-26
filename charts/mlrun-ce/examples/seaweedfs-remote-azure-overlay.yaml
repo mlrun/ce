@@ -1,20 +1,44 @@
 # Example overlay: persist KFP pipeline artifacts to Azure Blob via SeaweedFS remote gateway.
 #
-# Pass credentials at deploy time — do not commit secrets:
+# Auth option A — account name + key (accountName/accountKey take precedence when both are set):
+#
+#   export AZURE_STORAGE_KEY="$(az storage account keys list \
+#     --account-name <ACCOUNT_NAME> --resource-group <RG> --query '[0].value' -o tsv)"
 #
 #   helm upgrade --install mlrun-ce charts/mlrun-ce -n mlrun \
 #     -f <your-environment-values>.yaml \
 #     -f charts/mlrun-ce/examples/seaweedfs-remote-azure-overlay.yaml \
-#     --set storage.azure.accountKey="$AZURE_STORAGE_KEY"
+#     --set storage.azure.accountName="<ACCOUNT_NAME>" \
+#     --set storage.azure.accountKey="$AZURE_STORAGE_KEY" \
+#     --set storage.azure.containerName="<CONTAINER_NAME>" \
+#     --set seaweedfs.remote.bucket="<CONTAINER_NAME>"
+#
+# Auth option B — connection string only (leave accountName/accountKey empty):
+#
+#   export AZURE_STORAGE_CONNECTION_STRING="$(az storage account show-connection-string \
+#     --name <ACCOUNT_NAME> --resource-group <RG> --query connectionString -o tsv)"
+#
+#   helm upgrade --install mlrun-ce charts/mlrun-ce -n mlrun \
+#     -f <your-environment-values>.yaml \
+#     -f charts/mlrun-ce/examples/seaweedfs-remote-azure-overlay.yaml \
+#     --set storage.azure.accountName="" \
+#     --set storage.azure.accountKey="" \
+#     --set storage.azure.connectionString="$AZURE_STORAGE_CONNECTION_STRING" \
+#     --set storage.azure.containerName="<CONTAINER_NAME>" \
+#     --set seaweedfs.remote.bucket="<CONTAINER_NAME>"
 #
 # See: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
 
 storage:
   mode: local
   azure:
+    # Option A: set accountName and pass accountKey at deploy time (see above).
     accountName: <ACCOUNT_NAME>
     accountKey: <ACCOUNT_KEY>
     containerName: <CONTAINER_NAME>
+    # Option B: connection string — parsed into accountName/accountKey by the remote-config Job
+    # when accountName or accountKey is empty. Pass at deploy time; do not commit secrets.
+    # connectionString: ""
 
 seaweedfs:
   remote:
