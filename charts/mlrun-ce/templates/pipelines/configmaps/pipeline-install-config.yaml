@@ -1,13 +1,13 @@
 {{- if .Values.pipelines.enabled -}}
 apiVersion: v1
 data:
-  objectStoreServiceHost: {{ include "mlrun-ce.pipelines.s3.host" . }}
-  objectStoreServicePort: {{ include "mlrun-ce.pipelines.s3.port" . | quote }}
+  objectStoreServiceHost: {{ include "mlrun-ce.s3.service.host" . }}
+  objectStoreServicePort: {{ include "mlrun-ce.s3.service.port" . | quote }}
   ConMaxLifeTime: 120s
   appName: pipeline
   appVersion: {{ .Values.pipelines.images.apiServer.tag }}
   autoUpdatePipelineDefaultVersion: "false"
-  bucketName: "{{ include "mlrun-ce.pipelines.s3.bucket" . }}"
+  bucketName: "{{ include "mlrun-ce.seaweedfs.s3.bucket" . }}"
   cacheDb: cachedb
   cacheImage: {{ .Values.pipelines.images.cacheImage.repository }}:{{ .Values.pipelines.images.cacheImage.tag }}
   cacheNodeRestrictions: "false"
