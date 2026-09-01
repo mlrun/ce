@@ -200,9 +200,9 @@ To persist KFP artifacts to cloud storage, enable `seaweedfs.remote`. SeaweedFS 
 The chart deploys:
 
 - A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and mounts the remote bucket into the filer (`s3-bucket-init` is skipped when remote is enabled). By default the mount uses `-nonempty` so upgrades succeed even when `/buckets/<local>` already contains pipeline artifacts
-- A **gateway Deployment** that keeps the local and remote buckets in sync — after remote configuration completes
+- A **gateway Deployment** (Helm post-install/upgrade hook, weight 9) that keeps the local and remote buckets in sync — after the remote mount from the config Job is in place
 
-Example overlays (copy and customize, or pass as `-f` values files):
+Example overlays (copy and customize, or pass as `-f` values files). See `examples/README.md` for deploy commands and Azure auth options:
 
 
 | Overlay                                        | Purpose                |
@@ -211,24 +211,15 @@ Example overlays (copy and customize, or pass as `-f` values files):
 | `examples/seaweedfs-remote-azure-overlay.yaml` | Sync to Azure Blob     |
 
 
-**AWS S3 example:**
+**AWS S3 example** (customize placeholders in the overlay first):
 
 ```bash
 helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
   -f <your-environment-values>.yaml \
-  -f charts/mlrun-ce/examples/seaweedfs-remote-s3-overlay.yaml \
-  --set storage.s3.accessKey="$AWS_ACCESS_KEY_ID" \
-  --set storage.s3.secretKey="$AWS_SECRET_ACCESS_KEY"
+  -f charts/mlrun-ce/examples/seaweedfs-remote-s3-overlay.yaml
 ```
 
-**Azure Blob example** (pass the account key at deploy time — do not commit secrets):
-
-```bash
-helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
-  -f <your-environment-values>.yaml \
-  -f charts/mlrun-ce/examples/seaweedfs-remote-azure-overlay.yaml \
-  --set storage.azure.accountKey="$AZURE_STORAGE_KEY"
-```
+**Azure Blob example** — see `examples/README.md` for account-key and connection-string options.
 
 Key values under `seaweedfs.remote`:
 
@@ -463,7 +454,6 @@ This table shows the versions of the main components in the MLRun CE chart:
 
 | MLRun CE         | MLRun       | Nuclio  | Jupyter     | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack | OpenTelemetry Operator |
 | ---------------- | ----------- | ------- | ----------- | ------------ | --------- | -------------- | --------- | --------------------- | ---------------------- |
-| **0.12.0-rc.11** | 1.12.0-rc25 | 0.21.27 | 1.12.0-rc25 | 0.6.0        | 4.17.0    | 2.1.0          | 2.16.0    | 72.1.1                | 0.105.0                |
 | **0.11.0**       | 1.11.0      | 1.15.27 | 4.5.0       | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |
 
 

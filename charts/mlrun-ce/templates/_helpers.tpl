@@ -198,7 +198,7 @@ S3 Bucket - for MLRun and Jupyter.
 {{- end -}}
 
 {{/*
-Used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines (via mlrun-ce.pipelines.s3.* helpers).
+Used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines.
 */}}
 {{- define "mlrun-ce.seaweedfs.s3.accessKey" -}}
 {{- .Values.storage.local.accessKey -}}
@@ -221,8 +221,12 @@ SeaweedFS S3 Bucket - sourced from storage.local.bucket.
 {{/*
 SeaweedFS cluster addresses (allInOne mode with fullnameOverride: seaweedfs).
 */}}
+{{- define "mlrun-ce.seaweedfs.filer.port" -}}
+{{- .Values.seaweedfs.filer.port | default 8888 -}}
+{{- end -}}
+
 {{- define "mlrun-ce.seaweedfs.filerAddress" -}}
-seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local:8888
+seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local:{{ include "mlrun-ce.seaweedfs.filer.port" . }}
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.masterAddress" -}}
@@ -282,77 +286,10 @@ fi
 {{- end -}}
 
 {{/*
-Pipelines S3 Access Key.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.accessKey" -}}
-{{- include "mlrun-ce.seaweedfs.s3.accessKey" . -}}
-{{- end -}}
-
-{{/*
-Pipelines S3 Secret Key.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.secretKey" -}}
-{{- include "mlrun-ce.seaweedfs.s3.secretKey" . -}}
-{{- end -}}
-
-{{/*
-Pipelines S3 Bucket / container name (local SeaweedFS bucket).
-*/}}
-{{- define "mlrun-ce.pipelines.s3.bucket" -}}
-{{- include "mlrun-ce.seaweedfs.s3.bucket" . -}}
-{{- end -}}
-
-{{/*
-Pipelines S3 Host.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.host" -}}
-{{- include "mlrun-ce.s3.service.host" . -}}
-{{- end -}}
-
-{{/*
-Pipelines S3 Port.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.port" -}}
-{{- include "mlrun-ce.s3.service.port" . -}}
-{{- end -}}
-
-{{/*
-Pipelines S3 Secure / Insecure.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.secure" -}}
-false
-{{- end -}}
-
-{{- define "mlrun-ce.pipelines.s3.insecure" -}}
-true
-{{- end -}}
-
-{{/*
-Pipelines S3 region for external object stores.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.region" -}}
-minio
-{{- end -}}
-
-{{/*
-Whether the KFP launcher should disable SSL for the configured S3 endpoint.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.disableSSL" -}}
-true
-{{- end -}}
-
-{{/*
-Whether the KFP launcher should use path-style S3 URLs.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.forcePathStyle" -}}
-true
-{{- end -}}
-
-{{/*
 Default KFP pipeline root URI scheme/path.
 */}}
 {{- define "mlrun-ce.pipelines.defaultPipelineRoot" -}}
-{{- $bucket := include "mlrun-ce.pipelines.s3.bucket" . -}}
+{{- $bucket := include "mlrun-ce.seaweedfs.s3.bucket" . -}}
 minio://{{ $bucket }}/v2/artifacts
 {{- end -}}
 

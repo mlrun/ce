@@ -28,7 +28,7 @@ spec:
             - name: FILER_HOST
               value: seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local
             - name: FILER_PORT
-              value: "8888"
+              value: {{ include "mlrun-ce.seaweedfs.filer.port" . | quote }}
           command:
             - /bin/sh
             - -c

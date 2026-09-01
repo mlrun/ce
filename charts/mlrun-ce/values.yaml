@@ -58,16 +58,14 @@ storage:
     bucket: ""
   azure:
     containerName: ""
-    # seaweedfs.remote: parsed into AZURE_STORAGE_ACCOUNT / AZURE_STORAGE_ACCESS_KEY by the remote-config Job.
-    # Also used by MLRun/Jupyter when storage.mode is azure-blob.
+    # Used by MLRun/Jupyter (storage.mode: azure-blob) and seaweedfs.remote (provider: azure).
+    # Remote gateway supports connectionString or accountName+accountKey (parsed by remote-config Job).
+    # sasToken, clientSecret, and tenantId apply to MLRun/Jupyter only.
     connectionString: ""
     accountName: ""
     accountKey: ""
-    # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.
     sasToken: ""
-    # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.
     clientSecret: ""
-    # MLRun/Jupyter only (storage.mode: azure-blob). Not supported by seaweedfs.remote.
     tenantId: ""
 
 nuclio:
@@ -375,6 +373,7 @@ seaweedfs:
         maxVolumes: 12
   filer:
     enabled: false
+    port: 8888
 
   # S3 auth config - enableAuth gates the seaweedfs-s3-config Secret creation in
   # templates/seaweedfs/seaweedfs-s3-config.yaml even though the dedicated s3 pod
@@ -532,10 +531,10 @@ pipelines:
   images:
     driver:
       repository: ghcr.io/kubeflow/kfp-driver
-      tag: 2.15.0
+      tag: 2.16.0
     launcher:
       repository: ghcr.io/kubeflow/kfp-launcher
-      tag: 2.15.0
+      tag: 2.16.0
     argoexec:
       repository: gcr.io/iguazio/argoexec
       tag: v3.4.17-license-compliance
@@ -550,19 +549,19 @@ pipelines:
         tag: 1.37
     persistenceagent:
       repository: ghcr.io/kubeflow/kfp-persistence-agent
-      tag: 2.15.0
+      tag: 2.16.0
     scheduledworkflow:
       repository: ghcr.io/kubeflow/kfp-scheduled-workflow-controller
-      tag: 2.15.0
+      tag: 2.16.0
     ui:
       repository: ghcr.io/kubeflow/kfp-frontend
-      tag: 2.15.0
+      tag: 2.16.0
     viewerCrdController:
       repository: ghcr.io/kubeflow/kfp-viewer-crd-controller
-      tag: 2.15.0
+      tag: 2.16.0
     visualizationServer:
       repository: ghcr.io/kubeflow/kfp-visualization-server
-      tag: 2.15.0
+      tag: 2.16.0
     metadata:
       container:
         repository: gcr.io/tfx-oss-public/ml_metadata_store_server

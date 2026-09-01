@@ -6,6 +6,10 @@ metadata:
   labels:
     {{- include "mlrun-ce.common.labels" . | nindent 4 }}
     app.kubernetes.io/component: seaweedfs-remote-gateway
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    # Same weight as seaweedfs-remote-config Job; init container waits for remote mount.
+    helm.sh/hook-weight: "9"
 spec:
   replicas: 1
   selector:
@@ -25,11 +29,25 @@ spec:
             - name: FILER_HOST
               value: seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local
             - name: FILER_PORT
-              value: "8888"
+              value: {{ include "mlrun-ce.seaweedfs.filer.port" . | quote }}
           command:
             - /bin/sh
             - -c
             - "until nc -z $FILER_HOST $FILER_PORT; do echo waiting for SeaweedFS filer; sleep 5; done"
+        - name: wait-for-remote-mount
+          image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              FILER="{{ include "mlrun-ce.seaweedfs.filerAddress" . }}"
+              MASTER="{{ include "mlrun-ce.seaweedfs.masterAddress" . }}"
+              MOUNT_DIR="/buckets/{{ include "mlrun-ce.seaweedfs.remote.localBucket" . }}"
+              until printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1 | grep -Fq "${MOUNT_DIR}"; do
+                echo "waiting for remote mount at ${MOUNT_DIR}..."
+                sleep 5
+              done
       containers:
         - name: remote-gateway
           image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
