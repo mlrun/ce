@@ -109,7 +109,14 @@ spec:
               {{- end }}
               {
               {{- if eq .Values.seaweedfs.remote.provider "s3" }}
-                echo "remote.configure -name=${REMOTE_NAME} -type=s3 -s3.access_key=${AWS_ACCESS_KEY_ID} -s3.secret_key=${AWS_SECRET_ACCESS_KEY} -s3.endpoint=https://${S3_ENDPOINT} -s3.region=${S3_REGION} -s3.force_path_style=${S3_FORCE_PATH_STYLE} -s3.storage_class=${S3_STORAGE_CLASS}"
+                _cfg="remote.configure -name=${REMOTE_NAME} -type=s3"
+                _cfg="${_cfg} -s3.access_key=${AWS_ACCESS_KEY_ID}"
+                _cfg="${_cfg} -s3.secret_key=${AWS_SECRET_ACCESS_KEY}"
+                _cfg="${_cfg} -s3.endpoint=https://${S3_ENDPOINT}"
+                _cfg="${_cfg} -s3.region=${S3_REGION}"
+                _cfg="${_cfg} -s3.force_path_style=${S3_FORCE_PATH_STYLE}"
+                _cfg="${_cfg} -s3.storage_class=${S3_STORAGE_CLASS}"
+                echo "${_cfg}"
               {{- else if eq .Values.seaweedfs.remote.provider "azure" }}
                 echo "remote.configure -name=${REMOTE_NAME} -type=azure"
               {{- end }}
