@@ -42,6 +42,25 @@ installer-lint: ## Syntax-check and shellcheck scripts/install.sh
 	@bash -n scripts/install.sh
 	@shellcheck scripts/install.sh
 
+# Symlink rather than copy, so the command tracks the working tree and can still find the
+# chart next to it (a copy has no chart, and reports its version as unknown).
+INSTALLER_BIN_DIR ?= $(HOME)/.local/bin
+
+.PHONY: installer-link
+installer-link: ## Put mlrun-ce-installer on PATH, pointing at this checkout
+	@mkdir -p "$(INSTALLER_BIN_DIR)"
+	@ln -sf "$(CURDIR)/scripts/install.sh" "$(INSTALLER_BIN_DIR)/mlrun-ce-installer"
+	@echo "linked $(INSTALLER_BIN_DIR)/mlrun-ce-installer -> $(CURDIR)/scripts/install.sh"
+	@case ":$$PATH:" in \
+		*":$(INSTALLER_BIN_DIR):"*) ;; \
+		*) echo "note: $(INSTALLER_BIN_DIR) is not on PATH — add it, or set INSTALLER_BIN_DIR" ;; \
+	esac
+
+.PHONY: installer-unlink
+installer-unlink: ## Remove the mlrun-ce-installer symlink
+	@rm -f "$(INSTALLER_BIN_DIR)/mlrun-ce-installer"
+	@echo "removed $(INSTALLER_BIN_DIR)/mlrun-ce-installer"
+
 .PHONY: helm-lint
 helm-lint: helm-repo-add ## Lint Helm Chart
 	@helm lint charts/mlrun-ce

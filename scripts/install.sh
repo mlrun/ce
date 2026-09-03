@@ -111,8 +111,21 @@ helm() { command helm ${KUBE_CONTEXT:+--kube-context "${KUBE_CONTEXT}"} "$@"; }
 # directory there is no chart to read, and the version is genuinely unknown: nothing in a
 # standalone script records which commit it came from. Pin by release tag to know.
 installer_version() {
-    local script_path script_dir chart_yaml
+    local script_path target script_dir chart_yaml
     script_path="${BASH_SOURCE[0]:-$0}"
+
+    # Follow symlinks by hand: `readlink -f` is GNU-only, and the common way to put this
+    # on PATH during development is a symlink into a checkout, where the link's own
+    # directory has no chart in it. Loop rather than resolve once, since a link can chain.
+    while [[ -L "${script_path}" ]]; do
+        target="$(readlink "${script_path}")"
+        if [[ "${target}" == /* ]]; then
+            script_path="${target}"
+        else
+            script_path="$(dirname "${script_path}")/${target}"
+        fi
+    done
+
     script_dir="$(cd "$(dirname "${script_path}")" 2>/dev/null && pwd)" || script_dir=""
     chart_yaml="${script_dir}/../charts/mlrun-ce/Chart.yaml"
 
