@@ -2,7 +2,7 @@
 
 `scripts/install.sh` — single-file bash wrapper around `helm install mlrun-ce/mlrun-ce`
 (published chart repo: `https://mlrun.github.io/ce`). Local execution only, no SSH, no git
-fetching. Full design/rationale: `docs/design-proposal.md`.
+fetching.
 
 It lives in the same repo as the chart it installs (`charts/mlrun-ce`), but installs the
 **published** chart by default — the in-repo chart is used only when the caller passes
@@ -28,7 +28,7 @@ the repo-root `AGENTS.md`/`CONTRIBUTING.md`. This file covers the installer only
 `install_ingress_controller` (which used to `helm install` the `ingress-nginx` chart when
 `--enable-ingress` was passed) was **removed** — see "Phase 5" below.
 
-## Phase status (see docs/design-proposal.md for full plan)
+## Phase status
 
 - **Phase 1 (done):** `--ce-version` fix, `--dry-run`, `--non-interactive` + `CI=true`
   auto-detect. Originally shipped as `--helm-version`/`HELM_VERSION`; renamed (hard
@@ -162,7 +162,7 @@ the repo-root `AGENTS.md`/`CONTRIBUTING.md`. This file covers the installer only
   the full image set is too slow per-PR). It's a separate workflow file rather than a job
   in `ci.yaml` so it reports as an independent status check. No Jenkinsfile — this repo is
   GitHub Actions only.
-## Phase 3 pre-work (resolved, see docs/design-proposal.md §6)
+## Phase 3 pre-work (resolved)
 
 Before implementing Phase 3 (`ce-config.yaml` + `yq`), these open questions were
 resolved by checking the official MLRun docs and the chart itself (`../charts/mlrun-ce`,
@@ -184,8 +184,8 @@ then still a separate repo):
   Everything else (`registry.secret.server`, `registry.secret.email`, `chartVersion`,
   `kubeContext`, `externalHostAddress`, `ingress.*`, `components.*`) is optional —
   documented in full in `docs/configuration.md`'s "Config file (`ce-config.yaml`)" section.
-- **NodePorts/components for Phase 4:** no additions beyond the list already in
-  `docs/design-proposal.md` Phase 4.
+- **NodePorts/components for Phase 4:** no additions beyond the ports already
+  covered by `REQUIRED_NODEPORTS` in `install.sh`.
 
 ## Version floors realigned (supersedes the Phase 3 pre-work finding above)
 

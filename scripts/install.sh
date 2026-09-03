@@ -1140,7 +1140,7 @@ do_uninstall() {
     fi
 }
 
-# Chart's fixed NodePorts (not configurable via values.yaml) — see docs/design-proposal.md §6.
+# Chart's fixed NodePorts (not configurable via values.yaml).
 REQUIRED_NODEPORTS=(30010 30020 30040 30050 30060 30070 30093 30094 30100 30110)
 
 # The Helm floor mirrors charts/mlrun-ce/README.md's "Helm >=3.6" — the chart's own stated
