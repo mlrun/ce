@@ -71,6 +71,7 @@ Options:
 | `EXTERNAL_HOST_ADDRESS`| —                                 | Host address the cluster is reachable at (see [FAQ](faq.md) for the autodetect fallback chain) |
 | `SKIP_REGISTRY_SECRET` | `false`                           | Set to `true` to skip secret creation                    |
 | `SKIP_VALIDATORS`      | `false`                           | Set to `true` to skip the pre-install validators         |
+| `HELM_TIMEOUT`         | `960s`                            | Timeout for helm's `--wait` on install/upgrade. Raise it on slow networks — a cold pull of the 4.2Gi jupyter image alone can take ~6 minutes |
 | `MIN_K8S_VERSION`      | — (no floor)                      | Kubernetes version to warn below (`MAJOR.MINOR`); never blocks the install |
 | `MIN_HELM_VERSION`     | `3.6`                             | Helm CLI version floor the blocking validator enforces (`MAJOR.MINOR`) |
 | `DISABLE_SYSTEM_MONITORING` | `false`                     | Set to `true` to disable the Grafana/Prometheus stack    |
