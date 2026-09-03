@@ -28,16 +28,25 @@ OpenTelemetry, precedence) · [FAQ](docs/faq.md) (known gotchas)
 
 ### Run directly (no download)
 
+Pin to a release tag. Pick one from [the releases page](https://github.com/mlrun/ce/releases)
+— the installer from tag `mlrun-ce-X` is the one tested against chart `X`:
+
 ```bash
-curl -sSL https://raw.githubusercontent.com/mlrun/ce/development/scripts/install.sh | bash
+CE_TAG=mlrun-ce-0.12.0-rc.12
+curl -sSL https://raw.githubusercontent.com/mlrun/ce/${CE_TAG}/scripts/install.sh | bash
 ```
+
+Substituting `development` for the tag always gets the newest script, but it moves with
+every merge, so two runs a day apart can differ. Prefer a tag anywhere reproducibility
+matters, CI especially.
 
 ### Install as a named command
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/mlrun/ce/development/scripts/install.sh \
+CE_TAG=mlrun-ce-0.12.0-rc.12
+curl -sSL https://raw.githubusercontent.com/mlrun/ce/${CE_TAG}/scripts/install.sh \
   -o /usr/local/bin/mlrun-install && chmod +x /usr/local/bin/mlrun-install
-mlrun-install
+mlrun-install --version
 ```
 
 ### From a clone of this repo
@@ -48,6 +57,31 @@ mlrun-install
 
 Still installs the published chart. Add `--chart-path ./charts/mlrun-ce` to install the
 chart from your working tree instead.
+
+---
+
+## Versioning and releases
+
+The installer has no version of its own. It ships with the chart and is released by the
+same tag, so `install.sh --version` reads the version straight out of
+`charts/mlrun-ce/Chart.yaml` beside it — bumping the chart bumps the installer, with no
+second copy to keep in step. Run standalone (`curl | bash`, or copied to a bin directory)
+there is no chart to read and nothing recording where the script came from, so it reports
+`unknown`; that's what pinning to a release tag answers.
+
+They're coupled on purpose. The installer encodes chart internals — the chart's fixed
+NodePorts, and the `--set` value paths it writes — so an installer and a chart from the
+same tag are the only pairing guaranteed to agree. Independent versions would invite a
+mismatch whose failure mode is silent: a renamed value path becomes a `--set` that
+quietly does nothing.
+
+Releasing follows from that. A push to `development` or a `X.Y.x` branch runs
+chart-releaser, which tags `mlrun-ce-<chart version>` and cuts a GitHub Release; that
+tag's tree contains this script, which is what the pinned `raw.githubusercontent.com`
+URLs above resolve against. So shipping an installer change is just merging it with a
+chart version bump — there's no separate installer release to cut. Note the chart
+tarball published to the Helm repo packages `charts/mlrun-ce` only, so the installer is
+available from the git tag rather than from inside the `.tgz`.
 
 ---
 
