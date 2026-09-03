@@ -336,6 +336,12 @@ predating K8s 1.34, so that node image likely wasn't even published for it.
   When a test is doing real work, verify the assertion holds — run the inner
   `bash -c` body standalone and look at the output, or install bash >= 4
   (`brew install bash`) so local runs match CI.
+- **Never hide a tool by hardcoding a PATH of real system directories.** The
+  GitHub runners ship `yq` in `/usr/bin`, so `PATH=/usr/bin:/bin` hides it on a
+  macOS box (where it's in `/opt/homebrew/bin`) but not in CI — which is how the
+  "load_config exits 1 when yq is not installed" test came to assert nothing in
+  the only environment that was checking it. Use the `_empty_bin` helper, which
+  points PATH at a directory that provably contains no executables.
 - Live/integration: exercise `--chart-path` against a real chart checkout (see
   below). Non-interactive runs need `REGISTRY_USERNAME`/`REGISTRY_PASSWORD`
   (or `REGISTRY_PASSWORD_FILE`)/`REGISTRY_EMAIL` set or they'll fail on the
