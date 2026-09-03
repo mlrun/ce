@@ -26,6 +26,59 @@ _empty_bin() {
 }
 
 # ---------------------------------------------------------------------------
+# Installer version (coupled to the chart)
+# ---------------------------------------------------------------------------
+
+# The version is read off the chart at runtime rather than stored in the script, so
+# there's no copy to carry forward and nothing to drift.
+@test "installer_version reads the version from the chart beside the script" {
+    local chart_version
+    chart_version="$(awk '/^version:/ {print $2; exit}' \
+        "$BATS_TEST_DIRNAME/../charts/mlrun-ce/Chart.yaml")"
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        printf '%s' \"\$(installer_version)\"
+    "
+    [ -n "$chart_version" ]
+    [ "$output" = "$chart_version" ]
+}
+
+@test "installer_version tracks the chart when its version changes" {
+    local fake_repo
+    fake_repo="$BATS_TMPDIR/fake_repo"
+    rm -rf "$fake_repo"
+    mkdir -p "$fake_repo/scripts" "$fake_repo/charts/mlrun-ce"
+    cp "$SCRIPT" "$fake_repo/scripts/install.sh"
+    printf 'apiVersion: v1\nname: mlrun-ce\nversion: 9.9.9-rc.1\n' \
+        > "$fake_repo/charts/mlrun-ce/Chart.yaml"
+    run bash "$fake_repo/scripts/install.sh" --version
+    [ "$status" -eq 0 ]
+    [ "$output" = "mlrun-ce installer 9.9.9-rc.1" ]
+}
+
+# curl | bash, or copied to /usr/local/bin: no chart to read, and nothing in the script
+# records where it came from, so say so rather than inventing a version.
+@test "installer_version reports unknown when running standalone" {
+    local standalone
+    standalone="$BATS_TMPDIR/standalone"
+    rm -rf "$standalone"
+    mkdir -p "$standalone"
+    cp "$SCRIPT" "$standalone/install.sh"
+    run bash "$standalone/install.sh" --version
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"unknown"* ]]
+}
+
+@test "-v is accepted as a short form of --version" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        parse_args -v
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mlrun-ce installer"* ]]
+}
+
+# ---------------------------------------------------------------------------
 # --ce-version parsing
 # ---------------------------------------------------------------------------
 

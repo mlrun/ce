@@ -37,6 +37,29 @@ is not the installer's job. `--enable-ingress` is now BYO-controller-only — it
 chart's Ingress toggles and `validate_ingress_controller` warns if no matching
 IngressClass exists.
 
+## Versioning and releases
+
+`installer_version()` (printed by `--version`) reads `version:` out of
+`charts/mlrun-ce/Chart.yaml` next to the script, so bumping the chart bumps the installer
+and there's no second copy to carry forward. Running standalone — `curl | bash`, or copied
+to a bin directory — there's no chart to read and nothing in the script recording its
+origin, so it reports `unknown` rather than inventing a number; that's the case pinning by
+release tag exists to answer.
+
+They're coupled because the installer encodes chart internals: `REQUIRED_NODEPORTS` is the
+chart's fixed NodePort list, and `helm_install` writes chart-specific `--set` paths
+(`global.registry.*`, `mlrun.{api,ui}.image.tag`, the `opentelemetry.*` and `components.*`
+keys). An installer and a chart from the same tag are the only pairing guaranteed to
+agree; a renamed value path would otherwise become a `--set` that silently does nothing.
+
+There is no separate installer release. `.github/workflows/release.yml` runs
+chart-releaser on every push to `development`/`X.Y.x`, tagging `mlrun-ce-<version>`, and
+that tag's tree contains `scripts/install.sh` — which is what the pinned
+`raw.githubusercontent.com/mlrun/ce/<tag>/scripts/install.sh` URLs resolve against.
+Shipping an installer change is merging it with a chart version bump. The published chart
+tarball packages `charts/mlrun-ce` only, so the installer ships via the git tag, not the
+`.tgz`.
+
 ## Version floors
 
 The installer's floors track the chart's own prerequisites, not the product install docs:
@@ -164,7 +187,7 @@ node image is the safest choice.
 
 ## Testing
 
-- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 98 tests, no cluster needed (sources
+- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 102 tests, no cluster needed (sources
   `install.sh` with `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries).
 - **A green local run on macOS does not mean a green CI run.** bats aborts a test
   on the first failed assertion via `set -e`, and under macOS's system bash (3.2)

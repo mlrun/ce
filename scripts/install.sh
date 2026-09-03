@@ -17,11 +17,12 @@
 # Creates a Docker registry secret from your credentials, then installs the
 # chart with your local URL and registry URL.
 #
-# Run as a command (no download, no ./ or sh):
-#   curl -sSL https://raw.githubusercontent.com/mlrun/ce/development/scripts/install.sh | bash
+# Run as a command (no download, no ./ or sh). Pin to a release tag — see
+# https://github.com/mlrun/ce/releases; "development" also works but moves with every merge:
+#   curl -sSL https://raw.githubusercontent.com/mlrun/ce/mlrun-ce-0.12.0-rc.12/scripts/install.sh | bash
 #
 # Or install as a named command, then run from any directory:
-#   curl -sSL https://raw.githubusercontent.com/mlrun/ce/development/scripts/install.sh -o /usr/local/bin/mlrun-install && chmod +x /usr/local/bin/mlrun-install
+#   curl -sSL https://raw.githubusercontent.com/mlrun/ce/mlrun-ce-0.12.0-rc.12/scripts/install.sh -o /usr/local/bin/mlrun-install && chmod +x /usr/local/bin/mlrun-install
 #   mlrun-install
 #
 # From a clone of this repo (installs the published chart):
@@ -89,6 +90,24 @@ log_error() { printf '%s\n' "${RED}[ERROR]${NC} $1" >&2; }
 kubectl() { command kubectl ${KUBE_CONTEXT:+--context "${KUBE_CONTEXT}"} "$@"; }
 helm() { command helm ${KUBE_CONTEXT:+--kube-context "${KUBE_CONTEXT}"} "$@"; }
 
+# The installer has no version of its own — it ships with the chart and is released by the
+# same tag — so read the version off the chart beside it rather than keeping a copy here
+# that has to be carried forward by hand. Served via `curl | bash` or copied to a bin
+# directory there is no chart to read, and the version is genuinely unknown: nothing in a
+# standalone script records which commit it came from. Pin by release tag to know.
+installer_version() {
+    local script_path script_dir chart_yaml
+    script_path="${BASH_SOURCE[0]:-$0}"
+    script_dir="$(cd "$(dirname "${script_path}")" 2>/dev/null && pwd)" || script_dir=""
+    chart_yaml="${script_dir}/../charts/mlrun-ce/Chart.yaml"
+
+    if [[ -n "${script_dir}" && -f "${chart_yaml}" ]]; then
+        awk '/^version:/ {print $2; exit}' "${chart_yaml}"
+    else
+        printf 'unknown (standalone script — pin by release tag to identify it)'
+    fi
+}
+
 usage() {
     cat <<EOF
 Usage: $0 [options]
@@ -99,6 +118,7 @@ with your local URL and registry URL, or from a values file.
 
 Options:
   -h, --help           Show this help message
+  -v, --version        Print the installer version (read from the chart it ships with)
   --uninstall          Uninstall the MLRun CE Helm release (uses RELEASE_NAME and NAMESPACE)
   --hard-clean         Use with --uninstall: also delete all PVCs and PVs in the namespace (data loss!)
   --skip-secret        Do not create or replace the registry secret (use existing one)
@@ -950,6 +970,10 @@ parse_args() {
         case "$1" in
             -h|--help)
                 usage
+                exit 0
+                ;;
+            -v|--version)
+                printf 'mlrun-ce installer %s\n' "$(installer_version)"
                 exit 0
                 ;;
             --skip-secret)

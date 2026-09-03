@@ -16,6 +16,7 @@ Usage: install.sh [options]
 
 Options:
   -h, --help                     Show help
+  -v, --version                  Print the installer version (read from the chart beside it)
   --uninstall                    Uninstall the MLRun CE Helm release
   --hard-clean                   Use with --uninstall: delete all PVCs and PVs (data loss!)
   --skip-secret                  Skip creating the Docker registry secret
