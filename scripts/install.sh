@@ -1076,6 +1076,11 @@ parse_args() {
                     collector)
                         ENABLE_OTEL_OPERATOR="true"
                         ENABLE_OTEL_COLLECTOR="true"
+                        # Set, not just left alone: a mode names a complete state, so
+                        # `collector` has to mean "no auto-instrumentation" even when the
+                        # env vars or an earlier granular flag turned those two on.
+                        ENABLE_OTEL_NAMESPACE_LABEL="false"
+                        ENABLE_OTEL_INSTRUMENTATION="false"
                         ;;
                     full)
                         ENABLE_OTEL_OPERATOR="true"
@@ -1189,7 +1194,7 @@ do_uninstall() {
         log_warn "Release '${RELEASE_NAME}' not found in namespace '${NAMESPACE}' (already uninstalled?)."
     else
         log_info "Uninstalling MLRun CE release '${RELEASE_NAME}' from namespace '${NAMESPACE}'..."
-        helm uninstall "${RELEASE_NAME}" --namespace "${NAMESPACE}" --timeout 960s
+        helm uninstall "${RELEASE_NAME}" --namespace "${NAMESPACE}" --timeout "${HELM_TIMEOUT}"
         log_info "Uninstall complete."
     fi
 
@@ -1285,7 +1290,11 @@ validate_helm_version() {
 # Blocking: cluster must have a default StorageClass (chart's PVCs rely on one).
 validate_storage_class() {
     local default_sc
-    default_sc="$(kubectl get storageclass -o jsonpath='{range .items[*]}{.metadata.name}{"="}{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}{"\n"}{end}' 2>/dev/null | grep '=true$' || true)"
+    # Both annotations: Kubernetes still honours the deprecated beta key, and clusters
+    # provisioned years ago can carry only that one. Missing it would fail the install
+    # over a StorageClass that does in fact default. Rows are name=<stable>=<beta>, so
+    # match =true in either field rather than only at end of line.
+    default_sc="$(kubectl get storageclass -o jsonpath='{range .items[*]}{.metadata.name}{"="}{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}{"="}{.metadata.annotations.storageclass\.beta\.kubernetes\.io/is-default-class}{"\n"}{end}' 2>/dev/null | grep -E '=true(=|$)' || true)"
     if [[ -z "$default_sc" ]]; then
         log_error "  No default StorageClass found in the cluster. MLRun CE requires a default StorageClass for its PVCs."
         return 1

@@ -45,9 +45,11 @@ IngressClass exists.
 
 ## Versioning and releases
 
-`installer_version()` (printed by `--version`) reads `version:` out of
+`installer_version()` (printed by the `version` command) reads `version:` out of
 `charts/mlrun-ce/Chart.yaml` next to the script, so bumping the chart bumps the installer
-and there's no second copy to carry forward. Running standalone — `curl | bash`, or copied
+and there's no second copy to carry forward. It walks symlinks to the real file first —
+`make installer-link` puts the command on PATH as a link into the checkout, and the link's
+own directory has no chart in it. Running standalone — `curl | bash`, or copied
 to a bin directory — there's no chart to read and nothing in the script recording its
 origin, so it reports `unknown` rather than inventing a number; that's the case pinning by
 release tag exists to answer.
@@ -138,6 +140,10 @@ node image is the safest choice.
   `VAR=x source install.sh` prefix form, since bash discards that prefix assignment when
   `source` returns and `set -u` then trips inside `helm_install`.
 
+  Follow-up: `do_uninstall` kept its literal `960s` and so ignored the new variable —
+  same default, but a raised `HELM_TIMEOUT` didn't reach uninstall. It now passes
+  `--timeout "${HELM_TIMEOUT}"` too.
+
 - **`do_hard_clean()`'s force-delete fallback could hang indefinitely** (found via live
   testing against a real remote cluster — a `--hard-clean` run sat blocked for
   18+ hours): both the PVC and PV delete loops fall back to
@@ -193,7 +199,7 @@ node image is the safest choice.
 
 ## Testing
 
-- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 111 tests, no cluster needed (sources
+- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 115 tests, no cluster needed (sources
   `install.sh` with `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries).
 - **A green local run on macOS does not mean a green CI run.** bats aborts a test
   on the first failed assertion via `set -e`, and under macOS's system bash (3.2)
