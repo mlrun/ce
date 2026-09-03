@@ -13,6 +13,18 @@ _src() {
     INSTALL_SH_SOURCE_ONLY=true source "$SCRIPT"
 }
 
+# Path to a directory guaranteed to hold no executables, for tests that need a
+# tool to be genuinely absent. Setting PATH to a real system directory doesn't
+# work: the GitHub runners ship yq in /usr/bin, so PATH=/usr/bin:/bin hides it
+# on macOS (yq lives in /opt/homebrew/bin there) while leaving it visible in CI.
+# The log_* helpers are printf-only, so an empty PATH still produces their output.
+_empty_bin() {
+    local dir="$BATS_TMPDIR/empty_bin"
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    printf '%s' "$dir"
+}
+
 # ---------------------------------------------------------------------------
 # --ce-version parsing
 # ---------------------------------------------------------------------------
@@ -329,9 +341,11 @@ _src() {
 }
 
 @test "load_config is a no-op (returns 0, no yq required) when CONFIG_FILE is empty" {
+    local empty_bin
+    empty_bin="$(_empty_bin)"
     run bash -c "
         INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
-        PATH=/usr/bin:/bin
+        PATH='$empty_bin'
         load_config
         echo done
     "
@@ -351,11 +365,13 @@ _src() {
 
 @test "load_config exits 1 when yq is not installed" {
     local cfg="$BATS_TMPDIR/cfg_noyq.yaml"
+    local empty_bin
     printf 'installer:\n  registry:\n    url: x\n' > "$cfg"
+    empty_bin="$(_empty_bin)"
     run bash -c "
         INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
         CONFIG_FILE='$cfg'
-        PATH=/usr/bin:/bin
+        PATH='$empty_bin'
         load_config
     "
     [ "$status" -eq 1 ]
