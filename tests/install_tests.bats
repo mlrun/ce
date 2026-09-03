@@ -26,6 +26,102 @@ _empty_bin() {
 }
 
 # ---------------------------------------------------------------------------
+# Subcommands
+# ---------------------------------------------------------------------------
+
+@test "install consumes the verb and still parses the flags after it" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        parse_command install --dry-run
+        parse_args \${COMMAND_ARGS[@]+\"\${COMMAND_ARGS[@]}\"}
+        echo \"\$SUBCOMMAND \$DRY_RUN\"
+    "
+    [ "$status" -eq 0 ]
+    [ "$output" = "install true" ]
+}
+
+@test "uninstall sets UNINSTALL the same way the --uninstall flag does" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        parse_command uninstall --hard-clean
+        parse_args \${COMMAND_ARGS[@]+\"\${COMMAND_ARGS[@]}\"}
+        [[ \"\$SUBCOMMAND\" == uninstall ]] && UNINSTALL=true
+        echo \"\$UNINSTALL \$HARD_CLEAN\"
+    "
+    [ "$status" -eq 0 ]
+    [ "$output" = "true true" ]
+}
+
+@test "version prints the version and exits 0" {
+    run bash "$SCRIPT" version
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mlrun-ce installer"* ]]
+}
+
+@test "help prints usage and exits 0" {
+    run bash "$SCRIPT" help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Usage: mlrun-ce-installer"* ]]
+}
+
+# Every invocation documented before commands existed passed flags with no verb.
+@test "a leading flag with no command is still an install" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        parse_command --dry-run
+        parse_args \${COMMAND_ARGS[@]+\"\${COMMAND_ARGS[@]}\"}
+        echo \"\$SUBCOMMAND \$DRY_RUN\"
+    "
+    [ "$status" -eq 0 ]
+    [ "$output" = "install true" ]
+}
+
+# bash < 4.4 treats an empty array as unset under `set -u`, so this is the case that
+# breaks first if the ${COMMAND_ARGS[@]+...} guard in main() is ever dropped.
+@test "no arguments at all defaults to install without tripping set -u" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        parse_command
+        parse_args \${COMMAND_ARGS[@]+\"\${COMMAND_ARGS[@]}\"}
+        echo \"\$SUBCOMMAND \${#COMMAND_ARGS[@]}\"
+    "
+    [ "$status" -eq 0 ]
+    [ "$output" = "install 0" ]
+}
+
+# A typo'd verb must not fall through to install: `unistall` would otherwise deploy.
+@test "an unknown command exits 1 instead of falling through to install" {
+    run bash "$SCRIPT" unistall
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Unknown command 'unistall'"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# Colored output
+# ---------------------------------------------------------------------------
+
+# `run` captures through a pipe, so stdout is never a TTY here — the escape-free
+# branch is the one under test, which is also what CI logs and `| tee` see.
+@test "log output carries no escape sequences when stdout is not a terminal" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        log_info hello
+    "
+    [ "$status" -eq 0 ]
+    [ "$output" = "[INFO] hello" ]
+}
+
+@test "NO_COLOR is honored" {
+    run bash -c "
+        NO_COLOR=1
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        log_warn careful
+    "
+    [ "$status" -eq 0 ]
+    [ "$output" = "[WARN] careful" ]
+}
+
+# ---------------------------------------------------------------------------
 # Installer version (coupled to the chart)
 # ---------------------------------------------------------------------------
 

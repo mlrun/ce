@@ -9,11 +9,27 @@ Every flag has an environment-variable equivalent (for CI / non-interactive use)
 
 ---
 
+## Commands
+
+```
+Usage: mlrun-ce-installer <command> [options]
+
+  install     Install MLRun CE (the default when no command is given)
+  uninstall   Uninstall the MLRun CE Helm release
+  version     Print the installer version
+  help        Show help
+```
+
+The command is optional: flags passed on their own are an `install`, so invocations
+written before commands existed still work. `uninstall` and the older `--uninstall` flag
+do the same thing. A word that isn't one of the four is an error rather than an install,
+so a typo like `unistall` can't deploy by accident.
+
+---
+
 ## Flags
 
 ```
-Usage: install.sh [options]
-
 Options:
   -h, --help                     Show help
   -v, --version                  Print the installer version (read from the chart beside it)

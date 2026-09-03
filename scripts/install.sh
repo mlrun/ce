@@ -22,8 +22,11 @@
 #   curl -sSL https://raw.githubusercontent.com/mlrun/ce/mlrun-ce-0.12.0-rc.12/scripts/install.sh | bash
 #
 # Or install as a named command, then run from any directory:
-#   curl -sSL https://raw.githubusercontent.com/mlrun/ce/mlrun-ce-0.12.0-rc.12/scripts/install.sh -o /usr/local/bin/mlrun-install && chmod +x /usr/local/bin/mlrun-install
-#   mlrun-install
+#   curl -sSL https://raw.githubusercontent.com/mlrun/ce/mlrun-ce-0.12.0-rc.12/scripts/install.sh -o /usr/local/bin/mlrun-ce-installer && chmod +x /usr/local/bin/mlrun-ce-installer
+#   mlrun-ce-installer install
+#
+# Commands: install (the default), uninstall, version, help. Flags may be passed with no
+# command at all, so every pre-command invocation below still means the same thing.
 #
 # From a clone of this repo (installs the published chart):
 #   ./scripts/install.sh
@@ -37,6 +40,9 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+
+SUBCOMMAND="install"
+COMMAND_ARGS=()
 
 NAMESPACE="${NAMESPACE:-mlrun}"
 RELEASE_NAME="${RELEASE_NAME:-mlrun-ce}"
@@ -75,11 +81,20 @@ KUBE_CONTEXT="${KUBE_CONTEXT:-}"
 MLRUN_VERSION="${MLRUN_VERSION:-}"
 NUCLIO_VERSION="${NUCLIO_VERSION:-}"
 
-# Colors for output (use $'...' so escape sequences are actual bytes, not literal \033)
-RED=$'\033[0;31m'
-GREEN=$'\033[0;32m'
-YELLOW=$'\033[1;33m'
-NC=$'\033[0m'
+# Colors for output (use $'...' so escape sequences are actual bytes, not literal \033).
+# Suppressed when stdout isn't a terminal or NO_COLOR is set (https://no-color.org), so a
+# piped or redirected run — CI logs, `| tee install.log` — reads as text instead of escapes.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[1;33m'
+    NC=$'\033[0m'
+else
+    RED=""
+    GREEN=""
+    YELLOW=""
+    NC=""
+fi
 
 log_info() { printf '%s\n' "${GREEN}[INFO]${NC} $1"; }
 log_warn() { printf '%s\n' "${YELLOW}[WARN]${NC} $1"; }
@@ -110,7 +125,13 @@ installer_version() {
 
 usage() {
     cat <<EOF
-Usage: $0 [options]
+Usage: mlrun-ce-installer <command> [options]
+
+Commands:
+  install              Install MLRun CE (default when no command is given)
+  uninstall            Uninstall the MLRun CE Helm release
+  version              Print the installer version
+  help                 Show this help message
 
 Interactive installer for MLRun CE on your local Kubernetes cluster.
 Creates a Docker registry secret (unless skipped) and installs the Helm chart
@@ -1384,8 +1405,54 @@ run_validators() {
     log_info "Pre-install validation passed."
 }
 
+# Verb dispatch, kept in front of parse_args rather than inside it so the flag parser stays
+# a pure flag parser. Anything that isn't a known command — a flag, or nothing at all — is
+# an install, which is what every invocation documented before commands existed relied on.
+# A bare unknown word is rejected rather than silently installed: `mlrun-ce-installer
+# unistall` should not wipe a cluster's worth of PVCs on a typo.
+parse_command() {
+    SUBCOMMAND="install"
+    COMMAND_ARGS=()
+
+    if [[ $# -eq 0 ]]; then
+        return 0
+    fi
+
+    case "$1" in
+        install|uninstall)
+            SUBCOMMAND="$1"
+            shift
+            ;;
+        version)
+            printf 'mlrun-ce installer %s\n' "$(installer_version)"
+            exit 0
+            ;;
+        help)
+            usage
+            exit 0
+            ;;
+        -*)
+            ;;
+        *)
+            log_error "Unknown command '$1'. Expected one of: install, uninstall, version, help."
+            log_info "Flags may be passed without a command, e.g. '--dry-run' is the same as 'install --dry-run'."
+            exit 1
+            ;;
+    esac
+
+    COMMAND_ARGS=("$@")
+}
+
 main() {
-    parse_args "$@"
+    parse_command "$@"
+    # bash < 4.4 treats an empty array as unset under `set -u`, so an argument-less run
+    # would abort here without the ${a[@]+...} guard.
+    parse_args ${COMMAND_ARGS[@]+"${COMMAND_ARGS[@]}"}
+
+    # The `uninstall` command and the older --uninstall flag are the same thing.
+    if [[ "${SUBCOMMAND}" == "uninstall" ]]; then
+        UNINSTALL="true"
+    fi
 
     # Auto-enable non-interactive when running inside a CI environment
     if [[ "${CI:-}" == "true" ]]; then
