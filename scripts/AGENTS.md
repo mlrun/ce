@@ -326,6 +326,16 @@ predating K8s 1.34, so that node image likely wasn't even published for it.
 
 - Unit: `make installer-test` (`bats tests/install_tests.bats`) — 98 tests, no cluster needed (sources
   `install.sh` with `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries).
+- **A green local run on macOS does not mean a green CI run.** bats aborts a test
+  on the first failed assertion via `set -e`, and under macOS's system bash (3.2)
+  that only works for the *last* statement in a `@test` — a failed `[[ ]]`
+  anywhere before it is silently swallowed and the test still reports `ok`. CI
+  runs bash 5, where every assertion counts. A test whose stub doesn't match what
+  the code actually calls can therefore pass locally and fail in CI (this is
+  exactly how the `resolve_external_host` `KUBE_CONTEXT` test shipped broken).
+  When a test is doing real work, verify the assertion holds — run the inner
+  `bash -c` body standalone and look at the output, or install bash >= 4
+  (`brew install bash`) so local runs match CI.
 - Live/integration: exercise `--chart-path` against a real chart checkout (see
   below). Non-interactive runs need `REGISTRY_USERNAME`/`REGISTRY_PASSWORD`
   (or `REGISTRY_PASSWORD_FILE`)/`REGISTRY_EMAIL` set or they'll fail on the

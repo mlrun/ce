@@ -114,6 +114,15 @@ a `helm version --short` string, an allocatable quantity, and so on).
    `[[ "$output" == *"substring"* ]]`.
 5. Run `bats tests/install_tests.bats` to confirm green.
 
+> **Green on macOS is not green on CI.** Under macOS's system bash (3.2), a
+> failed assertion that isn't the *last* statement of a `@test` is silently
+> swallowed and the test still prints `ok`; CI runs bash 5, where it fails.
+> After writing a test that stubs external commands, run its inner `bash -c`
+> body standalone once and eyeball the output, or `brew install bash` so local
+> runs behave like CI. Note that stubs of `command` must account for the
+> `kubectl`/`helm` wrappers injecting `--context`/`--kube-context` before the
+> real arguments.
+
 ### Minimal test template
 
 ```bash
