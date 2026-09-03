@@ -15,6 +15,12 @@ the repo-root `AGENTS.md`/`CONTRIBUTING.md`. This file covers the installer only
 
 ## Install flow (`main()`, install.sh ~1319-1378)
 
+0. `parse_command` — pulls an optional leading verb (`install`/`uninstall`/`version`/`help`)
+   off the front, leaving the rest in `COMMAND_ARGS`. Kept out of `parse_args` so that stays
+   a pure flag parser. No verb (or a leading flag) means `install`, which is what every
+   invocation predating commands relied on; an unrecognised bare word is an error rather
+   than an install, so a typo can't deploy. `main()` expands `COMMAND_ARGS` with the
+   `${a[@]+"${a[@]}"}` guard — bash < 4.4 treats an empty array as unset under `set -u`
 1. `parse_args` — flags/env, precedence flag > env > default
 2. `check_requirements` — helm, kubectl, docker present and reachable
 3. `ensure_namespace` — creates `NAMESPACE`; in `--dry-run` only logs what it would do (no cluster mutation)
@@ -187,7 +193,7 @@ node image is the safest choice.
 
 ## Testing
 
-- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 102 tests, no cluster needed (sources
+- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 111 tests, no cluster needed (sources
   `install.sh` with `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries).
 - **A green local run on macOS does not mean a green CI run.** bats aborts a test
   on the first failed assertion via `set -e`, and under macOS's system bash (3.2)

@@ -33,7 +33,7 @@ make installer-test
 bats tests/install_tests.bats
 ```
 
-Expected output: `1..102` followed by `ok N <test-name>` for every test.
+Expected output: `1..111` followed by `ok N <test-name>` for every test.
 
 Keep the count in this file in sync when you add tests — it's the quickest way to
 notice a test silently failing to register.
@@ -88,10 +88,12 @@ Tests that exercise the validators individually stub `kubectl`/`helm`/`docker` a
 shell functions instead, echoing whatever the check parses (a `kubeletVersion`,
 a `helm version --short` string, an allocatable quantity, and so on).
 
-## Current coverage — 102 tests
+## Current coverage — 111 tests
 
 | Phase / area | Tests |
 |--------------|-------|
+| **Commands** — `parse_command` | `install`/`uninstall` consume the verb and keep their flags, `version`/`help` print and exit 0, a leading flag or no arguments at all still means install (the empty-array case that trips `set -u` on bash 3.2), an unknown word exits 1 instead of installing |
+| **Output** — color handling | no escape sequences when stdout isn't a TTY; `NO_COLOR` honored |
 | **Versioning** — `installer_version` / `--version` | reads the version from the chart beside the script, tracks it when the chart version changes, reports `unknown` when run standalone, `-v` short form |
 | **Phase 1** — `--ce-version` parsing | stores value, rejects missing arg, respects env var, defaults empty |
 | **Phase 1** — `--dry-run` / `--non-interactive` | each sets its var, each defaults false, flag consumed cleanly |

@@ -45,8 +45,8 @@ matters, CI especially.
 ```bash
 CE_TAG=mlrun-ce-0.12.0-rc.12
 curl -sSL https://raw.githubusercontent.com/mlrun/ce/${CE_TAG}/scripts/install.sh \
-  -o /usr/local/bin/mlrun-install && chmod +x /usr/local/bin/mlrun-install
-mlrun-install --version
+  -o /usr/local/bin/mlrun-ce-installer && chmod +x /usr/local/bin/mlrun-ce-installer
+mlrun-ce-installer version
 ```
 
 ### From a clone of this repo
@@ -57,6 +57,26 @@ mlrun-install --version
 
 Still installs the published chart. Add `--chart-path ./charts/mlrun-ce` to install the
 chart from your working tree instead.
+
+---
+
+## Commands
+
+```bash
+mlrun-ce-installer install [options]     # the default when no command is given
+mlrun-ce-installer uninstall [--hard-clean]
+mlrun-ce-installer version
+mlrun-ce-installer help
+```
+
+The command is optional. Flags on their own mean `install`, so `--dry-run` and
+`install --dry-run` are the same thing and anything written before commands existed still
+works. `uninstall` is equivalent to the older `--uninstall` flag. A word that isn't one of
+the four is rejected rather than treated as an install, so a typo like `unistall` can't
+deploy a cluster by accident.
+
+Colored output is suppressed automatically when stdout isn't a terminal, and when
+`NO_COLOR` is set, so piped and redirected runs stay readable.
 
 ---
 
