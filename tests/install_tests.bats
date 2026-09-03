@@ -1059,19 +1059,19 @@ EOF
                     if [[ \"\$1\" == config && \"\$2\" == current-context ]]; then
                         echo docker-desktop
                     elif [[ \"\$1\" == get && \"\$2\" == node ]]; then
-                        echo '192.168.236.51'
+                        echo '192.0.2.10'
                     fi
                     ;;
                 minikube) return 1 ;;
             esac
         }
-        KUBE_CONTEXT=vmdev137
+        KUBE_CONTEXT=remote-cluster
         NON_INTERACTIVE=true
         resolve_external_host
         echo \"host=\$EXTERNAL_HOST_ADDRESS\"
     "
     [ "$status" -eq 0 ]
-    [[ "$output" == *"host=192.168.236.51"* ]]
+    [[ "$output" == *"host=192.0.2.10"* ]]
     [[ "$output" != *"host=host.docker.internal"* ]]
 }
 
