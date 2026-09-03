@@ -1037,6 +1037,9 @@ EOF
             case \"\$1\" in
                 kubectl)
                     shift
+                    # The kubectl wrapper injects --context <ctx> ahead of the real
+                    # arguments, so drop it before matching on the subcommand.
+                    [[ \"\$1\" == --context ]] && shift 2
                     if [[ \"\$1\" == config && \"\$2\" == current-context ]]; then
                         echo docker-desktop
                     elif [[ \"\$1\" == get && \"\$2\" == node ]]; then
