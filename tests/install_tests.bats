@@ -835,6 +835,18 @@ EOF
     [[ "$output" == *"--timeout 1800s"* ]]
 }
 
+@test "HELM_TIMEOUT also applies to uninstall" {
+    run bash -c "
+        export HELM_TIMEOUT=120s
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        check_requirements() { :; }
+        helm() { [[ \"\$1\" == status ]] && return 0; echo \"HELM_ARGS: \$*\"; }
+        do_uninstall
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--timeout 120s"* ]]
+}
+
 @test "load_config maps installer.components.* to DISABLE_* the same as the --disable-* flags" {
     local cfg="$BATS_TMPDIR/cfg_components.yaml"
     cat > "$cfg" <<'EOF'
@@ -904,6 +916,17 @@ EOF
 
 @test "--enable-otel collector sets only operator+collector, not namespaceLabel/instrumentation" {
     run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        parse_args --enable-otel collector
+        echo \"op=\$ENABLE_OTEL_OPERATOR col=\$ENABLE_OTEL_COLLECTOR ns=\$ENABLE_OTEL_NAMESPACE_LABEL inst=\$ENABLE_OTEL_INSTRUMENTATION\"
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"op=true col=true ns=false inst=false"* ]]
+}
+
+@test "--enable-otel collector turns namespaceLabel/instrumentation back off" {
+    run bash -c "
+        export ENABLE_OTEL_NAMESPACE_LABEL=true ENABLE_OTEL_INSTRUMENTATION=true
         INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
         parse_args --enable-otel collector
         echo \"op=\$ENABLE_OTEL_OPERATOR col=\$ENABLE_OTEL_COLLECTOR ns=\$ENABLE_OTEL_NAMESPACE_LABEL inst=\$ENABLE_OTEL_INSTRUMENTATION\"
@@ -1396,6 +1419,25 @@ EOF
     "
     [ "$status" -eq 0 ]
     [[ "$output" == *"Default StorageClass: fast"* ]]
+}
+
+@test "validate_storage_class accepts the deprecated beta default-class annotation" {
+    # The stub answers according to the jsonpath it is handed, so this fails if the query
+    # stops asking for the beta annotation — a stub that echoed a fixed row would pass
+    # either way.
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        kubectl() {
+            if [[ \"\$*\" == *beta*is-default-class* ]]; then
+                printf 'standard==\nlegacy==true\n'
+            else
+                printf 'standard=\nlegacy=\n'
+            fi
+        }
+        validate_storage_class
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Default StorageClass: legacy"* ]]
 }
 
 @test "validate_ingress_controller skips when --enable-ingress is not used" {
