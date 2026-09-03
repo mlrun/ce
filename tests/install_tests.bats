@@ -617,6 +617,45 @@ EOF
     [[ "$output" == *"nuclio.dashboard.image.tag=1.16.0"* ]]
 }
 
+# Regression: --wait without --timeout inherits helm's 5m default, which is shorter than a
+# single cold pull of the 4.2Gi jupyter image (~5m40s observed on a real cluster) — the
+# release ends up marked failed even though the rollout succeeds moments later.
+@test "helm_install passes --timeout alongside --wait so a slow image pull can't fail the release" {
+    local chart_dir="$BATS_TMPDIR/fakechart_timeout"
+    mkdir -p "$chart_dir"
+    printf 'apiVersion: v2\nname: mlrun-ce\nversion: 0.0.1\n' > "$chart_dir/Chart.yaml"
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        helm() { echo \"HELM_ARGS: \$*\"; }
+        CHART_PATH='$chart_dir'
+        REGISTRY_URL=x
+        EXTERNAL_HOST_ADDRESS=x
+        DRY_RUN=true
+        helm_install
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--wait"* ]]
+    [[ "$output" == *"--timeout 960s"* ]]
+}
+
+@test "HELM_TIMEOUT overrides the helm --wait timeout" {
+    local chart_dir="$BATS_TMPDIR/fakechart_timeout2"
+    mkdir -p "$chart_dir"
+    printf 'apiVersion: v2\nname: mlrun-ce\nversion: 0.0.1\n' > "$chart_dir/Chart.yaml"
+    run bash -c "
+        export HELM_TIMEOUT=1800s
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        helm() { echo \"HELM_ARGS: \$*\"; }
+        CHART_PATH='$chart_dir'
+        REGISTRY_URL=x
+        EXTERNAL_HOST_ADDRESS=x
+        DRY_RUN=true
+        helm_install
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"--timeout 1800s"* ]]
+}
+
 @test "load_config maps installer.components.* to DISABLE_* the same as the --disable-* flags" {
     local cfg="$BATS_TMPDIR/cfg_components.yaml"
     cat > "$cfg" <<'EOF'

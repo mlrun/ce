@@ -214,6 +214,20 @@ predating K8s 1.34, so that node image likely wasn't even published for it.
 
 ## Known non-bugs
 
+- **CE does not officially support upgrades**, so a `helm upgrade` over an existing release
+  is out of scope as a supported path. The concrete symptom seen live (0.11.0 →
+  0.12.0-rc.11 on the `vmdev137` lab): the Kafka broker crash-loops with
+  `Invalid cluster.id in: /var/lib/kafka/data/kafka-log0/meta.properties. Expected
+  ByHirbmSVDCwP7YDBt3V2A, but read <random>`. Commit 19fc711 pins
+  `kafka.clusterId: "ByHirbmSVDCwP7YDBt3V2A"` in `values.yaml` so *re-installs* reuse
+  retained PVC data, but a volume formatted before that pin holds a random ID that nothing
+  migrates. **Fix: delete the Kafka PVC and pod** — `kubectl delete pvc
+  data-kafka-stream-kafka-stream-pool-<n> -n <ns> --wait=false` then `kubectl delete pod
+  kafka-stream-kafka-stream-pool-<n> -n <ns>` (deleting the pod releases the
+  `pvc-protection` finalizer); Strimzi reprovisions and reformats with the pinned ID.
+  Only transient model-monitoring stream data is lost. Setting `kafka.clusterId: ""`
+  restores the pre-19fc711 random-ID behaviour if keeping the existing volume matters more.
+
 - `--dry-run` uses `helm --dry-run=server`, which validates against the live API
   server. If the target cluster lacks the Prometheus Operator CRDs, the
   `kube-prometheus-stack` subchart's `PrometheusRule`/`ServiceMonitor` resources
@@ -236,6 +250,24 @@ predating K8s 1.34, so that node image likely wasn't even published for it.
   `install.sh` alone — it's a chart/Strimzi ordering issue.
 
 ## Fixed bugs
+
+- **`helm_install`'s `--wait` had no `--timeout`, so a slow image pull failed the release**
+  (found via live testing against the `vmdev137` lab): both helm invocations in
+  `helm_install` (the progress-UI branch and the plain branch) passed `--wait` without
+  `--timeout`, silently inheriting helm's **5 minute** default. A single cold pull of
+  `quay.io/mlrun/jupyter` (4.2Gi) took **5m40s** on that cluster, so helm gave up mid-pull
+  with `UPGRADE FAILED: resource Deployment/mlrun/mlrun-jupyter not ready ... Pending
+  termination: 1` and marked the release `failed` — even though the rollout completed
+  seconds later and every pod went Running. A failed release record is worse than a slow
+  one: it misreports a working install and leaves the release in a state that invites an
+  unnecessary rollback. Notably `helm uninstall` (`do_uninstall`) *already* passed
+  `--timeout 960s`, so this was an inconsistency rather than a deliberate choice. Fix:
+  added `HELM_TIMEOUT` (default `960s`, matching uninstall) and passed
+  `--timeout "${HELM_TIMEOUT}"` in both branches. Re-running with the fix took 3m12s and
+  the release went `deployed`. Two regression tests assert the default and the override —
+  note the override test must `export HELM_TIMEOUT` on its own line rather than using the
+  `VAR=x source install.sh` prefix form, since bash discards that prefix assignment when
+  `source` returns and `set -u` then trips inside `helm_install`.
 
 - **`do_hard_clean()`'s force-delete fallback could hang indefinitely** (found via live
   testing against the `vmdev137` lab cluster — a real `--hard-clean` run sat blocked for
@@ -292,7 +324,7 @@ predating K8s 1.34, so that node image likely wasn't even published for it.
 
 ## Testing
 
-- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 96 tests, no cluster needed (sources
+- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 98 tests, no cluster needed (sources
   `install.sh` with `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries).
 - Live/integration: exercise `--chart-path` against a real chart checkout (see
   below). Non-interactive runs need `REGISTRY_USERNAME`/`REGISTRY_PASSWORD`

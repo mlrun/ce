@@ -41,6 +41,10 @@ NAMESPACE="${NAMESPACE:-mlrun}"
 RELEASE_NAME="${RELEASE_NAME:-mlrun-ce}"
 REGISTRY_SECRET_NAME="${REGISTRY_SECRET_NAME:-registry-credentials}"
 HELM_REPO_URL="${HELM_REPO_URL:-https://mlrun.github.io/ce}"
+# --wait without --timeout inherits helm's 5m default, which a single image pull can
+# outrun: the 4.2Gi jupyter image alone takes ~5m40s on a cold node, failing the release
+# even though the rollout goes on to succeed. Matches `helm uninstall --timeout 960s`.
+HELM_TIMEOUT="${HELM_TIMEOUT:-960s}"
 SKIP_REGISTRY_SECRET="${SKIP_REGISTRY_SECRET:-false}"
 SKIP_VALIDATORS="${SKIP_VALIDATORS:-false}"
 REGISTRY_PASSWORD_FILE="${REGISTRY_PASSWORD_FILE:-}"
@@ -139,6 +143,7 @@ Options:
 Environment variables (for non-interactive / CI):
   SKIP_REGISTRY_SECRET  Set to 'true' to skip creating the registry secret
   SKIP_VALIDATORS       Set to 'true' to skip the pre-install validators
+  HELM_TIMEOUT          Timeout for helm's --wait on install/upgrade (default: 960s)
   MIN_K8S_VERSION       Kubernetes version to warn below (unset by default; never blocks)
   MIN_HELM_VERSION      Helm CLI version floor the validators enforce (default: 3.6)
   DISABLE_SYSTEM_MONITORING  Set to 'true' to disable the Grafana/Prometheus stack
@@ -889,6 +894,7 @@ helm_install() {
         helm upgrade --install "${RELEASE_NAME}" "${CHART_REF}" \
             --namespace "${NAMESPACE}" \
             --wait \
+            --timeout "${HELM_TIMEOUT}" \
             ${values_flag[@]+"${values_flag[@]}"} \
             ${version_flag[@]+"${version_flag[@]}"} \
             ${dry_run_flag[@]+"${dry_run_flag[@]}"} \
@@ -913,6 +919,7 @@ helm_install() {
         helm upgrade --install "${RELEASE_NAME}" "${CHART_REF}" \
             --namespace "${NAMESPACE}" \
             --wait \
+            --timeout "${HELM_TIMEOUT}" \
             ${values_flag[@]+"${values_flag[@]}"} \
             ${version_flag[@]+"${version_flag[@]}"} \
             ${dry_run_flag[@]+"${dry_run_flag[@]}"} \
