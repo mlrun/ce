@@ -58,6 +58,18 @@ mlrun-ce-installer version
 Still installs the published chart. Add `--chart-path ./charts/mlrun-ce` to install the
 chart from your working tree instead.
 
+To get the `mlrun-ce-installer` command while working on a clone, symlink it onto your
+PATH:
+
+```bash
+make installer-link                                   # links into ~/.local/bin
+make installer-link INSTALLER_BIN_DIR=/usr/local/bin   # or somewhere else on PATH
+```
+
+The link points back at your working tree, so edits take effect immediately and
+`mlrun-ce-installer version` reports the chart version rather than `unknown`. `make
+installer-unlink` removes it.
+
 ---
 
 ## Commands
@@ -83,11 +95,12 @@ Colored output is suppressed automatically when stdout isn't a terminal, and whe
 ## Versioning and releases
 
 The installer has no version of its own. It ships with the chart and is released by the
-same tag, so `install.sh --version` reads the version straight out of
+same tag, so `mlrun-ce-installer version` reads the version straight out of
 `charts/mlrun-ce/Chart.yaml` beside it — bumping the chart bumps the installer, with no
-second copy to keep in step. Run standalone (`curl | bash`, or copied to a bin directory)
-there is no chart to read and nothing recording where the script came from, so it reports
-`unknown`; that's what pinning to a release tag answers.
+second copy to keep in step. Symlinks are resolved first, so a link onto your PATH still
+finds the chart in the checkout it points at. Run standalone (`curl | bash`, or copied to
+a bin directory) there is no chart to read and nothing recording where the script came
+from, so it reports `unknown`; that's what pinning to a release tag answers.
 
 They're coupled on purpose. The installer encodes chart internals — the chart's fixed
 NodePorts, and the `--set` value paths it writes — so an installer and a chart from the

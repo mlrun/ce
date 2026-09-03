@@ -152,6 +152,20 @@ _empty_bin() {
     [ "$output" = "mlrun-ce installer 9.9.9-rc.1" ]
 }
 
+# Symlinking onto PATH is how you'd run this as a command during development, and the
+# link's own directory has no chart in it — resolve to the real file before looking.
+@test "installer_version follows a symlink back to the chart" {
+    local linkdir
+    linkdir="$BATS_TMPDIR/linkbin"
+    rm -rf "$linkdir"
+    mkdir -p "$linkdir"
+    ln -s "$(cd "$(dirname "$SCRIPT")" && pwd)/$(basename "$SCRIPT")" \
+        "$linkdir/mlrun-ce-installer"
+    run bash "$linkdir/mlrun-ce-installer" version
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"unknown"* ]]
+}
+
 # curl | bash, or copied to /usr/local/bin: no chart to read, and nothing in the script
 # records where it came from, so say so rather than inventing a version.
 @test "installer_version reports unknown when running standalone" {
