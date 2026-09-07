@@ -33,7 +33,7 @@ make installer-test
 bats tests/install_tests.bats
 ```
 
-Expected output: `1..115` followed by `ok N <test-name>` for every test.
+Expected output: `1..118` followed by `ok N <test-name>` for every test.
 
 Keep the count in this file in sync when you add tests — it's the quickest way to
 notice a test silently failing to register.
@@ -88,7 +88,7 @@ Tests that exercise the validators individually stub `kubectl`/`helm`/`docker` a
 shell functions instead, echoing whatever the check parses (a `kubeletVersion`,
 a `helm version --short` string, an allocatable quantity, and so on).
 
-## Current coverage — 115 tests
+## Current coverage — 118 tests
 
 | Phase / area | Tests |
 |--------------|-------|

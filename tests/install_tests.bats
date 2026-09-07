@@ -1476,6 +1476,48 @@ EOF
     [[ "$output" == *"IngressClass 'nginx' found"* ]]
 }
 
+# --local-registry used to ignore --dry-run entirely: on a cluster without the namespace
+# the apply failed and errexit aborted the run, and on one with it, a "render only" run
+# quietly deployed a real registry Deployment and Service.
+@test "deploy_local_registry applies nothing in dry-run" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        DRY_RUN=true
+        kubectl() { echo \"KUBECTL CALLED: \$*\"; }
+        deploy_local_registry
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"KUBECTL CALLED"* ]]
+    [[ "$output" == *"Dry-run: would deploy local registry"* ]]
+}
+
+# The guard sits after the URL is resolved, so a dry run still renders the --set flags the
+# real install would use.
+@test "deploy_local_registry still resolves the registry URL in dry-run" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        DRY_RUN=true
+        kubectl() { :; }
+        deploy_local_registry
+        echo \"URL=\$LOCAL_REGISTRY_URL\"
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"URL=local-registry.mlrun.svc.cluster.local:5000"* ]]
+}
+
+# The other half of the guard: a real run must still deploy.
+@test "deploy_local_registry still applies when it is not a dry run" {
+    run bash -c "
+        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
+        DRY_RUN=false
+        kubectl() { echo \"KUBECTL CALLED: \$*\"; }
+        deploy_local_registry
+    "
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"KUBECTL CALLED: apply -f - --namespace mlrun"* ]]
+    [[ "$output" != *"Dry-run"* ]]
+}
+
 @test "validate_registry_auth skips when --local-registry is in use" {
     run bash -c "
         INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
