@@ -167,6 +167,21 @@ node image is the safest choice.
   and the warning read "~0Gi" instead of the real ~52Gi. Fix: added `_allocatable_to_ki()`,
   a small quantity parser that handles `Ki`/`Mi`/`Gi`/`Ti` suffixes and a bare
   byte-integer form, used by both the memory and ephemeral-storage loops.
+- **`deploy_local_registry()` ignored `--dry-run` entirely** (found while rehearsing a demo
+  of `--local-registry` on `docker-desktop`): the function had no `DRY_RUN` guard, so it ran
+  `kubectl apply` unconditionally. Two failure modes, one loud and one quiet. On a cluster
+  without the namespace — the normal case for a first dry run — the apply failed with a raw
+  `Error from server (NotFound): namespaces "mlrun" not found`, `errexit` aborted, and the
+  run exited 1, so `--local-registry --dry-run` was simply unusable. On a cluster where the
+  namespace already existed, the apply *succeeded*: a run advertised as rendering-only
+  really deployed a `local-registry` Deployment and Service, and reported success. CI never
+  caught it because the `kind-install` job uses `--local-registry` for a real install, never
+  with `--dry-run`. Fix: an early `return 0` under `DRY_RUN`, placed *after* the
+  `LOCAL_REGISTRY_URL` assignment so the URL still reaches the rendered `--set` flags —
+  verified live, the dry run renders the URL into nuclio's `registry_url` ConfigMap and
+  mlrun's api chief/worker deployments while creating nothing. Three tests cover it: no
+  apply under dry-run, the URL still resolving, and a real run still applying.
+
 - **`resolve_external_host()`'s docker-desktop/minikube autodetect ignored `KUBE_CONTEXT`**
   (install.sh:602, found via live testing against a remote `--kube-context`): the
   `kubectl config current-context` check always reports the kubeconfig's *ambient*
@@ -199,7 +214,7 @@ node image is the safest choice.
 
 ## Testing
 
-- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 115 tests, no cluster needed (sources
+- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 118 tests, no cluster needed (sources
   `install.sh` with `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries).
 - **A green local run on macOS does not mean a green CI run.** bats aborts a test
   on the first failed assertion via `set -e`, and under macOS's system bash (3.2)

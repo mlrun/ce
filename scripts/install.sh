@@ -366,6 +366,15 @@ deploy_local_registry() {
         LOCAL_REGISTRY_URL="local-registry.${NAMESPACE}.svc.cluster.local:5000"
     fi
 
+    # Guard goes after the URL is resolved, not before: the URL still has to reach the
+    # rendered --set flags for the dry-run to represent the real install. Everything below
+    # this point mutates the cluster, which a dry run must not do — and on a cluster where
+    # the namespace does exist, an unguarded apply would quietly deploy a real registry.
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "Dry-run: would deploy local registry at '${LOCAL_REGISTRY_URL}'"
+        return 0
+    fi
+
     log_info "Deploying local Docker registry..."
     kubectl apply -f - --namespace "${NAMESPACE}" <<EOF
 apiVersion: apps/v1
