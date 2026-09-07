@@ -1,0 +1,150 @@
+{{- if eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-seaweedfs-remote-config
+  labels:
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seaweedfs-remote-config
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    # Before s3-bucket-init (weight 10; skipped when remote is enabled).
+    helm.sh/hook-weight: "9"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 8
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.common.labels" . | nindent 8 }}
+        app.kubernetes.io/component: seaweedfs-remote-config
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-filer
+          image: busybox:1.37
+          env:
+            - name: FILER_HOST
+              value: seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local
+            - name: FILER_PORT
+              value: {{ include "mlrun-ce.seaweedfs.filer.port" . | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - "until nc -z $FILER_HOST $FILER_PORT; do echo waiting for SeaweedFS filer; sleep 5; done"
+      containers:
+        - name: remote-config
+          image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: REMOTE_NAME
+              value: {{ .Values.seaweedfs.remote.name | quote }}
+            - name: LOCAL_BUCKET
+              value: {{ include "mlrun-ce.seaweedfs.remote.localBucket" . | quote }}
+            - name: REMOTE_BUCKET
+              value: {{ include "mlrun-ce.seaweedfs.remote.remoteBucket" . | quote }}
+            - name: MOUNT_EXISTING
+              value: {{ .Values.seaweedfs.remote.mount.mountExisting | default true | toString | quote }}
+            - name: MOUNT_NONEMPTY
+              value: {{ .Values.seaweedfs.remote.mount.nonempty | default true | toString | quote }}
+            {{- if eq .Values.seaweedfs.remote.provider "s3" }}
+            - name: S3_ENDPOINT
+              value: {{ .Values.seaweedfs.remote.s3.endpoint | quote }}
+            - name: S3_REGION
+              value: {{ .Values.seaweedfs.remote.s3.region | default "us-east-1" | quote }}
+            - name: S3_FORCE_PATH_STYLE
+              value: {{ .Values.seaweedfs.remote.s3.forcePathStyle | default true | toString | quote }}
+            - name: S3_STORAGE_CLASS
+              value: {{ .Values.seaweedfs.remote.s3.storageClass | default "STANDARD" | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: seaweedfs-remote-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: seaweedfs-remote-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+            {{- else if eq .Values.seaweedfs.remote.provider "azure" }}
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: seaweedfs-remote-credentials
+                  key: AZURE_STORAGE_CONNECTION_STRING
+                  optional: true
+            - name: AZURE_STORAGE_ACCOUNT
+              valueFrom:
+                secretKeyRef:
+                  name: seaweedfs-remote-credentials
+                  key: AZURE_STORAGE_ACCOUNT
+                  optional: true
+            - name: AZURE_STORAGE_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: seaweedfs-remote-credentials
+                  key: AZURE_STORAGE_ACCESS_KEY
+                  optional: true
+            {{- end }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -e
+              FILER="{{ include "mlrun-ce.seaweedfs.filerAddress" . }}"
+              MASTER="{{ include "mlrun-ce.seaweedfs.masterAddress" . }}"
+              REMOTE_PATH="${REMOTE_NAME}/${REMOTE_BUCKET}"
+              MOUNT_DIR="/buckets/${LOCAL_BUCKET}"
+
+              EXISTING_MOUNT=$(printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1)
+              if echo "${EXISTING_MOUNT}" | grep -Fq "${MOUNT_DIR}"; then
+                echo "Unmounting stale remote mount at ${MOUNT_DIR} before reconfigure..."
+                printf 'remote.unmount -dir=%s\n' "${MOUNT_DIR}" | weed shell -filer="${FILER}" -master="${MASTER}"
+              fi
+
+              # Azure: weed shell reads AZURE_STORAGE_ACCOUNT/ACCESS_KEY; parse connectionString when unset.
+              {{- if eq .Values.seaweedfs.remote.provider "azure" }}
+              {{ include "mlrun-ce.seaweedfs.remote.azureCredentialBootstrap" . | nindent 14 }}
+              {{- end }}
+              {
+              {{- if eq .Values.seaweedfs.remote.provider "s3" }}
+                _cfg="remote.configure -name=${REMOTE_NAME} -type=s3"
+                _cfg="${_cfg} -s3.access_key=${AWS_ACCESS_KEY_ID}"
+                _cfg="${_cfg} -s3.secret_key=${AWS_SECRET_ACCESS_KEY}"
+                _cfg="${_cfg} -s3.endpoint=https://${S3_ENDPOINT}"
+                _cfg="${_cfg} -s3.region=${S3_REGION}"
+                _cfg="${_cfg} -s3.force_path_style=${S3_FORCE_PATH_STYLE}"
+                _cfg="${_cfg} -s3.storage_class=${S3_STORAGE_CLASS}"
+                echo "${_cfg}"
+              {{- else if eq .Values.seaweedfs.remote.provider "azure" }}
+                echo "remote.configure -name=${REMOTE_NAME} -type=azure"
+              {{- end }}
+                if [ "${MOUNT_EXISTING}" = "true" ]; then
+                  MOUNT_CMD="remote.mount -dir=${MOUNT_DIR} -remote=${REMOTE_PATH}"
+                  if [ "${MOUNT_NONEMPTY}" = "true" ]; then
+                    MOUNT_CMD="${MOUNT_CMD} -nonempty"
+                  fi
+                  echo "${MOUNT_CMD}"
+                fi
+              } | weed shell -filer="${FILER}" -master="${MASTER}"
+              if [ "${MOUNT_EXISTING}" = "true" ]; then
+                MOUNT_OUT=$(printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1)
+                echo "remote mount status:"
+                echo "${MOUNT_OUT}"
+                echo "${MOUNT_OUT}" | grep -Fq "${MOUNT_DIR}" || {
+                  echo "ERROR: remote.mount did not attach ${MOUNT_DIR}"
+                  exit 1
+                }
+                echo "${MOUNT_OUT}" | grep -Fq "${REMOTE_BUCKET}" || {
+                  echo "ERROR: remote.mount did not target remote bucket ${REMOTE_BUCKET}"
+                  exit 1
+                }
+              fi
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+{{- end }}

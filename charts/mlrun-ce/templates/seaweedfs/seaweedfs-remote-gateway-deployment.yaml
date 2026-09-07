@@ -1,0 +1,76 @@
+{{- if eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-seaweedfs-remote-gateway
+  labels:
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: seaweedfs-remote-gateway
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    # Same weight as seaweedfs-remote-config Job; init container waits for remote mount.
+    helm.sh/hook-weight: "9"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mlrun-ce.common.labels" . | nindent 6 }}
+      app.kubernetes.io/component: seaweedfs-remote-gateway
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.common.labels" . | nindent 8 }}
+        app.kubernetes.io/component: seaweedfs-remote-gateway
+    spec:
+      initContainers:
+        - name: wait-for-filer
+          image: busybox:1.37
+          env:
+            - name: FILER_HOST
+              value: seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local
+            - name: FILER_PORT
+              value: {{ include "mlrun-ce.seaweedfs.filer.port" . | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - "until nc -z $FILER_HOST $FILER_PORT; do echo waiting for SeaweedFS filer; sleep 5; done"
+        - name: wait-for-remote-mount
+          image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              FILER="{{ include "mlrun-ce.seaweedfs.filerAddress" . }}"
+              MASTER="{{ include "mlrun-ce.seaweedfs.masterAddress" . }}"
+              MOUNT_DIR="/buckets/{{ include "mlrun-ce.seaweedfs.remote.localBucket" . }}"
+              until printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1 | grep -Fq "${MOUNT_DIR}"; do
+                echo "waiting for remote mount at ${MOUNT_DIR}..."
+                sleep 5
+              done
+      containers:
+        - name: remote-gateway
+          image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: seaweedfs-remote-credentials
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -e
+              {{- if eq .Values.seaweedfs.remote.provider "azure" }}
+              {{ include "mlrun-ce.seaweedfs.remote.azureCredentialBootstrap" . | nindent 14 }}
+              {{- end }}
+              exec /usr/bin/weed filer.remote.gateway \
+                -filer={{ include "mlrun-ce.seaweedfs.filerAddress" . }} \
+                -createBucketAt={{ .Values.seaweedfs.remote.name }} \
+                -createBucketWithRandomSuffix={{ .Values.seaweedfs.remote.gateway.createBucketWithRandomSuffix | default false }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+{{- end }}

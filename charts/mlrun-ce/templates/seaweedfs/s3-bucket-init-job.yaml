@@ -1,4 +1,4 @@
-{{- if .Values.seaweedfs.enabled }}
+{{- if and .Values.seaweedfs.enabled (not (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true")) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
