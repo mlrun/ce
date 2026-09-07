@@ -188,7 +188,7 @@ Pre-install validators still run in `--dry-run` — see [Configuration](docs/con
 ./scripts/install.sh --uninstall
 ```
 
-This runs `helm uninstall` with a 960s timeout. The namespace and CRDs are **not** deleted. For deleting persistent data too, see the [FAQ](docs/faq.md#deleting-everything-including-the-namespace).
+This runs `helm uninstall` with a timeout controlled by `HELM_TIMEOUT` (default `960s`). The namespace and CRDs are **not** deleted. For deleting persistent data too, see the [FAQ](docs/faq.md#deleting-everything-including-the-namespace).
 
 ---
 
