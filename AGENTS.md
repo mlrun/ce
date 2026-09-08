@@ -4,6 +4,8 @@
 
 This is a Helm umbrella chart repository for **MLRun Community Edition (CE)** — an open-source MLOps stack. The main chart lives at `charts/mlrun-ce/` and bundles: Nuclio, MLRun, Jupyter, MPI Operator, SeaweedFS (S3-compatible storage), Spark Operator, Kubeflow Pipelines, Prometheus stack, TimescaleDB, and Strimzi Kafka Operator.
 
+The repo also ships `scripts/install.sh`, a bash installer that wraps `helm install` for this chart. It installs the **published** chart by default and this repo's chart only when given `--chart-path ./charts/mlrun-ce`. Its own conventions, phase history and bug log live in [`scripts/AGENTS.md`](scripts/AGENTS.md) — read that when working under `scripts/`; this file covers the chart.
+
 ## Commands to lint, package, and manage the chart:
 
 ```bash
