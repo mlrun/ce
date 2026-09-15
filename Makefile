@@ -33,24 +33,59 @@ tests: ## Run tests
 package: ## Package the application
 	@./tests/package.sh
 
+# --- Installer -----------------------------------------------------------------------
+#
+# The installer is being ported from bash (scripts/install.sh) to uv + Python
+# (scripts/install.py plus the scripts/ce_installer package). Both ship during the
+# overlap and both are covered here; see scripts/AGENTS.md for the cutover plan.
+#
+# The Python targets shell out to uv, which manages its own interpreter and dependencies —
+# there is nothing to pip install first.
+
 .PHONY: installer-test
-installer-test: ## Run the scripts/install.sh unit tests (requires bats-core)
+installer-test: installer-test-bash installer-test-diff ## Run every installer test suite
+
+.PHONY: installer-test-bash
+installer-test-bash: ## Run the scripts/install.sh unit tests (requires bats-core)
 	@bats tests/install_tests.bats
 
+# Runs both installers over the same invocations with stubs standing in for
+# helm/kubectl/docker, and fails if their recorded calls differ. Never touches a cluster.
+.PHONY: installer-test-diff
+installer-test-diff: ## Diff install.sh against install.py over the flag matrix
+	@bash tests/installer/matrix.sh
+
 .PHONY: installer-lint
-installer-lint: ## Syntax-check and shellcheck scripts/install.sh
+installer-lint: installer-lint-bash installer-lint-python ## Lint both installers
+
+.PHONY: installer-lint-bash
+installer-lint-bash: ## Syntax-check and shellcheck scripts/install.sh
 	@bash -n scripts/install.sh
 	@shellcheck scripts/install.sh
+
+.PHONY: installer-lint-python
+installer-lint-python: ## Lint and format-check scripts/install.py and ce_installer
+	@cd scripts && uvx ruff check .
+	@cd scripts && uvx ruff format --check .
+
+.PHONY: installer-format
+installer-format: ## Reformat the Python installer in place
+	@cd scripts && uvx ruff check --fix .
+	@cd scripts && uvx ruff format .
 
 # Symlink rather than copy, so the command tracks the working tree and can still find the
 # chart next to it (a copy has no chart, and reports its version as unknown).
 INSTALLER_BIN_DIR ?= $(HOME)/.local/bin
 
+# Which implementation `make installer-link` puts on PATH. Flip to install.sh to go back to
+# the bash one without unlinking first.
+INSTALLER_ENTRYPOINT ?= scripts/install.py
+
 .PHONY: installer-link
 installer-link: ## Put mlrun-ce-installer on PATH, pointing at this checkout
 	@mkdir -p "$(INSTALLER_BIN_DIR)"
-	@ln -sf "$(CURDIR)/scripts/install.sh" "$(INSTALLER_BIN_DIR)/mlrun-ce-installer"
-	@echo "linked $(INSTALLER_BIN_DIR)/mlrun-ce-installer -> $(CURDIR)/scripts/install.sh"
+	@ln -sf "$(CURDIR)/$(INSTALLER_ENTRYPOINT)" "$(INSTALLER_BIN_DIR)/mlrun-ce-installer"
+	@echo "linked $(INSTALLER_BIN_DIR)/mlrun-ce-installer -> $(CURDIR)/$(INSTALLER_ENTRYPOINT)"
 	@case ":$$PATH:" in \
 		*":$(INSTALLER_BIN_DIR):"*) ;; \
 		*) echo "note: $(INSTALLER_BIN_DIR) is not on PATH — add it, or set INSTALLER_BIN_DIR" ;; \
