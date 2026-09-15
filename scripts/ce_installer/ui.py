@@ -114,6 +114,14 @@ def print_notes_table(settings: Settings) -> None:
         if current is None:
             continue
 
+        # A blank line closes the entry. Without this the final service absorbs every
+        # remaining line of the NOTES — the otel section alone put a sentence of prose in
+        # TimescaleDB's URL cell.
+        if not line:
+            entries.append(current)
+            current = None
+            continue
+
         user = re.match(r"^-\s+username:\s*(.*)$", line)
         if user:
             current["user"] = user.group(1)
@@ -122,7 +130,15 @@ def print_notes_table(settings: Settings) -> None:
         if password:
             current["pass"] = password.group(1)
             continue
-        if line and line not in ("You're up and running!", "Happy MLOPSing!!! :]"):
+        # e.g. "-  S3 credentials: seaweed / seaweed123", which carries both halves at once.
+        combined = re.match(r"^-\s+.*credentials:\s*(.*)$", line)
+        if combined:
+            current["pass"] = ""
+            current["user"] = combined.group(1)
+            continue
+        # First non-empty line only. Assigning unconditionally let the trailing "-  ..."
+        # detail lines overwrite the address they belong to.
+        if not current["url"] and line not in ("You're up and running!", "Happy MLOPSing!!! :]"):
             current["url"] = line
     if current:
         entries.append(current)
@@ -136,8 +152,12 @@ def print_notes_table(settings: Settings) -> None:
     table.add_column("CREDENTIALS")
     for entry in entries:
         credentials = ""
-        if entry["user"] or entry["pass"]:
-            credentials = "{} / {}".format(entry["user"], entry["pass"])
+        if entry["user"] and entry["pass"]:
+            credentials = f"{entry['user']} / {entry['pass']}"
+        elif entry["user"] or entry["pass"]:
+            # A combined "user / pass" line, or a service that only names one of the two;
+            # either way "postgres / " with a dangling separator reads as a bug.
+            credentials = entry["user"] or entry["pass"]
         table.add_row(entry["service"], entry["url"], credentials)
 
     out.print()

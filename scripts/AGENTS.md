@@ -200,16 +200,40 @@ node image is the safest choice.
   release's `helm install` fails immediately with an ownership-metadata error
   once one release already owns it. Not an `install.sh` bug — the chart itself
   has no multi-release story on a shared cluster short of patching that template.
-- `helm uninstall` (and `--hard-clean`) can leave orphaned Strimzi `Kafka`/
-  `KafkaNodePool`/`StrimziPodSet` custom resources and their broker pod behind:
-  once the `strimzi-kafka-operator` Deployment is gone, nothing reconciles those
-  CRs, so the broker pod keeps running and its PVC's `kubernetes.io/pvc-protection`
-  finalizer blocks `--hard-clean`'s PVC deletion indefinitely. Fix is manual:
-  delete the `strimzipodset` and pod directly (releases the finalizer), then the
-  `kafka`/`kafkanodepool` CRs. Not something `do_hard_clean` can anticipate from
-  `install.sh` alone — it's a chart/Strimzi ordering issue.
+- `helm uninstall` (and `--hard-clean`) leaves orphaned Strimzi `Kafka`/
+  `KafkaNodePool`/`StrimziPodSet` custom resources and their broker pod behind, so the
+  pod's `kubernetes.io/pvc-protection` finalizer holds its PVC in `Terminating` forever.
+  Fix is manual: delete the `strimzipodset` and pod directly (releasing the finalizer),
+  then the `kafka`/`kafkanodepool` CRs.
+
+  **Reconfirmed live on rke2 (2026-09-15)**, with a more specific cause than "ordering":
+  the Kafka CRs are created as *helm hook* resources (`helm.sh/hook: post-install`), and
+  helm never deletes hook-created resources on uninstall — they are not in the release
+  manifest. The `strimzi-kafka-operator` Deployment *is* in the manifest, so it goes away
+  while the CRs it was reconciling stay. `--hard-clean` reported success and exited 0 with
+  the PVC still `Terminating`, because `--wait=false` means it never observes the outcome.
+  A future `do_hard_clean` could reap this deterministically: after deleting PVCs, any left
+  in `Terminating` with `pvc-protection` are pinned by a pod, and the pods are discoverable
+  from `.spec.volumes[].persistentVolumeClaim.claimName`. Deliberately not done yet —
+  deleting pods the release does not own is a bigger blast radius than it looks.
 
 ## Fixed bugs
+
+- **The access-URL table put the wrong text in the URL column** (found by the first live
+  install of the port, on an rke2 lab). `print_notes_table` assigned *every* non-empty line
+  after a `X is available at:` header to `url`, so the last line won rather than the first:
+  SeaweedFS showed `-  S3 credentials: seaweed / seaweed123` as its address, and TimescaleDB
+  — the last entry in the NOTES — absorbed the whole trailing otel section and displayed a
+  sentence of prose. Now the first non-empty line wins and a blank line closes the entry;
+  a combined `-  ... credentials: <user> / <pass>` line is read as credentials, and a
+  service with only one half no longer renders a dangling `postgres / `.
+
+  **`install.sh` still has this bug** (`url="$line"` in its own `print_notes_table`) and is
+  deliberately left alone — it is being deleted, and changing it would only churn the
+  oracle. This is also a reminder of what the differential harness does *not* cover: it
+  compares the helm/kubectl calls two implementations make, not what they print, so no
+  number of matrix cases would have caught this. Output formatting needs its own tests or a
+  live run.
 
 - **`helm_install`'s `--wait` had no `--timeout`, so a slow image pull failed the release**
   (found via live testing against a real remote cluster): both helm invocations in
@@ -355,6 +379,27 @@ afterwards.
   below). Non-interactive runs need `REGISTRY_USERNAME`/`REGISTRY_PASSWORD`
   (or `REGISTRY_PASSWORD_FILE`)/`REGISTRY_EMAIL` set or they'll fail on the
   required-value check in `create_registry_secret`.
+- **The Python installer verified end-to-end on rke2 (2026-09-15)**: v1.36.1, single node,
+  `nfs-client` default StorageClass, helm **4.1.1**, reached through an
+  `ssh -L 16443:127.0.0.1:6443` tunnel. A `--hard-clean` uninstall of an existing
+  0.12.0-rc.11 release followed by
+  `--chart-path ./charts/mlrun-ce --enable-otel collector --skip-secret` produced a
+  `deployed` rc.12 release with 27/27 pods ready in ~3 minutes (warm image cache), the
+  Kafka post-install hooks applied, and only the usual single `mlrun-api-chief` restart
+  while it waits for the DB. `--skip-secret` correctly reused the pre-existing
+  `registry-credentials`, which survives uninstall because the installer creates it with
+  kubectl rather than through the chart.
+
+  Two things to know about that run. **Helm 4 logs
+  `Conflict: cannot merge map onto non-map for "registry". Skipping.` three times** during
+  install; it is informational, caused by the chart's `global.registry: &userRegistry`
+  anchor being multiplexed into `nuclio.*` and `mlrun.*`, and the value does apply —
+  `index.docker.io/demo` reached the MLRun API pod and the user-supplied values matched the
+  previous release exactly. And the **dependency skip works**: with all 8 lockfile subcharts
+  vendored it logged `Chart dependencies already vendored and match requirements.lock;
+  skipping fetch` and made no network call, where `install.sh` would have re-run
+  `helm dependency update`.
+
 - **Verified against a real remote cluster via `--kube-context`**: the installer
   itself never SSHes anywhere (still local-execution-only), but `kubectl`/`helm`
   can target any cluster reachable from the local machine — including one behind
