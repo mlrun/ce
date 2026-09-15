@@ -43,7 +43,15 @@ package: ## Package the application
 # there is nothing to pip install first.
 
 .PHONY: installer-test
-installer-test: installer-test-bash installer-test-diff ## Run every installer test suite
+installer-test: installer-test-python installer-test-bash installer-test-diff ## Run every installer test suite
+
+# One named test per entry in scripts/AGENTS.md's "Fixed bugs", plus the output formatting
+# the differential suite cannot see — it compares the calls two implementations make, not
+# what they print, so the access-URL table shipped broken through 28 green matrix cases.
+.PHONY: installer-test-python
+installer-test-python: ## Run the ce_installer regression tests
+	@uv run --quiet --with pytest --with rich --with typer --with pyyaml \
+		pytest tests/installer -q
 
 .PHONY: installer-test-bash
 installer-test-bash: ## Run the scripts/install.sh unit tests (requires bats-core)
@@ -63,15 +71,21 @@ installer-lint-bash: ## Syntax-check and shellcheck scripts/install.sh
 	@bash -n scripts/install.sh
 	@shellcheck scripts/install.sh
 
+# tests/installer lives outside scripts/, so it needs the package's ruff config passed
+# explicitly — at the repo root ruff would fall back to its defaults and disagree.
 .PHONY: installer-lint-python
-installer-lint-python: ## Lint and format-check scripts/install.py and ce_installer
+installer-lint-python: ## Lint and format-check the Python installer and its tests
 	@cd scripts && uvx ruff check .
 	@cd scripts && uvx ruff format --check .
+	@uvx ruff check --config scripts/pyproject.toml tests/installer
+	@uvx ruff format --config scripts/pyproject.toml --check tests/installer
 
 .PHONY: installer-format
-installer-format: ## Reformat the Python installer in place
+installer-format: ## Reformat the Python installer and its tests in place
 	@cd scripts && uvx ruff check --fix .
 	@cd scripts && uvx ruff format .
+	@uvx ruff check --config scripts/pyproject.toml --fix tests/installer
+	@uvx ruff format --config scripts/pyproject.toml tests/installer
 
 # Symlink rather than copy, so the command tracks the working tree and can still find the
 # chart next to it (a copy has no chart, and reports its version as unknown).

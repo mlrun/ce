@@ -354,11 +354,39 @@ afterwards.
   turned the StorageClass validator permanently red for both scripts at once — which
   *looked* like parity.
 
+### Regression suite (`make installer-test-python`)
+
+`tests/installer/test_regressions.py`, run by pytest under uv. One named test per entry in
+"Fixed bugs" above, plus the output formatting the differential suite cannot see. Test names
+end in the symptom a user would report, so a failure says what regressed.
+
+- **Add a test here for every new "Fixed bugs" entry.** A bug that reached a user once is
+  the cheapest possible test case, and the harness above will not catch a second occurrence
+  unless the bug changes which commands get run.
+- **Verify a new test by reintroducing the bug and watching it fail.** Two of these
+  originally passed against the reverted fix because the parser fixes overlapped — either
+  one alone kept the real-world fixture correct — so `PLAIN_DETAIL_NOTES` and
+  `LATER_SECTION_NOTES` exist purely to isolate them. A test that cannot fail is
+  documentation wearing a test's clothes.
+- The `Recorder` helper stands in for the kubectl/helm wrappers and records argv. Patch the
+  attribute **on the module under test** (`cluster.kubectl`), not on `shell` — each module
+  imports the wrappers into its own namespace.
+- The `settings` fixture pins its fields explicitly rather than reading the environment, so
+  an exported `HELM_TIMEOUT` in a developer's shell cannot change a result.
+
 ### Legacy bats suite (`make installer-test-bash`)
 
 - 118 tests over `install.sh`, no cluster needed (sources it with
   `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries). Retired with `install.sh`; the
   cases worth keeping move to the Python side rather than being rewritten in bats.
+- **Test 87 (`resolve_external_host still uses the docker-desktop heuristic when
+  KUBE_CONTEXT is unset`) currently fails**, producing `localhost` where it expects
+  `host.docker.internal`. It predates the port — `install.sh` and the bats file have not
+  changed since `6b445fa` — and is not being fixed in a script that is about to be deleted.
+  The behaviour it guards is covered on the Python side by
+  `test_external_host_without_kube_context_keeps_the_docker_desktop_heuristic`. Because of
+  this, `make installer-test` is currently red on the bash leg only; use
+  `installer-test-python` and `installer-test-diff` as the gate.
 - **A green local run on macOS does not mean a green CI run.** bats aborts a test
   on the first failed assertion via `set -e`, and under macOS's system bash (3.2)
   that only works for the *last* statement in a `@test` — a failed `[[ ]]`

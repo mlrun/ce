@@ -75,7 +75,9 @@ def handle_kubectl(args):
         if what == "secret":
             return (0, "") if os.environ.get("STUB_SECRET_EXISTS") == "1" else (1, "not found")
         if what == "ingressclass":
-            return (0, "") if os.environ.get("STUB_INGRESSCLASS_EXISTS") == "1" else (1, "not found")
+            return (
+                (0, "") if os.environ.get("STUB_INGRESSCLASS_EXISTS") == "1" else (1, "not found")
+            )
         if what == "storageclass":
             # Answer according to the jsonpath handed over, so dropping the beta key from
             # the query changes the answer instead of silently still passing.
@@ -85,7 +87,7 @@ def handle_kubectl(args):
             if "storageclass.beta.kubernetes.io/is-default-class" in path:
                 fields.append(os.environ.get("STUB_SC_BETA", ""))
             return 0, "=".join(fields)
-        if what == "nodes" or what == "node":
+        if what in ("nodes", "node"):
             if "kubeletVersion" in path:
                 return 0, os.environ.get("STUB_K8S_VERSION", "v1.30.2")
             if "allocatable.memory" in path:
@@ -127,7 +129,11 @@ def handle_helm(args):
     if verb == "version":
         return 0, os.environ.get("STUB_HELM_VERSION", "v3.14.2+g2a2fb3b")
     if verb == "status":
-        return (0, "STATUS: deployed") if os.environ.get("STUB_RELEASE_EXISTS") == "1" else (1, "not found")
+        return (
+            (0, "STATUS: deployed")
+            if os.environ.get("STUB_RELEASE_EXISTS") == "1"
+            else (1, "not found")
+        )
     if verb == "get" and len(args) > 1 and args[1] == "notes":
         return 0, os.environ.get("STUB_NOTES", "")
     if verb in ("repo", "dependency", "upgrade", "uninstall"):
