@@ -1,4 +1,4 @@
-# Sample config for scripts/install.sh --config ce-config.yaml (or CONFIG_FILE=ce-config.yaml).
+# Sample config for scripts/install.py --config ce-config.yaml (or CONFIG_FILE=ce-config.yaml).
 # Only the reserved `installer:` block is read; everything else is ignored.
 # See docs/configuration.md's "Config file (ce-config.yaml)" section for the full field list.
 #
@@ -11,11 +11,11 @@
 # -f/--values: helm applies --set after --values, so any field this file sets always
 # wins over the same key in a -f file, with no extra merge logic needed. -f used alone
 # (no --config) keeps its own self-contained behavior (you supply global.registry.*,
-# versions, everything, install.sh sets nothing on top, no secret creation).
+# versions, everything; the installer sets nothing on top, no secret creation).
 
 installer:
   # kubectl/helm context to use. Blank = current local kubeconfig context (no SSH,
-  # no remote exec — install.sh always runs locally).
+  # no remote exec — the installer always runs locally).
   kubeContext: ""
 
   # "auto" runs the existing local autodetect (minikube ip / docker-desktop / node IP).

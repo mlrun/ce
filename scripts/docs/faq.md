@@ -7,7 +7,7 @@ before you hit them.
 
 ### The registry secret doesn't exist / install fails with a `helm --wait` timeout on image pull
 
-`--skip-secret` means "use an existing secret, don't create one" — `install.sh` verifies
+`--skip-secret` means "use an existing secret, don't create one" — `install.py` verifies
 that secret actually exists in the target namespace and exits 1 immediately with a clear
 message if it doesn't, rather than letting the install proceed and fail later with an
 opaque `helm --wait` timeout once pods can't pull images.
@@ -22,7 +22,7 @@ pull images using a nonexistent `imagePullSecrets` entry.
 the target cluster lacks the Prometheus Operator CRDs, the `kube-prometheus-stack`
 subchart's `PrometheusRule`/`ServiceMonitor` resources fail server-side validation. This
 is a Helm limitation (charts with CRDs can't fully dry-run without those CRDs present),
-not an `install.sh` bug.
+not an `install.py` bug.
 
 ### Can I install two `mlrun-ce` releases on one cluster?
 
@@ -30,7 +30,7 @@ No, even in different namespaces with different release/secret names and NodePor
 overrides via `-f`. The chart's `workflow-controller` `PriorityClass` is cluster-scoped
 with a hardcoded name (no values.yaml knob), so a second release's `helm install` fails
 immediately with an ownership-metadata error once one release already owns it. Not an
-`install.sh` bug — the chart itself has no multi-release story on a shared cluster short
+`install.py` bug — the chart itself has no multi-release story on a shared cluster short
 of patching that template.
 
 ### `--hard-clean` didn't delete everything — a Kafka pod and its PVC are still there
@@ -50,7 +50,7 @@ kubectl delete pod -l strimzi.io/cluster -n mlrun --force --grace-period=0
 kubectl delete kafka,kafkanodepool --all -n mlrun
 ```
 
-Not something `do_hard_clean` can anticipate from `install.sh` alone — it's a
+Not something `do_hard_clean` can anticipate from `install.py` alone — it's a
 chart/Strimzi ordering issue.
 
 ### What address does the installer suggest for `EXTERNAL_HOST_ADDRESS`, and why?
@@ -135,7 +135,7 @@ existing Ingress resources will start resolving with no re-install needed.
 
 `--uninstall --hard-clean` runs `helm uninstall` and then deletes every PVC in the
 namespace and every PV bound to it. **This is irreversible and will cause data loss.**
-The namespace and CRDs themselves are not deleted by `install.sh`; remove them yourself
+The namespace and CRDs themselves are not deleted by `install.py`; remove them yourself
 if needed:
 
 ```bash

@@ -1,6 +1,6 @@
 # Parameters Reference
 
-Full flag and environment variable reference for `install.sh`. For guided walkthroughs
+Full flag and environment variable reference for `install.py`. For guided walkthroughs
 see the main [README](../README.md); for the `ce-config.yaml` schema and precedence
 rules see [configuration.md](configuration.md).
 
@@ -58,15 +58,18 @@ Options:
   --enable-otel-instrumentation   Create the Instrumentation CR
   --local-registry               Deploy a local registry:2 registry inside the cluster
   --chart-path DIR               Install from a local chart directory instead of the published repo;
-                                 use ./charts/mlrun-ce for this repo's chart (runs helm dependency
-                                 update on the path first)
+                                 use ./charts/mlrun-ce for this repo's chart (resolves the chart's
+                                 dependencies first, honouring requirements.lock)
+  --skip-dependency-update       With --chart-path: do not fetch chart dependencies at all. Use when
+                                 charts/ is already vendored and the host cannot reach the upstream
+                                 Helm repos
   --ce-version VERSION           Pin the MLRun CE Helm chart version (default: latest; ignored with --chart-path)
   --dry-run                      Render the chart without deploying (helm --dry-run=server)
   --non-interactive              Never prompt; fail with exit 1 if a required value is missing
                                  (auto-set when CI=true)
   --config FILE                  Read defaults from a ce-config.yaml file's 'installer:' block
-                                 (requires yq; flag/env values always win over the file).
-                                 Can be combined with -f/--values — see configuration.md's "Precedence".
+                                 (flag/env values always win over the file). Can be combined with
+                                 -f/--values — see configuration.md's "Precedence".
 ```
 
 ---
@@ -98,6 +101,7 @@ Options:
 | `SHOW_PROGRESS`        | `false`                           | Set to `true` for live progress UI                       |
 | `PROGRESS_INTERVAL_SEC`| `10`                              | Refresh interval (seconds) for progress UI               |
 | `ENABLE_INGRESS`       | `false`                           | Set to `true` to enable the chart's Ingress resources (requires your own controller) |
+| `SKIP_DEPENDENCY_UPDATE` | `false`                         | Set to `true` to skip fetching chart dependencies with `--chart-path` |
 | `INGRESS_CLASS`        | `nginx`                           | Ingress class name                                       |
 | `ENABLE_OTEL_OPERATOR`        | `false`                     | Set to `true` for `--set opentelemetry-operator.enabled=true`  |
 | `ENABLE_OTEL_COLLECTOR`       | `false`                     | Set to `true` for `--set opentelemetry.collector.enabled=true` |

@@ -1,19 +1,102 @@
 ## What this directory is
 
-`scripts/install.sh` — single-file bash wrapper around `helm install mlrun-ce/mlrun-ce`
-(published chart repo: `https://mlrun.github.io/ce`). Local execution only, no SSH, no git
-fetching.
+A wrapper around `helm install mlrun-ce/mlrun-ce` (published chart repo:
+`https://mlrun.github.io/ce`). Local execution only, no SSH, no git fetching.
 
 It lives in the same repo as the chart it installs (`charts/mlrun-ce`), but installs the
 **published** chart by default — the in-repo chart is used only when the caller passes
-`--chart-path ./charts/mlrun-ce` explicitly. That's deliberate: the script is also served
-via `curl | bash`, where no repo exists around it, so the same invocation has to mean the
-same thing in both places.
+`--chart-path ./charts/mlrun-ce` explicitly. That's deliberate: the installer is also run
+detached from any checkout, so the same invocation has to mean the same thing in both
+places.
 
 For chart-side conventions (values.yaml layout, `requirements.lock`, adding components) see
 the repo-root `AGENTS.md`/`CONTRIBUTING.md`. This file covers the installer only.
 
-## Install flow (`main()`, install.sh ~1319-1378)
+## The port: install.py ships, install.sh is the oracle
+
+`install.py` + the `ce_installer/` package is **the** installer. `install.sh` (single-file
+bash, ~1545 lines) is not a supported alternative and is not released alongside it — it
+stays in the tree only for as long as the port needs something to be checked against, and
+is deleted at cutover. User-facing docs describe `install.py` only; don't reintroduce the
+bash one as an option.
+
+So: extend `install.py`. Touch `install.sh` only to keep the differential harness honest.
+
+**The contract is the argv log, not the source.** `tests/installer/matrix.sh` runs both over
+~28 invocations with recording stubs standing in for helm/kubectl/docker and fails if the
+calls or exit codes differ. A change to `install.py` that is supposed to preserve behaviour
+must keep that green; a change that is supposed to *alter* behaviour has to change
+`install.sh` too, or drop the case from the matrix with a note saying why. Once `install.sh`
+is deleted the harness loses its oracle, so the cases worth keeping have to be converted to
+assertions against recorded expectations before that happens.
+
+### Deliberate divergences from the bash behaviour
+
+Three, recorded here because the matrix would otherwise be expected to catch them, and
+because each is a behaviour change users can observe:
+
+1. **`docker` is not a prerequisite.** `check_requirements` no longer gates on
+   `docker info`; `validate_registry_auth` reports `skipped (docker not available)`. The
+   pull secret is created by `kubectl create secret docker-registry`, never by Docker, so
+   the only thing lost is a best-effort `docker login` that already degraded to a warning.
+   This is what makes in-pod execution possible — a containerd/CRI-O node has no daemon.
+2. **`--chart-path` prefers `helm dependency build`.** `update` re-resolves
+   `requirements.yaml` and rewrites the lock, which is the maintainer operation;
+   consumers want the lock honoured. `chart_deps_satisfied()` skips the fetch entirely
+   when `charts/` already holds every tarball `requirements.lock` names, and
+   `--skip-dependency-update` suppresses it unconditionally. Both exist so an
+   egress-restricted host is not forced to reach the upstream Helm repos.
+   Tarball names do not always equal the dependency name — the lock's
+   `strimzi-kafka-operator` ships as `strimzi-kafka-operator-helm-3-chart-<v>.tgz` — so the
+   match is a name prefix plus a version suffix, not an exact filename.
+3. **No `yq`.** `--config` is parsed with pyyaml.
+
+One bug the port fixes for free: `curl -sSL … | bash` makes the script itself bash's stdin,
+so `read -r -p` consumes script text instead of the user's answer and the interactive
+prompts are unusable. uv writes the script to a file before running it, leaving stdin
+attached to the terminal.
+
+### Module layout (`ce_installer/`)
+
+In dependency order — each imports only from the ones above it. `install.py` is *only* a
+launcher: PEP 723 metadata, the `_bootstrap()` uv re-exec, and a call to `main()`.
+
+| Module | Holds |
+|---|---|
+| `console.py` | rich consoles, `log_info/warn/error`, `InstallerError`, `die` |
+| `settings.py` | built-in defaults, `env_str`/`env_true`, the `Settings` dataclass, `prompt_or_env`, version floors |
+| `shell.py` | `run`/`stream`, the KUBE_CONTEXT-aware `kubectl`/`helm` wrappers, `check_requirements` |
+| `config.py` | the `ce-config.yaml` `installer:` block |
+| `cluster.py` | namespace, external host address, chart source resolution |
+| `registry.py` | pull secret, the optional in-cluster registry, the CoreDNS patch |
+| `validators.py` | pre-install checks, blocking and advisory |
+| `ui.py` | the live progress table and the access-URL table |
+| `helm_ops.py` | `--set` composition, install, uninstall, hard clean |
+| `cli.py` | installer version, argv pre-parse, `execute()` run order, the typer command |
+
+`Settings` is the only place precedence is applied (flag > env > `ce-config.yaml` >
+default). Nothing below `cli.py` and `config.py` reads `os.environ` for a tunable.
+
+### Why the argv pre-parse in `cli.py` exists
+
+click cannot express three things the bash `parse_args` does, so raw argv is rewritten
+before click sees it:
+
+1. `--enable-ingress [CLASS]` and `--enable-otel [MODE]` take an *optional* value, consumed
+   only when the next token does not start with `--`. Rewritten to `--flag=value`.
+2. The otel flags are **order-sensitive** — a MODE names a complete state, so
+   `--enable-otel collector --enable-otel-instrumentation` ends with instrumentation on and
+   the reverse order does not. click does not preserve inter-option order, so
+   `resolve_otel_flags` folds the *raw* argv left to right. The five otel parameters on the
+   typer command exist only so they render in `--help`; their parsed values are unused.
+3. An unrecognised option warns and is ignored rather than aborting
+   (`ignore_unknown_options` + `allow_extra_args`, then a warn loop over `ctx.args`).
+
+One click trap worth knowing: with `standalone_mode=False`, `command.main()` **returns** a
+`typer.Exit`'s code instead of raising it. `main()` has to honour the return value or every
+failure raised inside the command silently exits 0.
+
+## Install flow (`execute()` in `cli.py`; `main()` in install.sh ~1319-1378)
 
 0. `parse_command` — pulls an optional leading verb (`install`/`uninstall`/`version`/`help`)
    off the front, leaving the rest in `COMMAND_ARGS`. Kept out of `parse_args` so that stays
@@ -62,11 +145,17 @@ agree; a renamed value path would otherwise become a `--set` that silently does 
 
 There is no separate installer release. `.github/workflows/release.yml` runs
 chart-releaser on every push to `development`/`X.Y.x`, tagging `mlrun-ce-<version>`, and
-that tag's tree contains `scripts/install.sh` — which is what the pinned
-`raw.githubusercontent.com/mlrun/ce/<tag>/scripts/install.sh` URLs resolve against.
-Shipping an installer change is merging it with a chart version bump. The published chart
-tarball packages `charts/mlrun-ce` only, so the installer ships via the git tag, not the
-`.tgz`.
+that tag's tree contains `scripts/`, which is what the pinned
+`uvx --from "git+https://github.com/mlrun/ce@<tag>#subdirectory=scripts" mlrun-ce-installer`
+invocation resolves against. Shipping an installer change is merging it with a chart version
+bump. The published chart tarball packages `charts/mlrun-ce` only, so the installer ships
+via the git tag, not the `.tgz`.
+
+`scripts/pyproject.toml` exists purely to make that `uvx --from git+…` form work — it
+declares the `mlrun-ce-installer` console script. Its `version` is a placeholder and is
+**not** bumped per release; `installer_version()` reads the chart, so there is only ever one
+number to maintain. A clone never goes through it at all: `install.py` carries its own
+PEP 723 metadata and `uv run --script` ignores the surrounding project.
 
 ## Version floors
 
@@ -199,7 +288,7 @@ node image is the safest choice.
   the node-IP fallback, which already goes through the `KUBE_CONTEXT`-aware
   `kubectl` wrapper. Still just a suggested default (`prompt_or_env` default arg) —
   set `EXTERNAL_HOST_ADDRESS`/`installer.externalHostAddress` explicitly when the
-  node IP itself isn't reachable from where `install.sh` runs (e.g. still behind an
+  node IP itself isn't reachable from where the installer runs (e.g. still behind an
   SSH tunnel to the target cluster).
 - **`resolve_external_host()`'s generic fallback (no heuristic matched) now suggests
   `localhost` instead of a node-IP lookup.** Only the truly generic case changed — the
@@ -214,8 +303,38 @@ node image is the safest choice.
 
 ## Testing
 
-- Unit: `make installer-test` (`bats tests/install_tests.bats`) — 118 tests, no cluster needed (sources
-  `install.sh` with `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries).
+`make installer-test` runs everything. `make installer-lint` runs shellcheck over
+`install.sh` and `uvx ruff check` + `ruff format --check` over the Python;
+`make installer-format` fixes what ruff can fix.
+
+### Differential suite (`make installer-test-diff`)
+
+The main guard on the port. `tests/installer/matrix.sh` drives
+`tests/installer/difftest.sh` over ~28 invocations; each one runs `install.sh` and
+`install.py` with `tests/installer/stub.py` symlinked onto a temporary PATH as `helm`,
+`kubectl`, `docker` and `minikube`, and fails if the two disagree on either the exit code
+or the sequence of recorded calls. No cluster is contacted and the temp PATH is torn down
+afterwards.
+
+- The stub derives its answers from the arguments rather than returning fixed values, so a
+  test cannot pass by accident once a script stops asking the question it was supposed to
+  ask. `STUB_*` env vars steer the interesting branches (`STUB_SC_STABLE`,
+  `STUB_HELM_EXIT`, `STUB_NODE_MEMORY`, …).
+- Add a case to `matrix.sh` whenever a flag gains behaviour that reaches helm or kubectl.
+  Refusals belong there too — the two must agree on *how* they reject a bad value, not
+  only on how they succeed.
+- `VERBOSE=1 tests/installer/difftest.sh <flags>` prints both transcripts for one case.
+- **Watch for jsonpath escaping in the stub.** Annotation keys reach kubectl as
+  `storageclass\.kubernetes\.io/is-default-class`; `jsonpath_of()` strips the backslashes
+  before matching, because matching the escaped form made every lookup silently miss and
+  turned the StorageClass validator permanently red for both scripts at once — which
+  *looked* like parity.
+
+### Legacy bats suite (`make installer-test-bash`)
+
+- 118 tests over `install.sh`, no cluster needed (sources it with
+  `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries). Retired with `install.sh`; the
+  cases worth keeping move to the Python side rather than being rewritten in bats.
 - **A green local run on macOS does not mean a green CI run.** bats aborts a test
   on the first failed assertion via `set -e`, and under macOS's system bash (3.2)
   that only works for the *last* statement in a `@test` — a failed `[[ ]]`
@@ -236,7 +355,7 @@ node image is the safest choice.
   below). Non-interactive runs need `REGISTRY_USERNAME`/`REGISTRY_PASSWORD`
   (or `REGISTRY_PASSWORD_FILE`)/`REGISTRY_EMAIL` set or they'll fail on the
   required-value check in `create_registry_secret`.
-- **Verified against a real remote cluster via `--kube-context`**: `install.sh`
+- **Verified against a real remote cluster via `--kube-context`**: the installer
   itself never SSHes anywhere (still local-execution-only), but `kubectl`/`helm`
   can target any cluster reachable from the local machine — including one behind
   SSH, via a local port-forward tunnel (`ssh -f -N -L <port>:<remote-ip>:6443
@@ -250,8 +369,8 @@ node image is the safest choice.
   which fails on local Apple Silicon `docker-desktop` runs only because that
   image has no `linux/arm64` build; the remote cluster was x86_64.
 
-  Tear a verification release down with `KUBE_CONTEXT=<ctx> ./scripts/install.sh
-  --uninstall --hard-clean --non-interactive` (also deletes its PVCs). That
+  Tear a verification release down with `KUBE_CONTEXT=<ctx> ./scripts/install.py
+  uninstall --hard-clean --non-interactive` (also deletes its PVCs). That
   command is destructive enough against shared remote infra that it's worth
   running deliberately rather than as a matter of course.
 
@@ -260,8 +379,9 @@ node image is the safest choice.
 The chart is now in this same repo at `charts/mlrun-ce` (it used to be a separate clone
 reached via an absolute `--chart-path`; the installer was merged into the chart repo).
 It has `Chart.yaml`, and its dependency subcharts are fetched into
-`charts/mlrun-ce/charts/` by `helm dependency update`, which `resolve_chart_source` runs
-automatically in local-path mode.
+`charts/mlrun-ce/charts/` by `resolve_chart_source`, which runs automatically in
+local-path mode — `helm dependency build` when `requirements.lock` is present, and nothing
+at all when `charts/` already satisfies the lock.
 
 The installer only ever **reads** the chart — it never writes to `charts/`. Chart changes
 follow the repo-root `AGENTS.md`/`CONTRIBUTING.md` (values.yaml conventions,
@@ -271,5 +391,5 @@ Re-run the live dry-run test from the repo root:
 
 ```
 REGISTRY_USERNAME=x REGISTRY_PASSWORD=y REGISTRY_EMAIL=z@z.com \
-  ./scripts/install.sh --chart-path ./charts/mlrun-ce --dry-run --non-interactive
+  ./scripts/install.py --chart-path ./charts/mlrun-ce --dry-run --non-interactive
 ```

@@ -3,8 +3,8 @@
 Interactive installer for the MLRun CE Helm chart on a local or CI Kubernetes cluster.
 
 By default it installs the **published** chart from `https://mlrun.github.io/ce`, so the
-`curl | bash` one-liner below works with no repo checked out. To install this repo's own
-chart instead — the working tree, on whatever branch you have checked out — pass
+one-liner below works with no repo checked out. To install this repo's own chart instead —
+the working tree, on whatever branch you have checked out — pass
 `--chart-path ./charts/mlrun-ce`. See [Install this repo's chart](#install-this-repos-chart).
 
 **More docs:** [Parameters reference](docs/parameters.md) (all flags/env vars) ·
@@ -15,12 +15,18 @@ OpenTelemetry, precedence) · [FAQ](docs/faq.md) (known gotchas)
 
 ## Requirements
 
-| Tool      | Notes                                               |
-|-----------|-----------------------------------------------------|
-| `helm`    | [install](https://helm.sh/docs/intro/install/) |
-| `kubectl` | Configured and pointing at your cluster             |
-| `docker`  | Daemon running and accessible by your user          |
-| `yq`      | Only required when using `--config`/`CONFIG_FILE` — [install](https://github.com/mikefarah/yq/releases) (pin a version, verify its checksum) |
+Three tools, and `uv` supplies the Python:
+
+| Tool | Notes |
+|---|---|
+| `uv` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` — brings its own Python interpreter and resolves the installer's dependencies itself, so there is nothing to `pip install` and no virtualenv to manage |
+| `helm` | [install](https://helm.sh/docs/intro/install/) |
+| `kubectl` | Configured and pointing at your cluster |
+
+`docker` is **not** required. The image pull secret is created by `kubectl create secret
+docker-registry`, never by Docker; the only thing a Docker daemon adds is a best-effort
+`docker login` in the pre-install validators, which reports `skipped` without it. That is
+also what lets the installer run from inside a pod, where there is no daemon at all.
 
 ---
 
@@ -33,10 +39,14 @@ Pin to a release tag. Pick one from [the releases page](https://github.com/mlrun
 
 ```bash
 CE_TAG=mlrun-ce-0.12.0-rc.12
-curl -sSL https://raw.githubusercontent.com/mlrun/ce/${CE_TAG}/scripts/install.sh | bash
+uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
+  mlrun-ce-installer install
 ```
 
-Substituting `development` for the tag always gets the newest script, but it moves with
+`uvx` fetches the installer, resolves its dependencies into a throwaway environment and
+runs it, leaving nothing behind on your system Python.
+
+Substituting `development` for the tag always gets the newest installer, but it moves with
 every merge, so two runs a day apart can differ. Prefer a tag anywhere reproducibility
 matters, CI especially.
 
@@ -44,25 +54,32 @@ matters, CI especially.
 
 ```bash
 CE_TAG=mlrun-ce-0.12.0-rc.12
-curl -sSL https://raw.githubusercontent.com/mlrun/ce/${CE_TAG}/scripts/install.sh \
-  -o /usr/local/bin/mlrun-ce-installer && chmod +x /usr/local/bin/mlrun-ce-installer
+uv tool install "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts"
 mlrun-ce-installer version
 ```
+
+`uv tool upgrade mlrun-ce-installer` moves it forward; `uv tool uninstall
+mlrun-ce-installer` removes it.
 
 ### From a clone of this repo
 
 ```bash
-./scripts/install.sh
+./scripts/install.py
 ```
 
 Still installs the published chart. Add `--chart-path ./charts/mlrun-ce` to install the
 chart from your working tree instead.
 
+The `#!/usr/bin/env -S uv run --script` shebang means `./scripts/install.py` is enough —
+you do not need to say `uv run`. Running it as `python3 scripts/install.py` also works: if
+the dependencies are missing it re-executes itself under uv rather than failing on an
+import.
+
 To get the `mlrun-ce-installer` command while working on a clone, symlink it onto your
 PATH:
 
 ```bash
-make installer-link                                   # links into ~/.local/bin
+make installer-link                                    # links into ~/.local/bin
 make installer-link INSTALLER_BIN_DIR=/usr/local/bin   # or somewhere else on PATH
 ```
 
@@ -98,9 +115,10 @@ The installer has no version of its own. It ships with the chart and is released
 same tag, so `mlrun-ce-installer version` reads the version straight out of
 `charts/mlrun-ce/Chart.yaml` beside it — bumping the chart bumps the installer, with no
 second copy to keep in step. Symlinks are resolved first, so a link onto your PATH still
-finds the chart in the checkout it points at. Run standalone (`curl | bash`, or copied to
-a bin directory) there is no chart to read and nothing recording where the script came
-from, so it reports `unknown`; that's what pinning to a release tag answers.
+finds the chart in the checkout it points at. Run standalone (via `uvx`, `uv tool
+install`, or copied to a bin directory) there is no chart to read and nothing recording
+where the installer came from, so it reports `unknown`; that's what pinning to a release
+tag answers.
 
 They're coupled on purpose. The installer encodes chart internals — the chart's fixed
 NodePorts, and the `--set` value paths it writes — so an installer and a chart from the
@@ -129,7 +147,7 @@ Run the script with no flags. You will be prompted for:
 3. Docker registry URL for images
 
 ```bash
-./scripts/install.sh
+./scripts/install.py
 ```
 
 ### Non-interactive / CI install
@@ -145,7 +163,7 @@ export REGISTRY_EMAIL=me@example.com
 export REGISTRY_URL=index.docker.io/myuser
 export EXTERNAL_HOST_ADDRESS=localhost   # or minikube ip
 
-./scripts/install.sh
+./scripts/install.py
 ```
 
 ### Install this repo's chart
@@ -153,19 +171,24 @@ export EXTERNAL_HOST_ADDRESS=localhost   # or minikube ip
 The installer ships alongside the chart it installs, but does **not** install it by
 default — pass `--chart-path ./charts/mlrun-ce` to install the chart from your working
 tree instead of the published release. This is how you test a branch or PR: check it out
-here, then point the installer at the chart directory. The installer runs
-`helm dependency update` on the path before installing; no git operations happen inside
-the script.
+here, then point the installer at the chart directory. No git operations happen inside
+the installer.
+
+Chart dependencies are resolved first. `install.py` prefers `helm dependency build`, which
+honours `requirements.lock` rather than re-resolving `requirements.yaml`, and skips the
+fetch entirely when `charts/` already holds every tarball the lock names — so a second run,
+or a run on an air-gapped host, does not need the upstream Helm repos. Pass
+`--skip-dependency-update` to suppress the fetch unconditionally.
 
 ```bash
 # 1. Check out the branch/PR you want to test
 git checkout my-branch
 
 # 2. Dry-run first to validate without deploying
-./scripts/install.sh --chart-path ./charts/mlrun-ce --dry-run
+./scripts/install.py --chart-path ./charts/mlrun-ce --dry-run
 
 # 3. Install for real
-./scripts/install.sh --chart-path ./charts/mlrun-ce
+./scripts/install.py --chart-path ./charts/mlrun-ce
 ```
 
 `--ce-version` is ignored in local-path mode — the chart version comes from
@@ -177,7 +200,7 @@ optionally add `--ce-version`) to go back to installing a published release.
 Renders the Helm chart and validates it against the cluster API server without creating any resources. Useful to confirm a configuration is valid before a real install.
 
 ```bash
-./scripts/install.sh --dry-run
+./scripts/install.py --dry-run
 ```
 
 Pre-install validators still run in `--dry-run` — see [Configuration](docs/configuration.md#pre-install-validators).
@@ -185,7 +208,7 @@ Pre-install validators still run in `--dry-run` — see [Configuration](docs/con
 ### Uninstall
 
 ```bash
-./scripts/install.sh --uninstall
+./scripts/install.py --uninstall
 ```
 
 This runs `helm uninstall` with a timeout controlled by `HELM_TIMEOUT` (default `960s`). The namespace and CRDs are **not** deleted. For deleting persistent data too, see the [FAQ](docs/faq.md#deleting-everything-including-the-namespace).

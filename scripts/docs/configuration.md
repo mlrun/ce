@@ -1,6 +1,6 @@
 # Configuration
 
-How to drive `install.sh` beyond the interactive defaults: the `ce-config.yaml` file,
+How to drive `install.py` beyond the interactive defaults: the `ce-config.yaml` file,
 values files, precedence between all the input sources, and the flows that configure
 ingress, a local registry, disabled components, and OpenTelemetry.
 
@@ -23,7 +23,7 @@ field for this run:
 
 ```bash
 cp scripts/ce-config.yaml.example ce-config.yaml   # edit with your registry/chart-source values
-./scripts/install.sh --config ce-config.yaml
+./scripts/install.py --config ce-config.yaml
 # e.g. "Docker registry password [from a value you can't put in the file]: " still prompts,
 # but "Docker registry URL for images [index.docker.io/myuser]: " now shows the file's value —
 # just press Enter to accept it.
@@ -33,7 +33,7 @@ For CI, add `--non-interactive` (or `CI=true`) so any field missing from *both* 
 and a flag/env fails fast with exit 1 instead of hanging on a prompt:
 
 ```bash
-CI=true ./scripts/install.sh --config ce-config.yaml
+CI=true ./scripts/install.py --config ce-config.yaml
 ```
 
 ## Install from a values file
@@ -41,16 +41,16 @@ CI=true ./scripts/install.sh --config ce-config.yaml
 Skips secret creation and all prompts:
 
 ```bash
-./scripts/install.sh -f my-values.yaml
+./scripts/install.py -f my-values.yaml
 ```
 
 ## Install with a remote kubeconfig context
 
 ```bash
-KUBE_CONTEXT=my-remote-cluster ./scripts/install.sh
+KUBE_CONTEXT=my-remote-cluster ./scripts/install.py
 ```
 
-`install.sh` itself never SSHes anywhere — it still only runs `kubectl`/`helm` against
+`install.py` itself never SSHes anywhere — it still only runs `kubectl`/`helm` against
 whatever cluster `KUBE_CONTEXT` (or the ambient current-context) points at. To reach a
 cluster that's only accessible over SSH (e.g. a lab VM), open a local port-forward
 tunnel yourself first, then add a context whose `server:` points at `localhost:<port>`:
@@ -63,7 +63,7 @@ kubectl config set-credentials my-remote-cluster --client-certificate=<client.cr
   --client-key=<client.key> --embed-certs=true
 kubectl config set-context my-remote-cluster --cluster=my-remote-cluster --user=my-remote-cluster
 
-KUBE_CONTEXT=my-remote-cluster ./scripts/install.sh --dry-run --non-interactive
+KUBE_CONTEXT=my-remote-cluster ./scripts/install.py --dry-run --non-interactive
 ```
 
 This works cleanly when the remote cluster's serving cert already lists `localhost`/
@@ -72,7 +72,7 @@ This works cleanly when the remote cluster's serving cert already lists `localho
 heuristics (which only make sense for the *ambient* local environment) and falls back to
 the target cluster's node IP — set `EXTERNAL_HOST_ADDRESS`/`installer.externalHostAddress`
 explicitly if that node IP isn't actually reachable from where you're running
-`install.sh` (e.g. still behind the SSH tunnel). See [faq.md](faq.md) for the full
+`install.py` (e.g. still behind the SSH tunnel). See [faq.md](faq.md) for the full
 autodetect fallback chain.
 
 ## Install with live progress UI
@@ -80,19 +80,19 @@ autodetect fallback chain.
 Shows a refreshing table of deployments and statefulsets while Helm runs:
 
 ```bash
-./scripts/install.sh --show-progress
+./scripts/install.py --show-progress
 ```
 
 ## Pin the chart version
 
 ```bash
-./scripts/install.sh --ce-version 0.11.0
+./scripts/install.py --ce-version 0.11.0
 ```
 
 ## Install with optional components disabled
 
 ```bash
-./scripts/install.sh \
+./scripts/install.py \
   --disable-system-monitoring \
   --disable-spark \
   --disable-mpi \
@@ -103,15 +103,15 @@ Shows a refreshing table of deployments and statefulsets while Helm runs:
 
 ```bash
 # Basic metrics pipeline (operator + collector), no auto-instrumentation
-./scripts/install.sh --enable-otel collector
+./scripts/install.py --enable-otel collector
 
 # Everything, including namespace-wide auto-instrumentation
-./scripts/install.sh --enable-otel full
+./scripts/install.py --enable-otel full
 # same as:
-./scripts/install.sh --enable-otel
+./scripts/install.py --enable-otel
 
 # Or pick individual knobs directly
-./scripts/install.sh --enable-otel-operator --enable-otel-collector
+./scripts/install.py --enable-otel-operator --enable-otel-collector
 ```
 
 `--enable-otel-namespace-label` has a namespace-wide blast radius (it auto-instruments
@@ -129,10 +129,10 @@ proceeds — the Ingress resources are created either way, they just won't resol
 controller providing that class exists.
 
 ```bash
-./scripts/install.sh --enable-ingress
+./scripts/install.py --enable-ingress
 
 # Use a custom ingress class name (must match a controller already in the cluster)
-./scripts/install.sh --enable-ingress myclass
+./scripts/install.py --enable-ingress myclass
 ```
 
 ## Install with local registry
@@ -144,7 +144,7 @@ Without `--enable-ingress`, the registry is reachable only in-cluster via its Ku
 service DNS name (`local-registry.<namespace>.svc.cluster.local:5000`):
 
 ```bash
-./scripts/install.sh --local-registry
+./scripts/install.py --local-registry
 ```
 
 ## Install with ingress + local registry
@@ -156,7 +156,7 @@ makes the registry reachable from the same hostname both inside pods and from yo
 terminal.
 
 ```bash
-./scripts/install.sh --enable-ingress --local-registry
+./scripts/install.py --enable-ingress --local-registry
 ```
 
 Docker Desktop TLS/hosts-file setup for this combo is covered in [faq.md](faq.md).
@@ -183,7 +183,7 @@ running, so you see every problem in one pass. Skip the whole dispatcher with
 `--skip-validators` / `SKIP_VALIDATORS=true` if you need to proceed anyway:
 
 ```bash
-./scripts/install.sh --skip-validators
+./scripts/install.py --skip-validators
 ```
 
 ### Version floors
@@ -201,7 +201,7 @@ Both are overridable, which is mainly useful for tightening rather than loosenin
 `MIN_HELM_VERSION` to hard-require a newer Helm:
 
 ```bash
-MIN_K8S_VERSION=1.34 MIN_HELM_VERSION=4.1 ./scripts/install.sh --chart-path ./charts/mlrun-ce --dry-run
+MIN_K8S_VERSION=1.34 MIN_HELM_VERSION=4.1 ./scripts/install.py --chart-path ./charts/mlrun-ce --dry-run
 ```
 
 `MIN_K8S_VERSION` only ever warns; it never blocks the install. Only `MIN_HELM_VERSION` is
@@ -320,7 +320,7 @@ just chart `--set`s plus a warning check — it doesn't install an ingress contr
 logic needed.
 
 Used alone (no `--config`), `-f` keeps its original, fully self-contained behavior: you
-supply `global.registry.*`, image tags, everything yourself, `install.sh` sets nothing on
+supply `global.registry.*`, image tags, everything yourself, `install.py` sets nothing on
 top, and it skips creating the registry secret entirely (the secret named in your values
 file must already exist). Add `--config` and that changes: secret creation and registry/
 host resolution run exactly as they do in `--config`-only mode, using the config file's
@@ -338,15 +338,13 @@ versions, components, otel), a flag, env var, or `ce-config.yaml` value always o
 the same key in a `-f` file or the chart's own default — because it's applied as `--set`,
 and helm applies `--set` after `--values`. For anything **outside** that curated schema
 (arbitrary chart values — resource limits, replica counts, etc.), `-f` is authoritative;
-nothing in `install.sh` touches those keys.
+nothing in `install.py` touches those keys.
 
-Requires `yq` — but only when `--config`/`CONFIG_FILE` is actually used; installs that
-don't use a config file have no new dependency.
 
 ```bash
-./scripts/install.sh --config scripts/ce-config.yaml.example --dry-run
+./scripts/install.py --config scripts/ce-config.yaml.example --dry-run
 
 # Combined with a values file — config's registry/chart-source/component fields still
 # resolve as --set, layered on top of my-values.yaml:
-./scripts/install.sh --config scripts/ce-config.yaml.example -f my-values.yaml --dry-run
+./scripts/install.py --config scripts/ce-config.yaml.example -f my-values.yaml --dry-run
 ```

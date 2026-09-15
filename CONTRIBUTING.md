@@ -6,14 +6,22 @@
 |---|---|---|
 | helm | 3.6 | Chart rendering, linting, install |
 | kubectl | 1.24 | Cluster interaction |
-| bats-core | 1.5 | Only for `make installer-test` (the `scripts/install.sh` unit tests) |
-| shellcheck | any | Only for `make installer-lint` |
+| uv | 0.4 | Runs `scripts/install.py`, and `make installer-lint-python` / `installer-format` via `uvx ruff` |
+| bats-core | 1.5 | Only for `make installer-test-bash` (the legacy `scripts/install.sh` unit tests) |
+| shellcheck | any | Only for `make installer-lint-bash` |
 
 For Kubernetes storage class setup and cluster prerequisites, see [charts/mlrun-ce/README.md](charts/mlrun-ce/README.md#prerequisites).
 
-`scripts/install.sh` enforces the same helm 3.6 floor at install time and imposes no
+`scripts/install.py` enforces the same helm 3.6 floor at install time and imposes no
 Kubernetes floor, so a cluster you can develop against is one you can install against — see
 [scripts/docs/configuration.md](scripts/docs/configuration.md#version-floors).
+
+The installer is mid-port from bash to Python. `scripts/install.py` plus the
+`scripts/ce_installer/` package is the one that ships; `scripts/install.sh` is kept only as
+the reference the differential tests check against, and is deleted at cutover. Make changes
+in the Python one and keep `make installer-test` green — it runs both over the same
+invocations and fails if their helm/kubectl calls diverge. See
+[scripts/AGENTS.md](scripts/AGENTS.md).
 
 ## First-Time Setup
 
