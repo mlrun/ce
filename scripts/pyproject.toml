@@ -9,12 +9,13 @@
 # A clone does not go through this file at all — scripts/install.py carries its own PEP 723
 # metadata and `uv run --script` ignores the surrounding project.
 #
-# The version is not the chart version and is not bumped per release: `install.py version`
-# reads charts/mlrun-ce/Chart.yaml so there is only ever one number to maintain.
+# The version is never set here. charts/mlrun-ce/Chart.yaml is the only number, and
+# hatch_build.py reads it at build time — see that file for why an installed copy needs it
+# baked in rather than read from a checkout it does not have.
 
 [project]
 name = "mlrun-ce-installer"
-version = "0.0.0"
+dynamic = ["version"]
 description = "Interactive installer for the MLRun Community Edition Helm chart"
 requires-python = ">=3.9"
 dependencies = [
@@ -34,8 +35,13 @@ mlrun-ce-installer = "ce_installer.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Both hooks live in hatch_build.py, which hatchling picks up by name.
+[tool.hatch.metadata.hooks.custom]
+
 [tool.hatch.build.targets.wheel]
 packages = ["ce_installer"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
 
 [tool.ruff]
 line-length = 100
@@ -72,6 +78,12 @@ ignore = [
 # _bootstrap() has to probe for its own dependencies before importing them, and run on a
 # stdlib-only interpreter while doing it.
 "install.py" = ["PLC0415"]
+
+[tool.ruff.lint.isort]
+# The tests import ce_installer from scripts/ via a sys.path insert, so ruff cannot infer
+# that it is ours and sorts it in with typer and rich. Saying so keeps the import block in
+# tests/installer grouped the same way it is inside the package itself.
+known-first-party = ["ce_installer"]
 
 [tool.ruff.lint.pylint]
 # install() is one long flag-to-Settings mapping; splitting it would only move the

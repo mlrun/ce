@@ -112,13 +112,16 @@ Colored output is suppressed automatically when stdout isn't a terminal, and whe
 ## Versioning and releases
 
 The installer has no version of its own. It ships with the chart and is released by the
-same tag, so `mlrun-ce-installer version` reads the version straight out of
-`charts/mlrun-ce/Chart.yaml` beside it — bumping the chart bumps the installer, with no
-second copy to keep in step. Symlinks are resolved first, so a link onto your PATH still
-finds the chart in the checkout it points at. Run standalone (via `uvx`, `uv tool
-install`, or copied to a bin directory) there is no chart to read and nothing recording
-where the installer came from, so it reports `unknown`; that's what pinning to a release
-tag answers.
+same tag, so `mlrun-ce-installer version` reports the version from
+`charts/mlrun-ce/Chart.yaml` — bumping the chart bumps the installer, with no second copy
+to keep in step.
+
+That works however you run it. From a clone the version is read from the chart directly,
+and symlinks are resolved first, so `make installer-link` still finds the chart in the
+checkout it points at. Installed via `uvx` or `uv tool install` there is no chart on disk,
+so the version is baked into the package when it is built from the tag. Only a copy that
+is neither — the file moved to a bin directory by hand, say — reports `unknown`, because
+nothing then records where it came from; that's what pinning to a release tag answers.
 
 They're coupled on purpose. The installer encodes chart internals — the chart's fixed
 NodePorts, and the `--set` value paths it writes — so an installer and a chart from the
@@ -128,8 +131,8 @@ quietly does nothing.
 
 Releasing follows from that. A push to `development` or a `X.Y.x` branch runs
 chart-releaser, which tags `mlrun-ce-<chart version>` and cuts a GitHub Release; that
-tag's tree contains this script, which is what the pinned `raw.githubusercontent.com`
-URLs above resolve against. So shipping an installer change is just merging it with a
+tag's tree contains `scripts/`, which is what the pinned `uvx --from "git+…@<tag>"`
+invocations above resolve against. So shipping an installer change is just merging it with a
 chart version bump — there's no separate installer release to cut. Note the chart
 tarball published to the Helm repo packages `charts/mlrun-ce` only, so the installer is
 available from the git tag rather than from inside the `.tgz`.

@@ -28,6 +28,7 @@ from .settings import Settings
 class Result:
     code: int
     out: str
+    err: str = ""
 
     @property
     def ok(self) -> bool:
@@ -40,18 +41,26 @@ def run(
     input_data: Optional[str] = None,
     check: bool = False,
 ) -> Result:
-    """Run a command, capturing stdout and stderr together.
+    """Run a command, capturing stdout and stderr separately.
 
     Never raises on a non-zero exit unless `check` is set. Call sites mirror the bash
     original's explicit `|| true` / `if ! cmd` style rather than exception flow, which is
     what keeps the warning-vs-blocking distinction in the validators readable.
+
+    The two streams are kept apart because `out` is parsed, not just displayed: kubectl and
+    helm write deprecation and kubeconfig warnings to stderr on otherwise successful calls,
+    and folding those into stdout corrupts whatever reads it. The sharpest case is
+    `deploy_local_registry`, which pipes rendered YAML from one kubectl into the stdin of
+    the next — a single warning line would be applied to the cluster as part of the
+    manifest. The version validators are the subtler one: `parse_major_minor` takes the
+    first `vN.N` anywhere in the string, and a warning naming a Kubernetes version would be
+    read as the cluster's own.
     """
     try:
         proc = subprocess.run(
             list(cmd),
             input=input_data,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            capture_output=True,
             text=True,
         )
     except FileNotFoundError:
@@ -59,10 +68,13 @@ def run(
             raise die(f"Command not found: {cmd[0]}") from None
         return Result(127, "")
 
-    result = Result(proc.returncode, proc.stdout or "")
+    result = Result(proc.returncode, proc.stdout or "", proc.stderr or "")
     if check and not result.ok:
-        if result.out:
-            err.print(result.out.rstrip("\n"))
+        # Diagnostics land on stderr, but fall back to stdout for tools that report
+        # failures there rather than lose the only explanation the user would get.
+        detail = result.err.strip() or result.out.strip()
+        if detail:
+            err.print(detail)
         raise die("Command failed: {}".format(" ".join(cmd)), result.code)
     return result
 

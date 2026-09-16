@@ -25,8 +25,15 @@ HELM_LINT_DEFAULT_BRANCH ?= development
 help: ## Display available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
+# Not a test suite despite the name, and not hermetic: tests/run.sh runs a real
+# `helm install --wait --timeout 960s` into whatever cluster kubectl currently points at,
+# with no assertions and no teardown. It was written as the body of ci.yaml's `test:` job,
+# which ran it inside a throwaway kind cluster — that job is commented out ("takes too long
+# to pull images"), so the only thing left that can reach this is a developer's laptop.
+# ROADMAP items A1/A2 reclaim the name and split the deploy into `make integration-test`.
+# Use `make installer-test` for the installer suites; they touch no cluster.
 .PHONY: tests
-tests: ## Run tests
+tests: ## Deploy CE to the current cluster (real install, not a test suite — see comment)
 	@./tests/run.sh
 
 .PHONY: package
@@ -35,41 +42,55 @@ package: ## Package the application
 
 # --- Installer -----------------------------------------------------------------------
 #
-# The installer is being ported from bash (scripts/install.sh) to uv + Python
-# (scripts/install.py plus the scripts/ce_installer package). Both ship during the
-# overlap and both are covered here; see scripts/AGENTS.md for the cutover plan.
+# scripts/install.py plus the scripts/ce_installer package beside it. Every target here
+# shells out to uv, which manages its own interpreter and dependencies — there is nothing
+# to pip install first, and no virtualenv to activate.
 #
-# The Python targets shell out to uv, which manages its own interpreter and dependencies —
-# there is nothing to pip install first.
+# --isolated is load-bearing. Without it, an activated conda base or virtualenv in the
+# developer's shell satisfies the --with requirements and uv uses it as-is, so the suite
+# silently runs on that interpreter and those package versions instead of a resolved set.
+# That is invisible locally and does not match CI. The pinned version is the floor declared
+# in scripts/pyproject.toml, so 3.9 support is exercised rather than merely asserted by
+# ruff's target-version; override to check another:
+#
+#   make installer-test INSTALLER_PYTHON=3.13
+#
+# The dependencies come from scripts/pyproject.toml via --with-editable rather than a list
+# of --with flags, so there is one declared set instead of two that drift. They did drift:
+# the flags omitted click, which cli.py imports directly, and that went unnoticed only
+# because older typer pulled click in transitively — on a newer typer the suite could not
+# import the module under test.
+INSTALLER_PYTHON ?= 3.9
+# hatchling is the build backend, pulled in because the suite covers scripts/hatch_build.py
+# — the hook that carries the chart version into an installed copy.
+INSTALLER_PYTEST = uv run --isolated --python $(INSTALLER_PYTHON) --quiet \
+	--with pytest --with hatchling --with-editable ./scripts pytest
 
 .PHONY: installer-test
-installer-test: installer-test-python installer-test-bash installer-test-diff ## Run every installer test suite
+installer-test: installer-test-unit installer-test-golden ## Run every installer test suite
 
-# One named test per entry in scripts/AGENTS.md's "Fixed bugs", plus the output formatting
-# the differential suite cannot see — it compares the calls two implementations make, not
-# what they print, so the access-URL table shipped broken through 28 green matrix cases.
-.PHONY: installer-test-python
-installer-test-python: ## Run the ce_installer regression tests
-	@uv run --quiet --with pytest --with rich --with typer --with pyyaml \
-		pytest tests/installer -q
+# Patch the helm/kubectl wrappers and check one function at a time: flag parsing, config
+# precedence, validators, and one named test per entry in scripts/AGENTS.md's "Fixed bugs".
+.PHONY: installer-test-unit
+installer-test-unit: ## Run the ce_installer unit and regression tests
+	@$(INSTALLER_PYTEST) tests/installer -q --ignore=tests/installer/test_golden_argv.py
 
-.PHONY: installer-test-bash
-installer-test-bash: ## Run the scripts/install.sh unit tests (requires bats-core)
-	@bats tests/install_tests.bats
+# Runs the whole installer as a subprocess against stub binaries and compares the
+# helm/kubectl calls it makes to tests/installer/golden/. Catches what the unit tests
+# cannot: a flag that parses but never reaches helm, or a step that runs out of order.
+# Never touches a cluster.
+.PHONY: installer-test-golden
+installer-test-golden: ## Check the installer still makes the recorded helm/kubectl calls
+	@$(INSTALLER_PYTEST) tests/installer/test_golden_argv.py -q
 
-# Runs both installers over the same invocations with stubs standing in for
-# helm/kubectl/docker, and fails if their recorded calls differ. Never touches a cluster.
-.PHONY: installer-test-diff
-installer-test-diff: ## Diff install.sh against install.py over the flag matrix
-	@bash tests/installer/matrix.sh
+.PHONY: installer-test-golden-update
+installer-test-golden-update: ## Re-record the expectations after an intended change
+	@UPDATE_GOLDEN=1 $(INSTALLER_PYTEST) tests/installer/test_golden_argv.py -q
+	@echo "re-recorded — review 'git diff tests/installer/golden/' before committing:"
+	@echo "every changed line is a change in what the installer does to a cluster."
 
 .PHONY: installer-lint
-installer-lint: installer-lint-bash installer-lint-python ## Lint both installers
-
-.PHONY: installer-lint-bash
-installer-lint-bash: ## Syntax-check and shellcheck scripts/install.sh
-	@bash -n scripts/install.sh
-	@shellcheck scripts/install.sh
+installer-lint: installer-lint-python ## Lint the installer
 
 # tests/installer lives outside scripts/, so it needs the package's ruff config passed
 # explicitly — at the repo root ruff would fall back to its defaults and disagree.
@@ -90,9 +111,6 @@ installer-format: ## Reformat the Python installer and its tests in place
 # Symlink rather than copy, so the command tracks the working tree and can still find the
 # chart next to it (a copy has no chart, and reports its version as unknown).
 INSTALLER_BIN_DIR ?= $(HOME)/.local/bin
-
-# Which implementation `make installer-link` puts on PATH. Flip to install.sh to go back to
-# the bash one without unlinking first.
 INSTALLER_ENTRYPOINT ?= scripts/install.py
 
 .PHONY: installer-link

@@ -12,28 +12,29 @@ places.
 For chart-side conventions (values.yaml layout, `requirements.lock`, adding components) see
 the repo-root `AGENTS.md`/`CONTRIBUTING.md`. This file covers the installer only.
 
-## The port: install.py ships, install.sh is the oracle
+## The port from bash, and what survives it
 
-`install.py` + the `ce_installer/` package is **the** installer. `install.sh` (single-file
-bash, ~1545 lines) is not a supported alternative and is not released alongside it — it
-stays in the tree only for as long as the port needs something to be checked against, and
-is deleted at cutover. User-facing docs describe `install.py` only; don't reintroduce the
-bash one as an option.
+`install.py` + the `ce_installer/` package is **the** installer. It replaced `install.sh`
+(single-file bash, ~1545 lines), which was never released alongside it: the bash script
+stayed in the tree only while the port needed something to be checked against, and was
+deleted once that role ended.
 
-So: extend `install.py`. Touch `install.sh` only to keep the differential harness honest.
+**The contract is the argv log, not the source.** While both existed,
+`tests/installer/matrix.sh` ran them over 32 invocations with recording stubs standing in
+for helm/kubectl/docker and failed if the calls or exit codes differed. At cutover all 32
+were identical, and that log was frozen into `tests/installer/golden/` as the expectation
+for `install.py` alone. So the guard did not disappear with the oracle — it changed from
+"these two agree" to "this one still does what it did on the day they agreed", which is the
+same property with one fewer moving part.
 
-**The contract is the argv log, not the source.** `tests/installer/matrix.sh` runs both over
-~28 invocations with recording stubs standing in for helm/kubectl/docker and fails if the
-calls or exit codes differ. A change to `install.py` that is supposed to preserve behaviour
-must keep that green; a change that is supposed to *alter* behaviour has to change
-`install.sh` too, or drop the case from the matrix with a note saying why. Once `install.sh`
-is deleted the harness loses its oracle, so the cases worth keeping have to be converted to
-assertions against recorded expectations before that happens.
+Practically: if `make installer-test-golden` fails, you changed what the installer does to a
+cluster. Re-record only after reading the diff (`make installer-test-golden-update`).
 
 ### Deliberate divergences from the bash behaviour
 
-Three, recorded here because the matrix would otherwise be expected to catch them, and
-because each is a behaviour change users can observe:
+Five, recorded here because each is a behaviour change users can observe, and because the
+golden expectations bake them in — a reader comparing against the old bash script would
+otherwise read them as regressions:
 
 1. **`docker` is not a prerequisite.** `check_requirements` no longer gates on
    `docker info`; `validate_registry_auth` reports `skipped (docker not available)`. The
@@ -50,6 +51,20 @@ because each is a behaviour change users can observe:
    `strimzi-kafka-operator` ships as `strimzi-kafka-operator-helm-3-chart-<v>.tgz` — so the
    match is a name prefix plus a version suffix, not an exact filename.
 3. **No `yq`.** `--config` is parsed with pyyaml.
+4. **A malformed config file is now fatal.** bash ran `yq eval … 2>/dev/null || true`, so a
+   YAML syntax error read as an empty value for *every* field and the install continued on
+   built-in defaults — the user got a working-looking run that silently ignored their
+   config. The port raises `Could not parse config file`. Related: bash could not tell YAML
+   null from the string `null` and blanked both, so `url: "null"` came through empty there
+   and stays `"null"` here.
+5. **stderr is no longer folded into stdout.** `shell.run` captures the two separately.
+   Merging them was the bash behaviour only by accident (`2>/dev/null` discarded stderr
+   outright), and it actively broke things once output started being parsed rather than
+   just displayed: `deploy_local_registry` pipes rendered YAML from one kubectl into the
+   stdin of the next, where a single kubectl warning line would have been applied to the
+   cluster as part of the manifest, and `parse_major_minor` takes the first `vN.N` anywhere
+   in its input, so a deprecation warning naming a Kubernetes version would be read as the
+   cluster's own. Found while porting the validator tests.
 
 One bug the port fixes for free: `curl -sSL … | bash` makes the script itself bash's stdin,
 so `read -r -p` consumes script text instead of the user's answer and the interactive
@@ -96,7 +111,7 @@ One click trap worth knowing: with `standalone_mode=False`, `command.main()` **r
 `typer.Exit`'s code instead of raising it. `main()` has to honour the return value or every
 failure raised inside the command silently exits 0.
 
-## Install flow (`execute()` in `cli.py`; `main()` in install.sh ~1319-1378)
+## Install flow (`execute()` in `cli.py`)
 
 0. `parse_command` — pulls an optional leading verb (`install`/`uninstall`/`version`/`help`)
    off the front, leaving the rest in `COMMAND_ARGS`. Kept out of `parse_args` so that stays
@@ -128,14 +143,11 @@ IngressClass exists.
 
 ## Versioning and releases
 
-`installer_version()` (printed by the `version` command) reads `version:` out of
-`charts/mlrun-ce/Chart.yaml` next to the script, so bumping the chart bumps the installer
-and there's no second copy to carry forward. It walks symlinks to the real file first —
-`make installer-link` puts the command on PATH as a link into the checkout, and the link's
-own directory has no chart in it. Running standalone — `curl | bash`, or copied
-to a bin directory — there's no chart to read and nothing in the script recording its
-origin, so it reports `unknown` rather than inventing a number; that's the case pinning by
-release tag exists to answer.
+`installer_version()` (printed by the `version` command) resolves to the chart's version, so
+bumping the chart bumps the installer and there's no second copy to carry forward. It
+reaches that number two ways depending on whether a chart is on disk beside it — see
+[Where the version comes from](#where-the-version-comes-from) below for the resolution
+order and the build hook that covers the installed case.
 
 They're coupled because the installer encodes chart internals: `REQUIRED_NODEPORTS` is the
 chart's fixed NodePort list, and `helm_install` writes chart-specific `--set` paths
@@ -152,10 +164,77 @@ bump. The published chart tarball packages `charts/mlrun-ce` only, so the instal
 via the git tag, not the `.tgz`.
 
 `scripts/pyproject.toml` exists purely to make that `uvx --from git+…` form work — it
-declares the `mlrun-ce-installer` console script. Its `version` is a placeholder and is
-**not** bumped per release; `installer_version()` reads the chart, so there is only ever one
-number to maintain. A clone never goes through it at all: `install.py` carries its own
-PEP 723 metadata and `uv run --script` ignores the surrounding project.
+declares the `mlrun-ce-installer` console script. A clone never goes through it at all:
+`install.py` carries its own PEP 723 metadata and `uv run --script` ignores the surrounding
+project.
+
+### Where the version comes from
+
+`charts/mlrun-ce/Chart.yaml` is the only version number in the repo, and nothing here is
+bumped per release. It reaches `install.py version` two ways, tried in that order:
+
+1. **The chart in the surrounding checkout.** Authoritative and always current — edit
+   `Chart.yaml` and the next run reports the new value with nothing to rebuild.
+2. **A value baked into the wheel at build time** by `scripts/hatch_build.py`, for an
+   installed copy with no checkout around it.
+
+The second exists because the wheel packages `ce_installer` only, so an installed copy has
+no chart to read and used to report `unknown` — including for the pinned `uvx --from git+…`
+form the README recommends to users without a clone. Hardcoding a version in
+`pyproject.toml` would have fixed that by introducing exactly the second number the
+chart-reading was meant to avoid, so `hatch_build.py` reads `../charts/mlrun-ce/Chart.yaml`
+at build time instead; uv clones the whole repo before building the `scripts/` subdirectory,
+so the chart is there to read. Two hooks off that one source:
+
+- a metadata hook sets the **distribution** version, converted to PEP 440 — Helm's
+  `0.12.0-rc.12` is not a legal Python version and becomes `0.12.0rc12`
+- a build hook writes `ce_installer/_chart_version.py` holding the **literal** chart string,
+  which is what gets displayed, then deletes it in `finalize()` so a build never leaves the
+  checkout dirty
+
+Building with no chart in reach (an sdist of `scripts/` alone) degrades to the old
+behaviour — distribution `0.0.0`, `version` reports `unknown` — rather than failing. A
+version string the translation does not recognise falls back the same way, deliberately: a
+wrong version silently misidentifies what a user is running, which is worse than an absent
+one.
+
+Two consequences worth knowing. `make installer-test` pulls in `hatchling` because the
+suite covers the hook. And moving either `scripts/` or `charts/` breaks the relative path
+the hook depends on, which would change the version of every installed copy and nothing
+else — `test_the_hook_reads_the_real_chart_in_this_repo` is there to catch that.
+
+### Dependencies and `install.py.lock`
+
+The four third-party dependencies — typer, click, rich, pyyaml — are declared **twice**, for
+the two entry paths, and both declarations have to be kept in step:
+
+| Declared in | Consumed by | Form |
+|---|---|---|
+| the PEP 723 header in `install.py` | `uv run --script`, i.e. the clone path | pinned via `install.py.lock` |
+| `[project.dependencies]` in `pyproject.toml` | `uvx --from git+…`, `--with-editable ./scripts` | floors, resolved fresh |
+
+`scripts/install.py.lock` is committed, and it is what makes `./scripts/install.py`
+reproducible: `uv run --script` otherwise re-resolves the four on every user's machine, so a
+new typer release could change behaviour for a user who changed nothing. Regenerate it
+whenever the PEP 723 header changes:
+
+```bash
+uv lock --script scripts/install.py
+```
+
+Forgetting is caught — CI runs `uv lock --script scripts/install.py --check`, which exits 1
+on a stale lock — but only after a push, so it is worth doing in the same commit.
+
+The two declarations stay floors-and-pins rather than pins-and-pins on purpose. The
+installed path may land in an environment a user already has, so pinning there would cause
+conflicts it has no business causing; the script path owns its environment outright, so it
+can afford exact pins. Note that the floors are what `make installer-test` resolves against,
+via `--with-editable ./scripts` — the lock does not constrain the test run, which is why CI
+tests both 3.9 and 3.13 rather than trusting one resolution.
+
+`scripts/uv.lock` is a local development artifact and is gitignored; nothing consumes it.
+Do not confuse either with `charts/mlrun-ce/requirements.lock`, which pins the chart's
+sub-chart tarballs and has nothing to do with Python.
 
 ## Version floors
 
@@ -217,6 +296,27 @@ node image is the safest choice.
   from `.spec.volumes[].persistentVolumeClaim.claimName`. Deliberately not done yet —
   deleting pods the release does not own is a bigger blast radius than it looks.
 
+- **`helm --wait` returns before the OpenTelemetry collector is ready**, so the installer
+  prints its success table while `kubectl get pods` still shows
+  `mlrun-ce-otel-collector-* 0/1`. Same structural cause as the orphaned Strimzi CRs above,
+  in the other direction: the collector is not in the release manifest either. The chart
+  installs the *operator*, and the operator then reconciles an `OpenTelemetryCollector` CR
+  into a Deployment — which only begins once helm has finished. There is nothing for
+  `--wait` to wait on. **Observed live on rke2 (2026-09-16):** `0/1` at 80s,
+  `1/1` shortly after, with the pod's own logs already reporting
+  `Everything is ready. Begin running and processing data.` Not worth "fixing" by polling
+  for it: the install genuinely is complete, and blocking on a component the release does
+  not own would make every install slower to report what already succeeded.
+
+- **`mlrun-api-chief` restarts once or twice on a fresh install.** It starts before
+  `mlrun-db` accepts connections, fails its own startup with
+  `sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to
+  MySQL server on 'mlrun-db' ([Errno 111] Connection refused)")`, and is restarted by the
+  kubelet until the database is up. Self-healing, and the restart counter is the only
+  lasting trace. Confirmed live on rke2 (2026-09-16): two restarts, then `2/2 Running`.
+  Worth recognising on sight, because a non-zero restart count on the API pod is the first
+  thing anyone looks at when an install is suspected of having gone wrong.
+
 ## Fixed bugs
 
 - **The access-URL table put the wrong text in the URL column** (found by the first live
@@ -228,11 +328,11 @@ node image is the safest choice.
   a combined `-  ... credentials: <user> / <pass>` line is read as credentials, and a
   service with only one half no longer renders a dangling `postgres / `.
 
-  **`install.sh` still has this bug** (`url="$line"` in its own `print_notes_table`) and is
-  deliberately left alone — it is being deleted, and changing it would only churn the
-  oracle. This is also a reminder of what the differential harness does *not* cover: it
-  compares the helm/kubectl calls two implementations make, not what they print, so no
-  number of matrix cases would have caught this. Output formatting needs its own tests or a
+  `install.sh` had the identical bug (`url="$line"` in its own `print_notes_table`) and was
+  left alone, since it was already scheduled for deletion. That is the point worth keeping:
+  the differential harness compared the helm/kubectl calls two implementations made, not
+  what they printed, so no number of matrix cases would have caught this — and the golden
+  suite that replaced it has the same blind spot. Output formatting needs its own tests or a
   live run.
 
 - **`helm_install`'s `--wait` had no `--timeout`, so a slow image pull failed the release**
@@ -248,10 +348,7 @@ node image is the safest choice.
   `--timeout 960s`, so this was an inconsistency rather than a deliberate choice. Fix:
   added `HELM_TIMEOUT` (default `960s`, matching uninstall) and passed
   `--timeout "${HELM_TIMEOUT}"` in both branches. Re-running with the fix took 3m12s and
-  the release went `deployed`. Two regression tests assert the default and the override —
-  note the override test must `export HELM_TIMEOUT` on its own line rather than using the
-  `VAR=x source install.sh` prefix form, since bash discards that prefix assignment when
-  `source` returns and `set -u` then trips inside `helm_install`.
+  the release went `deployed`. Two regression tests assert the default and the override.
 
   Follow-up: `do_uninstall` kept its literal `960s` and so ignored the new variable —
   same default, but a raised `HELM_TIMEOUT` didn't reach uninstall. It now passes
@@ -327,41 +424,67 @@ node image is the safest choice.
 
 ## Testing
 
-`make installer-test` runs everything. `make installer-lint` runs shellcheck over
-`install.sh` and `uvx ruff check` + `ruff format --check` over the Python;
-`make installer-format` fixes what ruff can fix.
+`make installer-test` runs everything. `make installer-lint` runs `uvx ruff check` +
+`ruff format --check`; `make installer-format` fixes what ruff can fix. The developer-facing
+workflow — fixtures, naming, how to add a case — lives in
+[`.claude/skills/run-tests`](../.claude/skills/run-tests/SKILL.md); this section covers why
+the suites are shaped the way they are.
 
-### Differential suite (`make installer-test-diff`)
+### Golden argv suite (`make installer-test-golden`)
 
-The main guard on the port. `tests/installer/matrix.sh` drives
-`tests/installer/difftest.sh` over ~28 invocations; each one runs `install.sh` and
-`install.py` with `tests/installer/stub.py` symlinked onto a temporary PATH as `helm`,
-`kubectl`, `docker` and `minikube`, and fails if the two disagree on either the exit code
-or the sequence of recorded calls. No cluster is contacted and the temp PATH is torn down
-afterwards.
+The successor to the differential harness, and the main guard on behaviour.
+`tests/installer/test_golden_argv.py` runs the whole installer as a subprocess over 32
+invocations with `tests/installer/stub.py` symlinked onto a temporary PATH as `helm`,
+`kubectl`, `docker` and `minikube`, then compares the recorded calls and exit code against
+`tests/installer/golden/`. No cluster is contacted and the temp PATH is torn down after.
+
+Those expectations are not arbitrary snapshots. They were recorded from `install.py` while
+`install.sh` still existed, and the differential harness confirmed all 32 identical between
+the two on the same commit — so they encode the bash script's behaviour, which is what makes
+deleting it safe.
 
 - The stub derives its answers from the arguments rather than returning fixed values, so a
-  test cannot pass by accident once a script stops asking the question it was supposed to
-  ask. `STUB_*` env vars steer the interesting branches (`STUB_SC_STABLE`,
+  test cannot pass by accident once the installer stops asking the question it was supposed
+  to ask. `STUB_*` env vars steer the interesting branches (`STUB_SC_STABLE`,
   `STUB_HELM_EXIT`, `STUB_NODE_MEMORY`, …).
-- Add a case to `matrix.sh` whenever a flag gains behaviour that reaches helm or kubectl.
-  Refusals belong there too — the two must agree on *how* they reject a bad value, not
-  only on how they succeed.
-- `VERBOSE=1 tests/installer/difftest.sh <flags>` prints both transcripts for one case.
+- Add a case to `CASES` whenever a flag gains behaviour that reaches helm or kubectl.
+  Refusals belong there too — *how* the installer rejects a bad value is as much a contract
+  as how it succeeds, and five of the 32 cases exist only to pin that.
+- **The config-file cases carry an env rule.** `--config` supplies the registry identity,
+  and flag/env beats file, so `run_case` drops `REGISTRY_URL`/`USERNAME`/`EMAIL` and
+  `EXTERNAL_HOST_ADDRESS` for those invocations — otherwise the recording would look the
+  same whether the file was parsed or ignored. `REGISTRY_PASSWORD` stays set, because it is
+  never read from a config file. The fixtures in `tests/installer/fixtures/` use values like
+  `host.from.config` so a flag carrying the wrong source is obvious in a diff.
+- **Re-record deliberately.** `make installer-test-golden-update` rewrites the files;
+  `git diff tests/installer/golden/` is then the reviewable part of the change. Re-recording
+  without reading the diff turns the suite into a rubber stamp.
 - **Watch for jsonpath escaping in the stub.** Annotation keys reach kubectl as
   `storageclass\.kubernetes\.io/is-default-class`; `jsonpath_of()` strips the backslashes
   before matching, because matching the escaped form made every lookup silently miss and
-  turned the StorageClass validator permanently red for both scripts at once — which
-  *looked* like parity.
+  turned the StorageClass validator permanently red — which, when two implementations were
+  being compared, *looked* like parity.
 
-### Regression suite (`make installer-test-python`)
+### Unit suites (`make installer-test-unit`)
 
-`tests/installer/test_regressions.py`, run by pytest under uv. One named test per entry in
-"Fixed bugs" above, plus the output formatting the differential suite cannot see. Test names
-end in the symptom a user would report, so a failure says what regressed.
+182 tests across `test_cli.py`, `test_config.py`, `test_validators.py`, `test_cluster.py`,
+`test_registry.py` and `test_regressions.py`. They patch the helm/kubectl wrappers and
+exercise one function at a time, covering what the golden suite structurally cannot: values
+computed and never sent to a command, text printed to the user, and the precedence rules
+between flags, environment variables and `ce-config.yaml`.
+
+Most were ported from the 118-case bats suite that covered `install.sh`. One case did not
+survive: bash needed `yq` to read a config file and had a test for its absence, where the
+Python port parses YAML with pyyaml and has no such dependency.
+
+#### Regression tests
+
+`tests/installer/test_regressions.py` holds one named test per entry in "Fixed bugs" above,
+plus the output formatting no argv comparison can see. Test names end in the symptom a user
+would report, so a failure says what regressed.
 
 - **Add a test here for every new "Fixed bugs" entry.** A bug that reached a user once is
-  the cheapest possible test case, and the harness above will not catch a second occurrence
+  the cheapest possible test case, and the golden suite will not catch a second occurrence
   unless the bug changes which commands get run.
 - **Verify a new test by reintroducing the bug and watching it fail.** Two of these
   originally passed against the reverted fix because the parser fixes overlapped — either
@@ -374,78 +497,18 @@ end in the symptom a user would report, so a failure says what regressed.
 - The `settings` fixture pins its fields explicitly rather than reading the environment, so
   an exported `HELM_TIMEOUT` in a developer's shell cannot change a result.
 
-### Legacy bats suite (`make installer-test-bash`)
+#### Never let the environment decide a test
 
-- 118 tests over `install.sh`, no cluster needed (sources it with
-  `INSTALL_SH_SOURCE_ONLY=true`, stubs external binaries). Retired with `install.sh`; the
-  cases worth keeping move to the Python side rather than being rewritten in bats.
-- **Test 87 (`resolve_external_host still uses the docker-desktop heuristic when
-  KUBE_CONTEXT is unset`) currently fails**, producing `localhost` where it expects
-  `host.docker.internal`. It predates the port — `install.sh` and the bats file have not
-  changed since `6b445fa` — and is not being fixed in a script that is about to be deleted.
-  The behaviour it guards is covered on the Python side by
-  `test_external_host_without_kube_context_keeps_the_docker_desktop_heuristic`. Because of
-  this, `make installer-test` is currently red on the bash leg only; use
-  `installer-test-python` and `installer-test-diff` as the gate.
-- **A green local run on macOS does not mean a green CI run.** bats aborts a test
-  on the first failed assertion via `set -e`, and under macOS's system bash (3.2)
-  that only works for the *last* statement in a `@test` — a failed `[[ ]]`
-  anywhere before it is silently swallowed and the test still reports `ok`. CI
-  runs bash 5, where every assertion counts. A test whose stub doesn't match what
-  the code actually calls can therefore pass locally and fail in CI (this is
-  exactly how the `resolve_external_host` `KUBE_CONTEXT` test shipped broken).
-  When a test is doing real work, verify the assertion holds — run the inner
-  `bash -c` body standalone and look at the output, or install bash >= 4
-  (`brew install bash`) so local runs match CI.
-- **Never hide a tool by hardcoding a PATH of real system directories.** The
-  GitHub runners ship `yq` in `/usr/bin`, so `PATH=/usr/bin:/bin` hides it on a
-  macOS box (where it's in `/opt/homebrew/bin`) but not in CI — which is how the
-  "load_config exits 1 when yq is not installed" test came to assert nothing in
-  the only environment that was checking it. Use the `_empty_bin` helper, which
-  points PATH at a directory that provably contains no executables.
-- Live/integration: exercise `--chart-path` against a real chart checkout (see
-  below). Non-interactive runs need `REGISTRY_USERNAME`/`REGISTRY_PASSWORD`
-  (or `REGISTRY_PASSWORD_FILE`)/`REGISTRY_EMAIL` set or they'll fail on the
-  required-value check in `create_registry_secret`.
-- **The Python installer verified end-to-end on rke2 (2026-09-15)**: v1.36.1, single node,
-  `nfs-client` default StorageClass, helm **4.1.1**, reached through an
-  `ssh -L 16443:127.0.0.1:6443` tunnel. A `--hard-clean` uninstall of an existing
-  0.12.0-rc.11 release followed by
-  `--chart-path ./charts/mlrun-ce --enable-otel collector --skip-secret` produced a
-  `deployed` rc.12 release with 27/27 pods ready in ~3 minutes (warm image cache), the
-  Kafka post-install hooks applied, and only the usual single `mlrun-api-chief` restart
-  while it waits for the DB. `--skip-secret` correctly reused the pre-existing
-  `registry-credentials`, which survives uninstall because the installer creates it with
-  kubectl rather than through the chart.
+Every installer tunable is an environment variable, so a shell that has been used to drive a
+real cluster is a hostile test environment. A leftover `export KUBE_CONTEXT=<lab>` once made
+the bash suite's `resolve_external_host` test fail with `localhost`, which reads exactly like
+a code regression — `KUBE_CONTEXT` makes that function skip the local heuristics by design.
+The hunt for a bug that did not exist cost more than the test was worth.
 
-  Two things to know about that run. **Helm 4 logs
-  `Conflict: cannot merge map onto non-map for "registry". Skipping.` three times** during
-  install; it is informational, caused by the chart's `global.registry: &userRegistry`
-  anchor being multiplexed into `nuclio.*` and `mlrun.*`, and the value does apply —
-  `index.docker.io/demo` reached the MLRun API pod and the user-supplied values matched the
-  previous release exactly. And the **dependency skip works**: with all 8 lockfile subcharts
-  vendored it logged `Chart dependencies already vendored and match requirements.lock;
-  skipping fetch` and made no network call, where `install.sh` would have re-run
-  `helm dependency update`.
-
-- **Verified against a real remote cluster via `--kube-context`**: the installer
-  itself never SSHes anywhere (still local-execution-only), but `kubectl`/`helm`
-  can target any cluster reachable from the local machine — including one behind
-  SSH, via a local port-forward tunnel (`ssh -f -N -L <port>:<remote-ip>:6443
-  user@jumphost`) plus a kubeconfig context whose `server:` points at
-  `localhost:<port>` (works cleanly when the cert's SANs already include
-  `localhost`/`127.0.0.1`, true for kubeadm/rke2 defaults). `--config` + `-f`
-  composition and `REGISTRY_PASSWORD_FILE` were both confirmed working through
-  such a tunnel against a live `rke2` cluster, in addition to local
-  `docker-desktop` runs. The remote run reached a fully healthy state (every
-  container ready, `helm status` → `deployed`) — notably including `mlrun-ui`,
-  which fails on local Apple Silicon `docker-desktop` runs only because that
-  image has no `linux/arm64` build; the remote cluster was x86_64.
-
-  Tear a verification release down with `KUBE_CONTEXT=<ctx> ./scripts/install.py
-  uninstall --hard-clean --non-interactive` (also deletes its PVCs). That
-  command is destructive enough against shared remote infra that it's worth
-  running deliberately rather than as a matter of course.
+Two guards, both in `tests/installer/conftest.py`: an autouse `clean_env` fixture unsets
+every installer variable before each test, and the `settings` fixture pins its fields rather
+than reading the environment. Keep both in mind when adding a fixture of your own — the
+moment a test reads `os.environ` directly, it can pass or fail based on who ran it.
 
 ## Cross-reference: the chart
 

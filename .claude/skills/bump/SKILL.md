@@ -22,6 +22,6 @@ Steps:
 5. Remind the user: version bumps must be committed before opening a PR, and the PR title must follow `[Scope] description` format.
 6. Update the MLRun CE version under Version Matrix in `charts/mlrun-ce/README.md`.
 
-`scripts/install.sh` needs no edit — it reads its version from `Chart.yaml` at runtime, so bumping the chart bumps the installer too.
+The installer needs no edit. `Chart.yaml` is the only version number in the repo — `scripts/install.py` resolves to it, reading the chart directly from a checkout and otherwise using a value baked in at build time by `scripts/hatch_build.py`. Bumping the chart bumps the installer, and there is nothing in `scripts/` to keep in step.
 
 If no argument is given, show the current version and list the three options with the resulting version for each, then ask which to apply.

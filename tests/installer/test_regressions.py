@@ -23,50 +23,12 @@ Each test name ends in the symptom a user would have reported, so a future failu
 what regressed rather than which assertion tripped.
 """
 
-import sys
-from pathlib import Path
-
 import pytest
 
-# scripts/ is the package root; tests/installer/ -> tests/ -> repo root -> scripts/
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-
 from ce_installer import cluster, helm_ops, registry, ui, validators
-from ce_installer.settings import Settings
 from ce_installer.shell import Result
 
-
-class Recorder:
-    """Stands in for the kubectl/helm/run wrappers, recording argv and replaying answers."""
-
-    def __init__(self, answers=None):
-        self.calls = []
-        self.answers = answers or {}
-
-    def __call__(self, *args, **kwargs):
-        # The wrappers are called as kubectl(settings, *args); plain run() as run(argv).
-        argv = list(args[1:]) if args and isinstance(args[0], Settings) else list(args[0])
-        self.calls.append(argv)
-        for needle, answer in self.answers.items():
-            if needle in " ".join(argv):
-                return answer
-        return Result(0, "")
-
-    def argv_containing(self, needle):
-        return [c for c in self.calls if needle in " ".join(c)]
-
-
-@pytest.fixture
-def settings():
-    """A Settings with the environment ignored, so a stray export cannot alter a result."""
-    return Settings(
-        namespace="mlrun",
-        release_name="mlrun-ce",
-        helm_timeout="960s",
-        kube_context="",
-        external_host_address="",
-    )
-
+from .conftest import Recorder
 
 # ------------------------------------------------------------------------------------------
 # The access-URL table put the wrong text in the URL column

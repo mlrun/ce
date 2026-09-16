@@ -47,15 +47,28 @@ from .validators import run_validators
 # Version
 # --------------------------------------------------------------------------------------
 
+try:
+    from ._chart_version import CHART_VERSION as BUILT_IN_CHART_VERSION
+except ImportError:
+    # Written into the wheel by scripts/hatch_build.py, so it is absent in a checkout —
+    # where the chart itself is present and authoritative anyway.
+    BUILT_IN_CHART_VERSION = ""
+
 
 def installer_version() -> str:
-    """Read the chart version from the chart shipped beside this installer.
+    """Report the chart version, whether or not a chart is sitting next to this file.
 
     The installer has no version of its own — it ships with the chart and is released by
-    the same tag — so reading the chart beside it beats keeping a copy here that has to be
-    carried forward by hand. Run detached from a checkout there is no chart to read and the
-    version is genuinely unknown: nothing records which commit it came from. Pin by release
-    tag to know.
+    the same tag — so there is exactly one number, in charts/mlrun-ce/Chart.yaml. It is
+    reached two ways, in this order:
+
+    1. The chart in the surrounding checkout, which is authoritative and always current. A
+       developer editing Chart.yaml sees the new value immediately, with nothing to rebuild.
+    2. A value baked in at build time by hatch_build.py, for an installed copy that has no
+       checkout around it — `uvx --from "git+...#subdirectory=scripts"` and friends.
+
+    Only a copy that is neither in a checkout nor built by that pipeline is genuinely
+    unknown, and then nothing records which commit it came from; pin by release tag.
 
     Path.resolve() follows symlink chains in one step; `make installer-link` puts the
     command on PATH as a link into a checkout, and the link's own directory has no chart.
@@ -63,15 +76,17 @@ def installer_version() -> str:
     try:
         package_dir = Path(__file__).resolve().parent
     except OSError:
-        return UNKNOWN_VERSION
+        package_dir = None
 
-    # scripts/ce_installer/cli.py -> scripts/ -> repo root -> charts/mlrun-ce
-    chart_yaml = package_dir.parent.parent / "charts" / "mlrun-ce" / "Chart.yaml"
-    if not chart_yaml.is_file():
-        return UNKNOWN_VERSION
+    if package_dir is not None:
+        # scripts/ce_installer/cli.py -> scripts/ -> repo root -> charts/mlrun-ce
+        chart_yaml = package_dir.parent.parent / "charts" / "mlrun-ce" / "Chart.yaml"
+        if chart_yaml.is_file():
+            match = re.search(r"^version:\s*(\S+)", chart_yaml.read_text(), re.MULTILINE)
+            if match:
+                return match.group(1)
 
-    match = re.search(r"^version:\s*(\S+)", chart_yaml.read_text(), re.MULTILINE)
-    return match.group(1) if match else UNKNOWN_VERSION
+    return BUILT_IN_CHART_VERSION or UNKNOWN_VERSION
 
 
 def print_version() -> None:

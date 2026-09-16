@@ -15,3 +15,13 @@ otlp-pro/
 # Filled-in installer config (copied from scripts/ce-config.yaml.example).
 # Unanchored, so it matches at any depth; ce-config.yaml.example is unaffected.
 ce-config.yaml
+# ...which also caught the test fixture, whose values are deliberately fake. Without this
+# exception the golden config cases fail in CI with the file simply missing.
+!tests/installer/fixtures/ce-config.yaml
+
+# uv writes this whenever a command runs with scripts/ as the working directory, because
+# the pyproject.toml there makes it look like a project. It is a byproduct, not the
+# installer's lockfile — that is scripts/install.py.lock, from the PEP 723 metadata, and it
+# is committed. pyproject.toml exists only so `uvx --from git+...` has an entry point.
+scripts/uv.lock
+.pytest_cache/

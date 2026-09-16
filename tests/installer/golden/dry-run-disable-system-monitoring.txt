@@ -1,0 +1,16 @@
+exit: 0
+---
+["helm", "version", "--short"]
+["kubectl", "cluster-info"]
+["docker", "info"]
+["kubectl", "get", "namespace", "mlrun"]
+["kubectl", "get", "nodes", "-o", "jsonpath={.items[0].status.nodeInfo.kubeletVersion}"]
+["helm", "version", "--short"]
+["kubectl", "get", "storageclass", "-o", "jsonpath={range .items[*]}{.metadata.name}{\"=\"}{.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class}{\"=\"}{.metadata.annotations.storageclass\\.beta\\.kubernetes\\.io/is-default-class}{\"\\n\"}{end}"]
+["docker", "login", "https://index.docker.io/v1/", "-u", "someone", "--password-stdin"]
+["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\" \"}{range .spec.ports[*]}{.nodePort}{\"\\n\"}{end}{end}"]
+["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.memory}{\"\\n\"}{end}"]
+["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.ephemeral-storage}{\"\\n\"}{end}"]
+["helm", "repo", "add", "mlrun-ce", "https://mlrun.github.io/ce"]
+["helm", "repo", "update"]
+["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--dry-run=server", "--set", "global.registry.url=index.docker.io/someone", "--set", "global.registry.secretName=registry-credentials", "--set", "global.externalHostAddress=localhost", "--set", "kube-prometheus-stack.enabled=false"]

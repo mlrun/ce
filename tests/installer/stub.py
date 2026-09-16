@@ -14,10 +14,10 @@
 # limitations under the License.
 """Recording stub standing in for helm / kubectl / docker on PATH.
 
-Every invocation is appended to $STUB_LOG as one JSON array per line, which is what the
-differential tests compare between scripts/install.sh and scripts/install.py. Answers are
-derived from the arguments rather than fixed, so a test cannot pass by accident when a
-script stops asking the question it was supposed to ask.
+Every invocation is appended to $STUB_LOG as one JSON array per line, which is what
+test_golden_argv.py compares against the recorded expectations in golden/. Answers are
+derived from the arguments rather than fixed, so a test cannot pass by accident when the
+installer stops asking the question it was supposed to ask.
 
 Installed under several names; argv[0]'s basename selects the behaviour.
 """

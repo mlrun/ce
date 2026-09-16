@@ -16,36 +16,69 @@ on:
 permissions:
   contents: read
 
-env:
-  BATS_VERSION: v1.13.0
-
 jobs:
-  lint-and-test:
-    name: Lint and unit-test install.sh
+  python:
+    # Both ends of the supported range: 3.9 is the floor in scripts/pyproject.toml, and the
+    # accommodations made for it (typing.Optional over `str | None`, no postponed
+    # annotations) are only load-bearing on that version, while the newest release is what
+    # most contributors actually have. Nothing in between is interesting enough to pay for.
+    name: Lint and test the installer (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.13"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # uv supplies its own Python and resolves the installer's dependencies, so no
+      # setup-python step and nothing to pip install. enable-cache keeps the resolved
+      # environment between runs.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Ruff's target-version is pinned in the config, so linting once is enough.
+      - name: Lint
+        if: matrix.python == '3.9'
+        run: make installer-lint-python
+
+      - name: Unit and regression tests
+        run: make installer-test-unit INSTALLER_PYTHON=${{ matrix.python }}
+
+      # Fails if install.py.lock is stale relative to the PEP 723 metadata in install.py,
+      # which would otherwise only surface as a surprise resolution on a user's machine.
+      - name: Check the lockfile is current
+        run: |
+          uv lock --script scripts/install.py --check
+
+      # A smoke test of the entry point itself: install.py re-execs under uv, and a broken
+      # bootstrap or a bad import would pass every unit test above and still fail here.
+      - name: Entry point smoke test
+        run: |
+          ./scripts/install.py version
+          ./scripts/install.py --help > /dev/null
+
+  golden:
+    name: Recorded helm/kubectl calls
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # shellcheck and yq (mikefarah) ship with the ubuntu-latest runner image.
-      # yq is needed for real: the load_config tests parse actual YAML.
-      - name: Show tool versions
-        run: |
-          shellcheck --version
-          yq --version
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
-      - name: Lint install.sh
-        run: make installer-lint
-
-      - name: Install bats
-        run: |
-          git clone --depth 1 --branch "${BATS_VERSION}" \
-            https://github.com/bats-core/bats-core.git /tmp/bats-core
-          sudo /tmp/bats-core/install.sh /usr/local
-          bats --version
-
-      - name: Run installer unit tests
-        run: make installer-test
+      # Runs the whole installer as a subprocess against stub binaries and compares the
+      # calls it makes to tests/installer/golden/. Separate from the unit job because a
+      # failure here means different things: the installer still parses its flags, but
+      # what it would do to a cluster has changed.
+      - name: Check the recorded calls
+        run: make installer-test-golden
 
   kind-install:
     name: End-to-end install on kind
@@ -56,6 +89,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
       # No node_image/kubectl_version pin: the installer enforces no Kubernetes floor, so
       # the action's own default node image (matched to the kind release it bundles) is
@@ -73,7 +111,7 @@ jobs:
         # --local-registry deploys a registry in-cluster and derives the pull
         # secret from it, so no external registry credentials are needed.
         run: |
-          ./scripts/install.sh \
+          ./scripts/install.py \
             --chart-path ./charts/mlrun-ce \
             --local-registry \
             --non-interactive

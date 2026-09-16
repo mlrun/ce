@@ -7,8 +7,6 @@
 | helm | 3.6 | Chart rendering, linting, install |
 | kubectl | 1.24 | Cluster interaction |
 | uv | 0.4 | Runs `scripts/install.py`, and `make installer-lint-python` / `installer-format` via `uvx ruff` |
-| bats-core | 1.5 | Only for `make installer-test-bash` (the legacy `scripts/install.sh` unit tests) |
-| shellcheck | any | Only for `make installer-lint-bash` |
 
 For Kubernetes storage class setup and cluster prerequisites, see [charts/mlrun-ce/README.md](charts/mlrun-ce/README.md#prerequisites).
 
@@ -16,12 +14,13 @@ For Kubernetes storage class setup and cluster prerequisites, see [charts/mlrun-
 Kubernetes floor, so a cluster you can develop against is one you can install against — see
 [scripts/docs/configuration.md](scripts/docs/configuration.md#version-floors).
 
-The installer is mid-port from bash to Python. `scripts/install.py` plus the
-`scripts/ce_installer/` package is the one that ships; `scripts/install.sh` is kept only as
-the reference the differential tests check against, and is deleted at cutover. Make changes
-in the Python one and keep `make installer-test` green — it runs both over the same
-invocations and fails if their helm/kubectl calls diverge. See
-[scripts/AGENTS.md](scripts/AGENTS.md).
+The installer is `scripts/install.py` plus the `scripts/ce_installer/` package. Keep
+`make installer-test` green: it runs the unit suites and then replays the installer against
+stub binaries to check it still makes the recorded helm/kubectl calls. If that second suite
+fails, read the diff before re-recording — every changed line is a change in what the
+installer does to somebody's cluster. See [scripts/AGENTS.md](scripts/AGENTS.md) for the
+design notes and [.claude/skills/run-tests](.claude/skills/run-tests/SKILL.md) for the test
+workflow.
 
 ## First-Time Setup
 

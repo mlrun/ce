@@ -1,161 +1,162 @@
 ---
 name: run-tests
 description: >-
-  Run and extend the bats test suite for the CE installer (scripts/install.sh).
-  Use when a developer asks to run installer tests, check coverage, add a new
-  test, or verify a change to scripts/install.sh didn't break existing behaviour.
+  Run and extend the pytest suites for the CE installer (scripts/install.py and the
+  scripts/ce_installer package). Use when a developer asks to run installer tests, check
+  coverage, add a new test, or verify a change to the installer didn't break existing
+  behaviour.
 ---
 
 # CE installer test suite
 
-Tests live in `tests/install_tests.bats` and use
-[bats-core](https://github.com/bats-core/bats-core). They source
-`scripts/install.sh` without executing it (via `INSTALL_SH_SOURCE_ONLY=true`) and
-stub out external binaries so no live cluster is needed.
+Tests live in `tests/installer/` and run under pytest. Nothing here contacts a cluster:
+the unit suites patch the `helm`/`kubectl` wrappers, and the golden suite puts stub
+binaries on `PATH`.
 
-These cover the installer only. The chart's own tests are the other scripts in
-`tests/` (`helm-template-test.sh`, `kind-test.sh`) plus `make helm-lint` — all
-unrelated to this suite.
+These cover the installer only. The chart's own tests are the other scripts in `tests/`
+(`helm-template-test.sh`, `kind-test.sh`) plus `make helm-lint` — unrelated to this suite.
 
 ## Prerequisites
 
-```bash
-brew install bats-core   # macOS; already installed if tests have been run before
-```
+None beyond `uv`. Every target resolves its own dependencies; there is no virtualenv to
+create and nothing to `pip install`.
 
-## Run the full suite
-
-From the repo root:
+## Run everything
 
 ```bash
 make installer-test
-# or directly:
-bats tests/install_tests.bats
 ```
 
-Expected output: `1..118` followed by `ok N <test-name>` for every test.
+That is two suites, and they fail for different reasons:
 
-Keep the count in this file in sync when you add tests — it's the quickest way to
-notice a test silently failing to register.
+| Target | What it runs | A failure means |
+|---|---|---|
+| `make installer-test-unit` | `tests/installer/test_*.py` except the golden one | a function computes or prints the wrong thing |
+| `make installer-test-golden` | `tests/installer/test_golden_argv.py` | what the installer *does to a cluster* changed |
 
-## Run a single test by name
+Run one file, or one test, the usual way:
 
 ```bash
-bats --filter "CI=true sets NON_INTERACTIVE" tests/install_tests.bats
+uv run --isolated --with pytest --with hatchling --with-editable ./scripts \
+  pytest tests/installer/test_validators.py -q
+uv run --isolated --with pytest --with hatchling --with-editable ./scripts \
+  pytest tests/installer -k "otel" -q
 ```
 
-## Run with verbose output
+Take the dependencies from `--with-editable ./scripts` rather than listing them by hand.
+A hand-written list drifts from `scripts/pyproject.toml`: the Makefile's used to, omitting
+`click`, which `cli.py` imports directly — it only appeared to work because an older typer
+pulled click in transitively.
+
+## The two kinds of test, and which one you want
+
+**Unit suites** import a module, patch its command wrappers, call one function, and assert
+on the result or the calls made. Fast (the whole set is well under a second) and precise.
+Most new tests belong here.
+
+| File | Covers |
+|---|---|
+| `test_cli.py` | commands, flag parsing, the argv pre-parse, env precedence, `--enable-otel` folding, run order, log output |
+| `test_config.py` | `ce-config.yaml` parsing, required-field checks, never overriding a flag |
+| `test_validators.py` | every pre-install check, and crucially which ones block versus warn |
+| `test_cluster.py` | chart-source resolution, dependency handling, namespaces, `KUBE_CONTEXT` injection |
+| `test_registry.py` | the pull secret, password file handling |
+| `test_regressions.py` | one named test per entry in `scripts/AGENTS.md`'s "Fixed bugs" |
+
+**The golden suite** runs the whole installer as a subprocess with stubs on `PATH` and
+compares every `helm`/`kubectl`/`docker` call against a recorded file in
+`tests/installer/golden/`. It catches what unit tests structurally cannot: a flag that
+parses correctly but never reaches helm, a step that runs in the wrong order, an argument
+dropped between layers.
+
+These expectations were generated while the bash installer still existed and were confirmed
+identical to its behaviour across all 32 cases, so they carry the authority the old
+differential harness did.
+
+### When the golden suite fails
+
+Read the diff before doing anything else. If the change is intended:
 
 ```bash
-bats --verbose-run tests/install_tests.bats
+make installer-test-golden-update
+git diff tests/installer/golden/
 ```
 
-## How tests source the script safely
+Every changed line is a change in what the installer does to somebody's cluster — that diff
+is the reviewable part of your PR. Re-recording without reading it defeats the whole
+mechanism.
 
-Every test opens with:
+Add a case to `CASES` in `test_golden_argv.py` whenever a flag gains behaviour that reaches
+helm or kubectl. Refusals belong there too: how the installer declines is as much a contract
+as how it succeeds.
+
+## Shared fixtures
+
+Defined in `tests/installer/conftest.py`; do not redefine them locally.
+
+| Fixture | Use |
+|---|---|
+| `settings` | a `Settings` with every field pinned, so nothing depends on your shell |
+| `recorder` | the `Recorder` class — records argv, replays canned `Result`s by argv substring |
+| `capture_logs` | `logs = capture_logs(validators)` collects log text without rich formatting |
+| `clean_env` | autouse; scrubs every installer env var before each test |
+
+`clean_env` is not optional politeness. A developer who exported `KUBE_CONTEXT` to drive a
+real cluster once made a test fail in a way that looked exactly like a code regression, and
+the hunt for a nonexistent bug cost more than the test was worth.
+
+## Adding a test
+
+1. Pick the file matching the module you changed.
+2. Name it after the **symptom a user would report**, not the function under test:
+   `test_node_capacity_warns_but_never_blocks`, not `test_validate_node_capacity_2`. When it
+   fails in two years, the name should say what broke.
+3. Use the shared fixtures.
+4. Comments explain *why* a case matters or what it caught. Never restate the code.
+5. **Verify the test can fail.** Reintroduce the bug in the source, confirm red, restore:
+
+   ```bash
+   # edit scripts/ce_installer/validators.py to break the behaviour
+   uv run --isolated --with pytest --with hatchling --with-editable ./scripts \
+     pytest tests/installer/test_validators.py -k your_test -q   # must FAIL
+   git checkout scripts/ce_installer/validators.py
+   ```
+
+   This is not ceremony. Writing this suite caught a test asserting on `prompt_or_env` that
+   passed whether or not the behaviour it named was present, because the value it checked
+   was falsy either way.
+
+### Traps specific to this codebase
+
+**Patch the module under test, not `shell`.** Every module does `from .shell import kubectl`
+and holds its own reference, so patching `shell.kubectl` changes nothing:
+
+```python
+monkeypatch.setattr(validators, "kubectl", recorder)   # right
+monkeypatch.setattr(shell, "kubectl", recorder)        # silently does nothing
+```
+
+**`docker_available()` is `lru_cache`d.** Call `shell.docker_available.cache_clear()` or
+patch it on the module under test, or one test's answer leaks into the next.
+
+**Errors are exceptions, not exit codes.** `die()` *returns* the exception so call sites read
+`raise die(...)`. Assert with `pytest.raises(InstallerError)` and check `.code`.
+
+**No `from __future__ import annotations`, no `str | None`.** The installer supports Python
+3.9 and typer resolves annotations at runtime; postponed annotations break its option
+parsing in ways the error message does not explain.
+
+**Blocking versus warning is the thing to assert.** A validator that starts blocking when it
+should warn makes the installer refuse a cluster that works fine. Assert the return value,
+not just the log text.
+
+## Linting
 
 ```bash
-run bash -c "
-    INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
-    ...
-"
+make installer-lint-python   # check
+make installer-format        # fix in place
 ```
 
-`SCRIPT` is defined once at the top of the file as
-`"$BATS_TEST_DIRNAME/../scripts/install.sh"`, so the suite works regardless of the
-directory bats is invoked from.
-
-`INSTALL_SH_SOURCE_ONLY=true` skips the `main "$@"` call at the bottom of
-`install.sh` (guarded by `[[ "${INSTALL_SH_SOURCE_ONLY:-}" == "true" ]] || main "$@"`),
-so sourcing only defines functions and global variables — no cluster, no
-prompts, no helm calls.
-
-External binaries (`helm`, `kubectl`, `docker`) are **not** needed for
-flag-parsing or `prompt_or_env` tests. For tests that exercise `main()`, stub
-every function it calls:
-
-```bash
-check_requirements()             { :; }
-ensure_namespace()               { :; }
-create_registry_secret()         { :; }
-verify_existing_registry_secret(){ :; }
-gather_install_params()          { :; }
-run_validators()                 { echo "run_validators called"; }
-helm_install()                   { echo "sentinel output"; }
-```
-
-Tests that exercise the validators individually stub `kubectl`/`helm`/`docker` as
-shell functions instead, echoing whatever the check parses (a `kubeletVersion`,
-a `helm version --short` string, an allocatable quantity, and so on).
-
-## Current coverage — 118 tests
-
-| Phase / area | Tests |
-|--------------|-------|
-| **Commands** — `parse_command` | `install`/`uninstall` consume the verb and keep their flags, `version`/`help` print and exit 0, a leading flag or no arguments at all still means install (the empty-array case that trips `set -u` on bash 3.2), an unknown word exits 1 instead of installing |
-| **Output** — color handling | no escape sequences when stdout isn't a TTY; `NO_COLOR` honored |
-| **Versioning** — `installer_version` / `--version` | reads the version from the chart beside the script, tracks it when the chart version changes, reports `unknown` when run standalone, `-v` short form |
-| **Phase 1** — `--ce-version` parsing | stores value, rejects missing arg, respects env var, defaults empty |
-| **Phase 1** — `--dry-run` / `--non-interactive` | each sets its var, each defaults false, flag consumed cleanly |
-| **Phase 1** — `prompt_or_env` non-interactive | returns default, exits 1 with no default, env var wins over default |
-| **Phase 1** — CI auto-detect | `CI=true` sets `NON_INTERACTIVE`; unset CI leaves it false |
-| **Phase 2** — `--chart-path` / `resolve_chart_source` | flag parsing (missing arg, flag-looking value), missing dir, missing `Chart.yaml`, `CHART_REF` in both path and published-repo mode, `--ce-version` ignored in path mode |
-| **Phase 3** — `--config` / `load_config` | flag parsing, no-op when unset, missing file, missing `yq`, registry field parsing, config value as interactive prompt default, password key warned+ignored, `chartPath` required when `kind: path`, all missing required fields listed together in one pass, `--skip-secret`/`--local-registry` relaxations, never overriding flag/env-set values |
-| **Phase 3** — `-f` + `--config` composition | secret still created when both are passed, `-f` alone still skips it (back-compat), registry `--set`s present with both and absent in pure `-f`-only mode |
-| **Phase 3** — versions / components / otel | `installer.versions.*` → image-tag `--set`s, `components.*` → `DISABLE_*` (never re-enabling one set by flag), `otel.*` → the 4 `ENABLE_OTEL_*` opt-ins, `--enable-otel [off\|collector\|full]` modes + invalid mode |
-| **Phase 3** — registry secret / password | `REGISTRY_PASSWORD_FILE` read, env password wins over it, missing file exits 1, file satisfies the non-interactive password requirement, `verify_existing_registry_secret` present/absent |
-| **Phase 3** — `KUBE_CONTEXT` | wrapper functions inject `--context`/`--kube-context`; `resolve_external_host` skips the docker-desktop/minikube heuristics when set, keeps them when unset, falls back to `localhost` when nothing matches |
-| **Phase 4** — validators | `--skip-validators` flag and `main()` honoring it; Helm version and StorageClass blocking failures and passes; k8s version reported but never blocking; ingress-controller, registry-auth, NodePort and node-capacity warnings; bare-byte ephemeral-storage parsing; `MIN_HELM_VERSION` raising the floor, `MIN_K8S_VERSION` warning without blocking, empty default accepted and a malformed value rejected at load time; `run_validators` aggregating multiple blocking failures into one `exit 1` |
-
-## Adding a new test
-
-1. Open `tests/install_tests.bats`.
-2. Add a `@test` block after the relevant section comment.
-3. Follow the sourcing pattern above — `INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'`
-   inside a `run bash -c "..."` block.
-4. Assert with standard bats: `[ "$status" -eq 0 ]`, `[ "$output" = "..." ]`,
-   `[[ "$output" == *"substring"* ]]`.
-5. Run `bats tests/install_tests.bats` to confirm green.
-
-> **Green on macOS is not green on CI.** Under macOS's system bash (3.2), a
-> failed assertion that isn't the *last* statement of a `@test` is silently
-> swallowed and the test still prints `ok`; CI runs bash 5, where it fails.
-> After writing a test that stubs external commands, run its inner `bash -c`
-> body standalone once and eyeball the output, or `brew install bash` so local
-> runs behave like CI. Note that stubs of `command` must account for the
-> `kubectl`/`helm` wrappers injecting `--context`/`--kube-context` before the
-> real arguments.
-
-### Minimal test template
-
-```bash
-@test "description of what is being tested" {
-    run bash -c "
-        INSTALL_SH_SOURCE_ONLY=true source '$SCRIPT'
-        # exercise the function or flag
-        parse_args --your-flag
-        echo \"\$YOUR_VAR\"
-    "
-    [ "$status" -eq 0 ]
-    [ "$output" = "expected" ]
-}
-```
-
-## Key scripts/install.sh pointers
-
-| Symbol | Location | Notes |
-|--------|----------|-------|
-| Global vars | lines 37-68 | All flags and env vars initialised here |
-| `kubectl()` / `helm()` wrappers | lines 82-83 | Inject `KUBE_CONTEXT` into every call |
-| `prompt_or_env()` | ~line 377 | Handles interactive/non-interactive/env-var precedence |
-| `load_config()` | ~line 411 | Reads the `installer:` block of a `ce-config.yaml` |
-| `resolve_external_host()` | ~line 602 | `EXTERNAL_HOST_ADDRESS` autodetect fallback chain |
-| `resolve_chart_source()` | ~line 778 | Published-repo vs `--chart-path` mode |
-| `helm_install()` | ~line 803 | Builds `extra_set_flags` and runs helm |
-| `parse_args()` | ~line 934 | Flag → variable mapping; add new flags here |
-| `run_validators()` | ~line 1300 | Pre-install check dispatcher (blocking checks `return 1`) |
-| `main()` | ~line 1319 | Orchestration; CI auto-detect lives here |
-| Source guard | last line | `[[ "${INSTALL_SH_SOURCE_ONLY:-}" == "true" ]] \|\| main "$@"` |
-
-These line numbers drift with every change to `install.sh` — prefer grepping for
-the function name over trusting them.
+`tests/installer` sits outside `scripts/`, so the targets pass
+`--config scripts/pyproject.toml` explicitly — at the repo root ruff falls back to its
+defaults and disagrees about line length.

@@ -1,0 +1,28 @@
+# Fixture for the config-file golden cases. Not a usable config — every value is chosen to
+# be unmistakable in a recorded helm command, so a --set flag carrying the wrong one is
+# obvious in a diff rather than plausible.
+#
+# Covers the fields that reach helm: the registry identity, the external host, per-service
+# version pins, a component disable, and two otel opt-ins. The opposite polarity of the
+# last two is the point — components.* are disables where false turns a component off,
+# while otel.* are opt-ins where true turns one on.
+installer:
+  externalHostAddress: host.from.config
+
+  registry:
+    url: registry.from.config/team
+    secret:
+      username: user-from-config
+      server: https://registry.from.config/v1/
+      email: team@from.config
+
+  versions:
+    mlrun: 9.9.9-from-config
+    nuclio: 8.8.8-from-config
+
+  components:
+    spark: false
+
+  otel:
+    operator: true
+    collector: true
