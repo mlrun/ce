@@ -26,7 +26,7 @@ spec:
           image: busybox:1.37
           env:
             - name: FILER_HOST
-              value: seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local
+              value: {{ include "mlrun-ce.seaweedfs.allInOne.fqdn" . | quote }}
             - name: FILER_PORT
               value: {{ include "mlrun-ce.seaweedfs.filer.port" . | quote }}
           command:
@@ -45,16 +45,16 @@ spec:
             - name: REMOTE_BUCKET
               value: {{ include "mlrun-ce.seaweedfs.remote.remoteBucket" . | quote }}
             - name: MOUNT_EXISTING
-              value: {{ .Values.seaweedfs.remote.mount.mountExisting | default true | toString | quote }}
+              value: {{ include "mlrun-ce.seaweedfs.remote.mount.mountExisting" . | toString | quote }}
             - name: MOUNT_NONEMPTY
-              value: {{ .Values.seaweedfs.remote.mount.nonempty | default true | toString | quote }}
+              value: {{ include "mlrun-ce.seaweedfs.remote.mount.nonempty" . | toString | quote }}
             {{- if eq .Values.seaweedfs.remote.provider "s3" }}
             - name: S3_ENDPOINT
               value: {{ .Values.seaweedfs.remote.s3.endpoint | quote }}
             - name: S3_REGION
               value: {{ .Values.seaweedfs.remote.s3.region | default "us-east-1" | quote }}
             - name: S3_FORCE_PATH_STYLE
-              value: {{ .Values.seaweedfs.remote.s3.forcePathStyle | default true | toString | quote }}
+              value: {{ .Values.seaweedfs.remote.s3.forcePathStyle | default false | toString | quote }}
             - name: S3_STORAGE_CLASS
               value: {{ .Values.seaweedfs.remote.s3.storageClass | default "STANDARD" | quote }}
             - name: AWS_ACCESS_KEY_ID
@@ -107,11 +107,15 @@ spec:
               {{- if eq .Values.seaweedfs.remote.provider "azure" }}
               {{ include "mlrun-ce.seaweedfs.remote.azureCredentialBootstrap" . | nindent 14 }}
               {{- end }}
+              # Quote credential values so shell metacharacters in keys do not break weed shell.
+              quote_dq() {
+                printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+              }
               {
               {{- if eq .Values.seaweedfs.remote.provider "s3" }}
                 _cfg="remote.configure -name=${REMOTE_NAME} -type=s3"
-                _cfg="${_cfg} -s3.access_key=${AWS_ACCESS_KEY_ID}"
-                _cfg="${_cfg} -s3.secret_key=${AWS_SECRET_ACCESS_KEY}"
+                _cfg="${_cfg} -s3.access_key=\"$(quote_dq "${AWS_ACCESS_KEY_ID}")\""
+                _cfg="${_cfg} -s3.secret_key=\"$(quote_dq "${AWS_SECRET_ACCESS_KEY}")\""
                 _cfg="${_cfg} -s3.endpoint=https://${S3_ENDPOINT}"
                 _cfg="${_cfg} -s3.region=${S3_REGION}"
                 _cfg="${_cfg} -s3.force_path_style=${S3_FORCE_PATH_STYLE}"
