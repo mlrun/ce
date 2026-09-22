@@ -12,3 +12,4 @@ seaweedfs:
     s3:
       endpoint: s3.<REGION>.amazonaws.com
       region: <REGION> # e.g. us-east-2
+      forcePathStyle: false
