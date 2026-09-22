@@ -93,6 +93,11 @@ CASES = [
     "badverb",
     "--chart-path",
     "--enable-otel bogus",
+    # A typo in a safety flag must not reach the cluster. install.sh warned and installed
+    # for real; the recorded calls here are the proof that nothing runs.
+    "--dry-rnu",
+    # A single-dash option following an optional-value flag is an option, not the value.
+    "--dry-run --enable-ingress -f tests/installer/fixtures/values.yaml",
 ]
 
 

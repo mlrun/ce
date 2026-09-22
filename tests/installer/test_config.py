@@ -350,3 +350,94 @@ def test_config_file_cannot_turn_off_an_otel_toggle_set_by_flag(settings, tmp_pa
     config.load_config(settings)
 
     assert settings.enable_otel_operator is True
+
+
+def test_config_file_cannot_re_enable_what_enable_otel_off_disabled(settings, tmp_path):
+    # `--enable-otel off` resolves all four to False, which is also what "never mentioned"
+    # looks like. Reading the booleans alone, the config's `true` won and the file switched
+    # back on what the flag had just turned off — flag-over-config, inverted.
+    settings.otel_set_by_cli = True
+    settings.config_file = write_config(
+        tmp_path,
+        "installer:\n  otel:\n    operator: true\n    collector: true\n",
+    )
+
+    config.load_config(settings)
+
+    assert settings.enable_otel_operator is False
+    assert settings.enable_otel_collector is False
+
+
+def test_config_file_cannot_add_instrumentation_to_the_collector_mode(settings, tmp_path):
+    # `--enable-otel collector` means operator+collector and *no* auto-instrumentation.
+    # A mode names the complete state, so the file may not extend it either.
+    settings.otel_set_by_cli = True
+    settings.enable_otel_operator = True
+    settings.enable_otel_collector = True
+    settings.config_file = write_config(
+        tmp_path, "installer:\n  otel:\n    instrumentation: true\n"
+    )
+
+    config.load_config(settings)
+
+    assert settings.enable_otel_instrumentation is False
+
+
+def test_otel_config_still_applies_when_no_otel_flag_was_passed(settings, tmp_path):
+    settings.otel_set_by_cli = False
+    settings.config_file = write_config(tmp_path, "installer:\n  otel:\n    operator: true\n")
+
+    config.load_config(settings)
+
+    assert settings.enable_otel_operator is True
+
+
+# ------------------------------------------------------------------------------------------
+# chartSource.kind selects where the chart comes from, so a typo may not be ignored
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", ["pth", "Path", "local", "git"])
+def test_an_unrecognised_chart_source_kind_is_rejected(settings, tmp_path, kind):
+    # Falling through to repo mode would install the *published* chart while the file is
+    # plainly asking for the local one — the difference between testing your branch and
+    # testing whatever is on the chart repo, with nothing said either way.
+    settings.config_file = write_config(
+        tmp_path,
+        f"installer:\n  chartSource:\n    kind: {kind}\n    chartPath: ./charts/mlrun-ce\n",
+    )
+
+    with pytest.raises(InstallerError) as excinfo:
+        config.load_config(settings)
+    assert kind in excinfo.value.message
+
+
+@pytest.mark.parametrize("kind", ["repo", "path"])
+def test_the_documented_chart_source_kinds_are_accepted(settings, tmp_path, kind):
+    settings.config_file = write_config(
+        tmp_path,
+        f"installer:\n  chartSource:\n    kind: {kind}\n    chartPath: ./charts/mlrun-ce\n",
+    )
+
+    config.load_config(settings)
+
+    assert settings.chart_path == ("./charts/mlrun-ce" if kind == "path" else "")
+
+
+def test_an_omitted_chart_source_kind_still_means_repo(settings, tmp_path):
+    settings.config_file = write_config(tmp_path, "installer:\n  chartSource:\n    kind: ''\n")
+
+    config.load_config(settings)
+
+    assert settings.chart_path == ""
+
+
+def test_the_ingress_controller_service_can_come_from_the_config_file(settings, tmp_path):
+    settings.config_file = write_config(
+        tmp_path,
+        "installer:\n  localRegistry:\n    ingressControllerService: ingress-nginx/custom\n",
+    )
+
+    config.load_config(settings)
+
+    assert settings.ingress_controller_service == "ingress-nginx/custom"

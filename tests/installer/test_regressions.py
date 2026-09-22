@@ -23,9 +23,14 @@ Each test name ends in the symptom a user would have reported, so a future failu
 what regressed rather than which assertion tripped.
 """
 
+import re
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
-from ce_installer import cluster, helm_ops, registry, ui, validators
+from ce_installer import cluster, helm_ops, registry, shell, ui, validators
+from ce_installer.console import InstallerError
 from ce_installer.shell import Result
 
 from .conftest import Recorder
@@ -351,3 +356,59 @@ def test_external_host_generic_cluster_suggests_localhost(monkeypatch, settings)
 
     # Those tools NodePort-map to localhost; a node-IP lookup is usually unreachable.
     assert settings.external_host_address == "localhost"
+
+
+# ------------------------------------------------------------------------------------------
+# A failing command printed its own argv, credentials included
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_failing_command_does_not_print_a_password_it_was_given():
+    # The registry secret no longer travels in argv, so nothing reaches this today. The
+    # redaction stays because the failure path prints whatever it was handed, and a CI log
+    # outlives the process table by a very long way.
+    masked = " ".join(shell.redact(["kubectl", "create", "--docker-password", "supersecret"]))
+
+    assert "supersecret" not in masked
+    assert masked == "kubectl create --docker-password <redacted>"
+
+
+def test_redaction_covers_the_equals_form_too():
+    masked = shell.redact(["helm", "--password=supersecret", "install"])
+
+    assert masked == ["helm", "--password=<redacted>", "install"]
+
+
+def test_redaction_leaves_ordinary_arguments_alone():
+    cmd = ["helm", "upgrade", "--install", "mlrun-ce", "--set", "global.registry.url=x"]
+
+    assert shell.redact(cmd) == cmd
+
+
+def test_a_failed_command_message_is_redacted_end_to_end(monkeypatch):
+    monkeypatch.setattr(
+        shell.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="")
+    )
+
+    with pytest.raises(InstallerError) as excinfo:
+        shell.run(["kubectl", "--docker-password", "supersecret"], check=True)
+
+    assert "supersecret" not in excinfo.value.message
+
+
+# ------------------------------------------------------------------------------------------
+# install.py.lock does not govern the uvx install path
+# ------------------------------------------------------------------------------------------
+
+
+def test_every_declared_dependency_has_an_upper_bound():
+    # `uvx --from "git+...#subdirectory=scripts"` resolves this list, not install.py.lock,
+    # so an unbounded floor lets a release-tagged install pick up a future major of typer
+    # or click and behave differently from the one that was tested.
+    pyproject = (Path(__file__).resolve().parents[2] / "scripts" / "pyproject.toml").read_text()
+    block = re.search(r"^dependencies = \[(.*?)^\]", pyproject, re.MULTILINE | re.DOTALL)
+    declared = re.findall(r'"([^"]+)"', block.group(1))
+
+    assert declared, "no dependencies found — did the pyproject layout change?"
+    for requirement in declared:
+        assert "<" in requirement, f"{requirement} has no upper bound"

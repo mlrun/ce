@@ -40,9 +40,20 @@ installer:
     #                  to chartVersion (same as --ce-version).
     # path:           install from a local chart directory (chartPath is then required —
     #                  same as --chart-path). Use ./charts/mlrun-ce for this repo's chart.
+    # Those two words are the only ones accepted: a typo is an error rather than a silent
+    # fall back to repo, which would install the published chart while you read this file
+    # and believed you were installing your own.
     kind: repo
     chartVersion: ""
     chartPath: ""
+
+  # Only consulted with --local-registry, which patches CoreDNS so pods can resolve the
+  # registry's ingress host. namespace/name of your ingress controller Service; omitted,
+  # ingress-nginx/ingress-nginx-controller is tried first and the release namespace second.
+  # Set it explicitly for Traefik or any non-standard install (same as
+  # INGRESS_CONTROLLER_SERVICE).
+  localRegistry:
+    ingressControllerService: ""
 
   # Pin individual service versions on top of the chart defaults (same as MLRUN_VERSION /
   # NUCLIO_VERSION env vars). Independent of chartSource/chartVersion above, which pins the
@@ -65,7 +76,9 @@ installer:
   # --enable-otel-* / ENABLE_OTEL_* flags, not the --disable-* mirror above). Independent
   # knobs, not one bundled toggle, so you can enable e.g. just the operator+collector
   # without namespaceLabel/instrumentation's namespace-wide auto-instrumentation.
-  # A flag/env-set ENABLE_OTEL_* always wins — this file can only turn one on.
+  # A flag/env-set ENABLE_OTEL_* always wins — this file can only turn one on. Passing any
+  # --enable-otel* flag ignores this block entirely: a MODE names the complete state, so
+  # --enable-otel off means all four off no matter what is written here.
   otel:
     operator: false         # -> --set opentelemetry-operator.enabled=true (CRDs, webhook, manager)
     collector: false        # -> --set opentelemetry.collector.enabled=true (Collector Deployment -> Prometheus)

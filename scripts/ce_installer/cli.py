@@ -24,7 +24,7 @@ import typer
 
 from .cluster import ensure_namespace, gather_install_params, resolve_external_host
 from .config import load_config
-from .console import InstallerError, die, log_info, log_warn, out
+from .console import InstallerError, die, log_info, out
 from .helm_ops import do_uninstall, helm_install
 from .registry import (
     create_registry_secret,
@@ -100,11 +100,15 @@ def print_version() -> None:
 # natively, handled here so the command itself can stay a plain typer command:
 #
 # 1. --enable-ingress [CLASS] and --enable-otel [MODE] take an *optional* value, consumed
-#    only when the next token does not start with "--".
+#    only when the next token is not itself an option.
 # 2. The otel flags are order-sensitive: a mode names a complete state, so
 #    `--enable-otel collector --enable-otel-instrumentation` ends with instrumentation on
 #    while the reverse order does not. click does not preserve inter-option order.
-# 3. An unrecognised option warns and is ignored rather than aborting.
+#
+# A value is "another option" if it starts with a single dash, not two. bash tested
+# `!= --*`, which let `--enable-ingress -f values.yaml` read "-f" as the ingress class and
+# strand the path; no ingress class, otel mode, version or path legitimately begins with a
+# dash, so the stricter test costs nothing and closes that.
 # --------------------------------------------------------------------------------------
 
 OTEL_GRANULAR = (
@@ -147,6 +151,19 @@ def inject_default_command(args: Sequence[str]) -> List[str]:
     )
 
 
+def otel_flags_present(args: Sequence[str]) -> bool:
+    """Whether the CLI said anything about otel at all.
+
+    Distinct from the resolved state, which cannot answer this: `--enable-otel off` and
+    passing no flag both leave the four booleans False, and only the first of those means
+    the user has decided. load_config needs to tell them apart.
+    """
+    return any(
+        token == "--enable-otel" or token.startswith("--enable-otel=") or token in OTEL_GRANULAR
+        for token in args
+    )
+
+
 def resolve_otel_flags(args: Sequence[str], start: Sequence[bool]) -> List[bool]:
     """Fold the otel flags left-to-right into a final (operator, collector, label, instr) state.
 
@@ -172,7 +189,7 @@ def resolve_otel_flags(args: Sequence[str], start: Sequence[bool]) -> List[bool]
         token = args[index]
         if token == "--enable-otel":
             mode = "full"
-            if index + 1 < len(args) and not args[index + 1].startswith("--"):
+            if index + 1 < len(args) and not args[index + 1].startswith("-"):
                 mode = args[index + 1]
                 index += 1
             apply_mode(mode)
@@ -198,7 +215,7 @@ def normalize_argv(args: Sequence[str]) -> List[str]:
         nxt = args[index + 1] if index + 1 < len(args) else None
 
         if token in ("--enable-ingress", "--enable-otel"):
-            if nxt is not None and not nxt.startswith("--"):
+            if nxt is not None and not nxt.startswith("-"):
                 result.append(f"{token}={nxt}")
                 index += 2
                 continue
@@ -209,15 +226,14 @@ def normalize_argv(args: Sequence[str]) -> List[str]:
             continue
 
         if token in VALUE_REQUIRED:
-            if nxt is None or nxt.startswith("--"):
+            if nxt is None or nxt.startswith("-"):
                 raise die(VALUE_REQUIRED[token].format(opt=token))
             result.extend([token, nxt])
             index += 2
             continue
 
         if token in ("-f", "--values"):
-            # bash only rejects an empty value here, not a following flag.
-            if nxt is None or nxt == "":
+            if nxt is None or nxt == "" or nxt.startswith("-"):
                 raise die(f"Option {token} requires a value (path to YAML file).")
             result.extend([token, nxt])
             index += 2
@@ -244,6 +260,12 @@ def execute(settings: Settings) -> None:
         do_uninstall(settings)
         return
 
+    # Before anything touches the cluster. Further down this sat after ensure_namespace and
+    # deploy_local_registry, so a mistyped -f left a namespace and a running registry behind
+    # on the way to reporting that the file was never there.
+    if settings.values_file and not Path(settings.values_file).is_file():
+        raise die(f"Values file not found: {settings.values_file}")
+
     check_requirements(settings)
     ensure_namespace(settings)
 
@@ -252,9 +274,6 @@ def execute(settings: Settings) -> None:
 
     if settings.local_registry:
         deploy_local_registry(settings)
-
-    if settings.values_file and not Path(settings.values_file).is_file():
-        raise die(f"Values file not found: {settings.values_file}")
 
     # Pure -f-only mode (no --config) stays fully self-contained: no secret creation, no
     # registry/host resolution — the values file must already reference an existing secret.
@@ -294,10 +313,7 @@ app = typer.Typer(
     add_completion=False,
     context_settings={
         "help_option_names": ["-h", "--help"],
-        # bash's parse_args logs "Unknown option: X (ignored)" and carries on, so an
-        # unrecognised flag must not abort the run.
-        "ignore_unknown_options": True,
-        "allow_extra_args": True,
+        # Unknown options are rejected
         "max_content_width": 100,
     },
 )
@@ -313,7 +329,6 @@ app = typer.Typer(
     )
 )
 def install(
-    ctx: typer.Context,
     version: bool = typer.Option(
         False,
         "-v",
@@ -445,11 +460,6 @@ def install(
         "always win over the file. Can be combined with -f/--values.",
     ),
 ) -> None:
-    # Warn before the version short-circuit: bash's parse_args walks argv in order, so
-    # `--bogus --version` reports the unknown option and then prints the version.
-    for extra in ctx.args:
-        log_warn(f"Unknown option: {extra} (ignored)")
-
     if version:
         print_version()
         raise typer.Exit(0)
@@ -510,11 +520,32 @@ def install(
                 env_true("ENABLE_OTEL_INSTRUMENTATION"),
             ),
         )
+        settings.otel_set_by_cli = otel_flags_present(_RAW_ARGS)
 
         apply_version_floors(settings)
         execute(settings)
     except InstallerError as exc:
         raise typer.Exit(exc.code) from None
+
+
+def click_exception_types() -> tuple:
+    """The classes a click usage error can actually arrive as.
+
+    typer >= 0.24 ships a vendored copy of click as `typer._click`, so a command built by
+    `typer.main.get_command` raises that copy's `ClickException` — a different class from
+    the one `import click` provides, and not a subclass of it. Which applies depends on the
+    resolved typer version and therefore on the user's Python: 3.9 gets typer 0.23 and the
+    real click, 3.10+ gets 0.27 and the vendored one.
+
+    Catching only the real one left a bare traceback and exit 1 on 3.10+ where 3.9 printed
+    one clean line and exited 2 — invisible until unknown options became fatal, because
+    until then nothing routine reached click's own error path.
+    """
+    types = [click.ClickException]
+    vendored = getattr(typer, "_click", None)
+    if vendored is not None and vendored.ClickException is not click.ClickException:
+        types.append(vendored.ClickException)
+    return tuple(types)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -559,7 +590,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return int(exc.code or 0)
     except typer.Exit as exc:
         return exc.exit_code
-    except click.ClickException as exc:
+    except click_exception_types() as exc:
         exc.show()
         return exc.exit_code
     except KeyboardInterrupt:

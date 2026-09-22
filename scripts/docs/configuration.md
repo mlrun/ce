@@ -231,9 +231,15 @@ installer:
       #           (path to a file containing just the password), or use the interactive
       #           masked prompt. A password key here is detected and ignored with a warning.
   chartSource:
-    kind: repo                   # repo | path
+    kind: repo                   # repo | path — anything else is rejected, so a typo can't
+                                  # quietly install the published chart instead of yours
     chartVersion: 0.11.0         # repo mode -> --ce-version
     chartPath: ""                # path mode -> --chart-path; REQUIRED (and validated) when kind: path
+  localRegistry:
+    ingressControllerService: "" # namespace/name of your ingress controller Service, used by
+                                  # --local-registry to patch CoreDNS. Omitted tries
+                                  # ingress-nginx/ingress-nginx-controller, then the release
+                                  # namespace. Set it for Traefik or a non-standard install.
   versions:
     mlrun: ""                    # -> --set mlrun.{api,ui}.image.tag, mlrun.api.sidecars.logCollector.image.tag
     nuclio: ""                   # -> --set nuclio.{controller,dashboard}.image.tag
@@ -275,7 +281,7 @@ Have working defaults:
 |----------------------------------------|-------------------------------------------------------|
 | `installer.registry.secret.server`     | `https://index.docker.io/v1/`                        |
 | `installer.registry.secret.email`      | unset                                                 |
-| `installer.chartSource.kind`           | `repo` (published chart)                             |
+| `installer.chartSource.kind`           | `repo` (published chart); only `repo` or `path` accepted |
 | `installer.chartSource.chartVersion`   | latest                                                |
 | `installer.kubeContext`                | current local kubeconfig context                     |
 | `installer.externalHostAddress`        | `auto` — existing autodetect (minikube/docker-desktop/node IP) |
@@ -289,6 +295,7 @@ Have working defaults:
 | `installer.otel.collector`             | `false` — disabled (chart default)                   |
 | `installer.otel.namespaceLabel`        | `false` — disabled (chart default)                   |
 | `installer.otel.instrumentation`       | `false` — disabled (chart default)                   |
+| `installer.localRegistry.ingressControllerService` | try `ingress-nginx/ingress-nginx-controller`, then the release namespace |
 
 `installer.components.{monitoring,spark,mpi,modelMonitoring}` mirror the existing
 `--disable-*` **flags** exactly (`false` maps to the same `--set` as the matching flag;
@@ -306,6 +313,10 @@ every Python pod in it is auto-instrumented once `instrumentation` is also on �
 one has a namespace-wide blast radius, review before enabling. `--enable-otel [MODE]`
 (`off`/`collector`/`full`, bare flag = `full`) is a convenience over the 4 granular
 flags/vars — it doesn't replace them, and they still work individually alongside it.
+Passing **any** `--enable-otel*` flag makes the CLI the sole authority on all four, and
+`installer.otel.*` is then ignored outright. A MODE names a complete state, so
+`--enable-otel off` means all four off even where the file says `true`, and
+`--enable-otel collector` means operator+collector and nothing more.
 `ingress.*` toggles, and anything that triggers real infra beyond a `--set` (e.g.
 `--local-registry` deploying a registry), are **not** implemented — use the existing
 `--enable-ingress`/`--local-registry` flags for those. (`--enable-ingress` itself is now

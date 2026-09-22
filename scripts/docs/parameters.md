@@ -25,6 +25,13 @@ written before commands existed still work. `uninstall` and the older `--uninsta
 do the same thing. A word that isn't one of the four is an error rather than an install,
 so a typo like `unistall` can't deploy by accident.
 
+An option the installer doesn't recognise is the same kind of error, and exits 2 without
+contacting the cluster. This matters most for the flags that make a run safe: `--dry-rnu`
+would otherwise have performed a real install, and a misspelled `--skip-secret` would have
+replaced a registry secret you meant to keep. Likewise, no option value may begin with a
+dash — `--enable-ingress -f values.yaml` gives you ingress on the default class *and* the
+values file, rather than an ingress class named `-f`.
+
 ---
 
 ## Flags
@@ -84,7 +91,7 @@ Options:
 | `HELM_REPO_URL`        | `https://mlrun.github.io/ce`      | Helm chart repository URL                                |
 | `REGISTRY_USERNAME`    | —                                 | Docker registry username                                 |
 | `REGISTRY_PASSWORD`    | —                                 | Docker registry password (never read from ce-config.yaml) |
-| `REGISTRY_PASSWORD_FILE` | —                               | Path to a file containing just the password (never read from ce-config.yaml; `REGISTRY_PASSWORD` wins if both are set) |
+| `REGISTRY_PASSWORD_FILE` | —                               | Path to a file containing just the password (never read from ce-config.yaml; `REGISTRY_PASSWORD` wins if both are set). Read into memory only — unlike `REGISTRY_PASSWORD`, it is never placed in the environment the installer's helm/kubectl/docker subprocesses inherit |
 | `REGISTRY_SERVER`      | `https://index.docker.io/v1/`     | Docker server URL                                        |
 | `REGISTRY_EMAIL`       | —                                 | Docker registry email                                    |
 | `REGISTRY_URL`         | —                                 | Registry URL for images (e.g. `index.docker.io/myuser`) |
@@ -103,6 +110,7 @@ Options:
 | `ENABLE_INGRESS`       | `false`                           | Set to `true` to enable the chart's Ingress resources (requires your own controller) |
 | `SKIP_DEPENDENCY_UPDATE` | `false`                         | Set to `true` to skip fetching chart dependencies with `--chart-path` |
 | `INGRESS_CLASS`        | `nginx`                           | Ingress class name                                       |
+| `INGRESS_CONTROLLER_SERVICE` | —                           | `namespace/name` of your ingress controller Service, used by `--local-registry` to patch CoreDNS. Unset tries `ingress-nginx/ingress-nginx-controller`, then the release namespace |
 | `ENABLE_OTEL_OPERATOR`        | `false`                     | Set to `true` for `--set opentelemetry-operator.enabled=true`  |
 | `ENABLE_OTEL_COLLECTOR`       | `false`                     | Set to `true` for `--set opentelemetry.collector.enabled=true` |
 | `ENABLE_OTEL_NAMESPACE_LABEL` | `false`                     | Set to `true` for `--set opentelemetry.namespaceLabel.enabled=true` |

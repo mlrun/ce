@@ -70,8 +70,10 @@ parses correctly but never reaches helm, a step that runs in the wrong order, an
 dropped between layers.
 
 These expectations were generated while the bash installer still existed and were confirmed
-identical to its behaviour across all 32 cases, so they carry the authority the old
-differential harness did.
+identical to its behaviour across the 32 cases that existed then, so they carry the
+authority the old differential harness did. Where one has since been deliberately changed,
+`scripts/AGENTS.md`'s "Deliberate divergences" list says which and why — check there before
+concluding a recorded line is simply what bash did.
 
 ### When the golden suite fails
 

@@ -22,7 +22,12 @@ pod's image pull, with nothing pointing back here.
 The in-cluster registry (deploy_local_registry) is covered in test_regressions.py.
 """
 
+import base64
+import json
+import os
+
 import pytest
+import yaml
 
 from ce_installer import registry
 from ce_installer.console import InstallerError
@@ -33,10 +38,9 @@ def prepare(monkeypatch, settings):
     """Supply everything create_registry_secret needs apart from the password."""
     monkeypatch.setenv("REGISTRY_USERNAME", "myuser")
     monkeypatch.setenv("REGISTRY_EMAIL", "me@example.com")
-    # Pinned to empty rather than deleted, for two reasons: env_str() mirrors bash's
-    # ${VAR:-}, so "" already reads as unset, and routing it through monkeypatch guarantees
-    # the value create_registry_secret writes into os.environ is undone before the next test
-    # (a leak here would make the "file is read" case pass for the wrong reason).
+    # Pinned to empty rather than deleted: env_str() mirrors bash's ${VAR:-}, so "" already
+    # reads as unset, and setting it explicitly documents that this case is about the file
+    # being consulted, not about the variable happening to be absent.
     monkeypatch.setenv("REGISTRY_PASSWORD", "")
     settings.non_interactive = True
 
@@ -121,14 +125,60 @@ def test_registry_password_reaches_only_the_secret_creation_call(monkeypatch, se
 
     registry.create_registry_secret(settings)
 
-    # The password is an argv element of `kubectl create secret docker-registry` — so it is
-    # visible in the process table for the life of that one call (true of install.sh too;
-    # the leak-free form is --docker-password-stdin, which kubectl does not offer, or
-    # `create secret generic --from-file`). This pins the blast radius to that single call:
-    # no other kubectl invocation, and nothing the installer composes later, may carry it.
+    # Not in argv at all. install.sh passed it to `kubectl create secret docker-registry`,
+    # which put it in the process table for the length of the call and in the text `run`
+    # prints when a command fails. The secret is piped in as a manifest instead.
     carrying = [call for call in rec.calls if "supersecret" in " ".join(call)]
-    assert len(carrying) == 1, f"password appeared in {len(carrying)} calls: {rec.joined}"
-    assert carrying[0][:3] == ["create", "secret", "docker-registry"]
+    assert not carrying, f"password appeared in argv: {rec.joined}"
+
+    applied = [call for call in rec.calls if call[:3] == ["apply", "-f", "-"]]
+    assert len(applied) == 1, f"expected one apply, got: {rec.joined}"
+
+
+def test_password_from_a_file_is_not_exported_to_child_processes(
+    monkeypatch, settings, recorder, tmp_path
+):
+    password_file = tmp_path / "pw.txt"
+    password_file.write_text("fromfile\n")
+    prepare(monkeypatch, settings)
+    settings.registry_password_file = str(password_file)
+    monkeypatch.setattr(registry, "kubectl", recorder())
+
+    registry.create_registry_secret(settings)
+
+    # This used to be assigned into os.environ to reach prompt_or_env, which handed it to
+    # every helm, kubectl and docker subprocess the run starts afterwards. A file-supplied
+    # password exists precisely so it is not in an environment anyone can read.
+    assert os.environ.get("REGISTRY_PASSWORD") == ""
+    assert settings.registry_password_value == "fromfile"
+
+
+def test_the_secret_is_piped_as_a_manifest_kubectl_would_have_produced(
+    monkeypatch, settings, recorder
+):
+    prepare(monkeypatch, settings)
+    monkeypatch.setenv("REGISTRY_PASSWORD", "supersecret")
+    monkeypatch.setenv("REGISTRY_SERVER", "https://index.docker.io/v1/")
+    rec = recorder(answers={"get secret": Result(1, "NotFound")})
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    registry.create_registry_secret(settings)
+
+    applied = [
+        text for call, text in zip(rec.calls, rec.inputs) if call[:3] == ["apply", "-f", "-"]
+    ]
+    manifest = yaml.safe_load(applied[0])
+    assert manifest["type"] == "kubernetes.io/dockerconfigjson"
+    assert manifest["metadata"]["name"] == settings.registry_secret_name
+
+    # Byte-for-byte what `kubectl create secret docker-registry` writes, so a secret made
+    # either way is interchangeable — including the auth field, which is the duplicate of
+    # user:pass that registries actually read.
+    payload = json.loads(base64.b64decode(manifest["data"][".dockerconfigjson"]))
+    entry = payload["auths"]["https://index.docker.io/v1/"]
+    assert entry["username"] == "myuser"
+    assert entry["password"] == "supersecret"
+    assert base64.b64decode(entry["auth"]).decode() == "myuser:supersecret"
 
 
 def test_registry_password_never_appears_in_log_output(
@@ -179,3 +229,113 @@ def test_skip_secret_with_an_existing_secret_passes_silently(monkeypatch, settin
     assert rec.joined == [
         f"get secret {settings.registry_secret_name} --namespace {settings.namespace}"
     ]
+
+
+# ------------------------------------------------------------------------------------------
+# The CoreDNS patch, which edits a ConfigMap the whole cluster depends on
+# ------------------------------------------------------------------------------------------
+
+COREFILE = """.:53 {
+    errors
+    forward . /etc/resolv.conf
+}
+"""
+
+
+def test_an_unreadable_corefile_skips_the_patch_rather_than_emptying_it(
+    monkeypatch, settings, recorder, capture_logs
+):
+    rec = recorder(
+        answers={"get svc": Result(0, "10.96.0.10"), "get configmap coredns": Result(1, "")}
+    )
+    monkeypatch.setattr(registry, "kubectl", rec)
+    logs = capture_logs(registry)
+
+    registry.patch_coredns_for_registry(settings, "registry.example.com")
+
+    # A failed read used to become Corefile="", which insert_hosts_entry returns unchanged,
+    # so the installer applied an empty Corefile and restarted CoreDNS — taking DNS down
+    # cluster-wide while logging "CoreDNS patched".
+    assert not rec.ran("apply"), f"nothing may be applied: {rec.joined}"
+    assert not rec.ran("rollout")
+    assert any("skipping CoreDNS patch" in message for message in logs)
+
+
+def test_an_empty_corefile_skips_the_patch(monkeypatch, settings, recorder, capture_logs):
+    rec = recorder(
+        answers={"get svc": Result(0, "10.96.0.10"), "get configmap coredns": Result(0, "   ")}
+    )
+    monkeypatch.setattr(registry, "kubectl", rec)
+    logs = capture_logs(registry)
+
+    registry.patch_coredns_for_registry(settings, "registry.example.com")
+
+    assert not rec.ran("apply")
+    assert any("skipping CoreDNS patch" in message for message in logs)
+
+
+def test_a_corefile_with_nowhere_to_insert_skips_the_patch(
+    monkeypatch, settings, recorder, capture_logs
+):
+    # Neither a hosts{} block nor a forward line, so insert_hosts_entry has no anchor and
+    # returns the input untouched. Applying that would be a no-op ConfigMap write plus a
+    # pointless CoreDNS restart, reported as success.
+    rec = recorder(
+        answers={
+            "get svc": Result(0, "10.96.0.10"),
+            "get configmap coredns": Result(0, ".:53 {\n    errors\n}\n"),
+        }
+    )
+    monkeypatch.setattr(registry, "kubectl", rec)
+    logs = capture_logs(registry)
+
+    registry.patch_coredns_for_registry(settings, "registry.example.com")
+
+    assert not rec.ran("apply")
+    assert any("skipping CoreDNS patch" in message for message in logs)
+
+
+def test_a_healthy_corefile_is_patched_and_coredns_restarted(monkeypatch, settings, recorder):
+    rec = recorder(
+        answers={"get svc": Result(0, "10.96.0.10"), "get configmap coredns": Result(0, COREFILE)}
+    )
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    registry.patch_coredns_for_registry(settings, "registry.example.com")
+
+    assert rec.ran("apply")
+    assert rec.ran("rollout restart")
+
+
+def test_the_ingress_controller_is_looked_for_where_ingress_nginx_installs_itself(settings):
+    # install.sh only looked in the release namespace, which is not where a stock
+    # ingress-nginx lands, so the patch was skipped on most real clusters.
+    assert registry.ingress_controller_candidates(settings)[0] == (
+        "ingress-nginx/ingress-nginx-controller"
+    )
+    assert f"{settings.namespace}/ingress-nginx-controller" in (
+        registry.ingress_controller_candidates(settings)
+    )
+
+
+def test_an_explicit_controller_service_is_the_only_one_tried(settings):
+    # Traefik, a vendored controller or a non-standard namespace cannot be guessed at, so
+    # the override replaces the candidates rather than being appended to them.
+    settings.ingress_controller_service = "traefik-system/traefik"
+    assert registry.ingress_controller_candidates(settings) == ["traefik-system/traefik"]
+
+
+def test_the_second_candidate_is_tried_when_the_first_is_absent(monkeypatch, settings, recorder):
+    rec = recorder(answers={"--namespace mlrun": Result(0, "10.96.0.44")})
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    assert registry.resolve_ingress_controller_ip(settings) == "10.96.0.44"
+    assert len(rec.calls) == 2
+
+
+def test_a_controller_reference_without_a_namespace_is_rejected(monkeypatch, settings, recorder):
+    settings.ingress_controller_service = "just-a-name"
+    monkeypatch.setattr(registry, "kubectl", recorder())
+
+    with pytest.raises(InstallerError):
+        registry.resolve_ingress_controller_ip(settings)

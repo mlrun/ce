@@ -13,7 +13,8 @@
 # limitations under the License.
 """Registry pull secret, the optional in-cluster registry, and the CoreDNS patch."""
 
-import os
+import base64
+import json
 import re
 from pathlib import Path
 from typing import List
@@ -81,6 +82,46 @@ spec:
 """
 
 
+DOCKER_CONFIG_SECRET = """apiVersion: v1
+kind: Secret
+metadata:
+  name: {name}
+  namespace: {namespace}
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: {payload}
+"""
+
+
+def docker_config_secret(
+    *, name: str, namespace: str, server: str, username: str, password: str, email: str
+) -> str:
+    """Render the pull secret `kubectl create secret docker-registry` would have produced.
+
+    Building the manifest here and piping it on stdin keeps the password out of argv, where
+    it would otherwise sit in the process table for the length of the call and be printed
+    verbatim by `run`'s failure path. The field order and the `auth` duplicate of
+    user:pass are what kubectl emits, so a secret created either way compares equal.
+    """
+    payload = json.dumps(
+        {
+            "auths": {
+                server: {
+                    "username": username,
+                    "password": password,
+                    "email": email,
+                    "auth": base64.b64encode(f"{username}:{password}".encode()).decode(),
+                }
+            }
+        }
+    )
+    return DOCKER_CONFIG_SECRET.format(
+        name=name,
+        namespace=namespace,
+        payload=base64.b64encode(payload.encode()).decode(),
+    )
+
+
 def insert_hosts_entry(corefile: str, ip: str, host: str) -> str:
     """Add an `ip host` line to CoreDNS's Corefile.
 
@@ -120,20 +161,55 @@ def insert_hosts_entry(corefile: str, ip: str, host: str) -> str:
     return "\n".join(result)
 
 
+def ingress_controller_candidates(settings: Settings) -> List[str]:
+    """Where to look for the ingress controller Service, best guess first.
+
+    An explicit `namespace/name` always wins. Otherwise try the namespace ingress-nginx
+    installs itself into by default, then the release namespace — the latter is where the
+    bash installer looked, and is right only when the user put the controller there.
+    Anything else (Traefik, a vendored controller, a non-standard namespace) has to say so
+    via the override rather than be guessed at.
+    """
+    if settings.ingress_controller_service:
+        return [settings.ingress_controller_service]
+    return [
+        "ingress-nginx/ingress-nginx-controller",
+        f"{settings.namespace}/ingress-nginx-controller",
+    ]
+
+
+def resolve_ingress_controller_ip(settings: Settings) -> str:
+    for candidate in ingress_controller_candidates(settings):
+        namespace, _, name = candidate.partition("/")
+        if not namespace or not name:
+            raise die(
+                f"Invalid ingress controller Service reference '{candidate}' "
+                "(expected 'namespace/name')."
+            )
+        result = kubectl(
+            settings,
+            "get",
+            "svc",
+            name,
+            "--namespace",
+            namespace,
+            "-o",
+            "jsonpath={.spec.clusterIP}",
+        )
+        clusterip = result.out.strip() if result.ok else ""
+        if clusterip:
+            return clusterip
+    return ""
+
+
 def patch_coredns_for_registry(settings: Settings, registry_host: str) -> None:
-    ingress_ip = kubectl(
-        settings,
-        "get",
-        "svc",
-        "ingress-nginx-controller",
-        "--namespace",
-        settings.namespace,
-        "-o",
-        "jsonpath={.spec.clusterIP}",
-    )
-    clusterip = ingress_ip.out.strip() if ingress_ip.ok else ""
+    clusterip = resolve_ingress_controller_ip(settings)
     if not clusterip:
         log_warn("Could not get ingress controller ClusterIP; skipping CoreDNS patch.")
+        log_warn(
+            "Set INGRESS_CONTROLLER_SERVICE (or installer.localRegistry."
+            "ingressControllerService) to 'namespace/name' if your controller is elsewhere."
+        )
         log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
         return
 
@@ -147,13 +223,26 @@ def patch_coredns_for_registry(settings: Settings, registry_host: str) -> None:
         "-o",
         "jsonpath={.data.Corefile}",
     )
-    corefile = corefile_result.out if corefile_result.ok else ""
+    # An unreadable or empty Corefile must not be treated as "no entries yet": the patch
+    # below would then apply an empty Corefile and restart CoreDNS, taking cluster DNS down
+    # while reporting success. There is nothing to patch safely, so leave it alone.
+    if not corefile_result.ok or not corefile_result.out.strip():
+        log_warn("Could not read the CoreDNS Corefile; skipping CoreDNS patch.")
+        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
+        return
+    corefile = corefile_result.out
 
     if registry_host in corefile:
         log_info(f"CoreDNS already has an entry for {registry_host}; skipping patch.")
         return
 
     patched = insert_hosts_entry(corefile, clusterip, registry_host)
+    # insert_hosts_entry has nowhere to put the entry in a Corefile with neither a hosts{}
+    # block nor a forward line, and returns it unchanged rather than guessing.
+    if f"{clusterip} {registry_host}" not in patched:
+        log_warn("Could not find a place to insert the hosts entry; skipping CoreDNS patch.")
+        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
+        return
 
     rendered = kubectl(
         settings,
@@ -277,20 +366,19 @@ def _create_local_registry_secret(settings: Settings) -> None:
     log_info(f"Creating local registry secret '{settings.registry_secret_name}'...")
     kubectl(
         settings,
-        "create",
-        "secret",
-        "docker-registry",
-        settings.registry_secret_name,
+        "apply",
+        "-f",
+        "-",
         "--namespace",
         settings.namespace,
-        "--docker-server",
-        settings.local_registry_url,
-        "--docker-username",
-        "local",
-        "--docker-password",
-        "local",
-        "--docker-email",
-        "local@local",
+        input_data=docker_config_secret(
+            name=settings.registry_secret_name,
+            namespace=settings.namespace,
+            server=settings.local_registry_url,
+            username="local",
+            password="local",
+            email="local@local",
+        ),
         check=True,
     )
 
@@ -309,20 +397,26 @@ def create_registry_secret(settings: Settings) -> None:
 
     # REGISTRY_PASSWORD (env) > REGISTRY_PASSWORD_FILE > interactive masked prompt. Never
     # settable via ce-config.yaml — env, file or prompt only.
-    if not env_str("REGISTRY_PASSWORD") and settings.registry_password_file:
+    password = env_str("REGISTRY_PASSWORD")
+    if not password and settings.registry_password_file:
         password_path = Path(settings.registry_password_file)
         if not password_path.is_file():
             raise die(
                 "REGISTRY_PASSWORD_FILE is set but the file does not exist: "
                 f"{settings.registry_password_file}"
             )
+        # Kept in a local rather than exported into os.environ: everything the installer
+        # runs afterwards — helm, kubectl, docker — inherits this process's environment,
+        # and a file-supplied password exists precisely so it is not sitting in one.
+        #
         # Strip the trailing newline a file almost always carries at EOF; leaving it in
         # produces a secret that fails auth in a way that is painful to trace back here.
-        os.environ["REGISTRY_PASSWORD"] = password_path.read_text().strip("\r\n")
+        password = password_path.read_text().strip("\r\n")
 
-    password = prompt_or_env(
-        settings, "REGISTRY_PASSWORD", "Docker registry password", "", secret=True
-    )
+    if not password:
+        password = prompt_or_env(
+            settings, "REGISTRY_PASSWORD", "Docker registry password", "", secret=True
+        )
     server = prompt_or_env(
         settings,
         "REGISTRY_SERVER",
@@ -348,19 +442,18 @@ def create_registry_secret(settings: Settings) -> None:
     log_info(f"Creating Docker registry secret '{settings.registry_secret_name}'...")
     kubectl(
         settings,
-        "create",
-        "secret",
-        "docker-registry",
-        settings.registry_secret_name,
+        "apply",
+        "-f",
+        "-",
         "--namespace",
         settings.namespace,
-        "--docker-username",
-        username,
-        "--docker-password",
-        password,
-        "--docker-server",
-        server,
-        "--docker-email",
-        email,
+        input_data=docker_config_secret(
+            name=settings.registry_secret_name,
+            namespace=settings.namespace,
+            server=server,
+            username=username,
+            password=password,
+            email=email,
+        ),
         check=True,
     )

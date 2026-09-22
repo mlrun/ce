@@ -121,6 +121,28 @@ kubectl run test --rm -it --image=curlimages/curl --restart=Never \
   -n mlrun -- curl http://registry.host.docker.internal/v2/_catalog
 ```
 
+If pods can't resolve that host, the CoreDNS patch was skipped. It needs your ingress
+controller's ClusterIP, and it looks in `ingress-nginx` and then in the release namespace.
+A controller living elsewhere — Traefik, or an ingress-nginx someone put in `kube-system` —
+has to be named outright:
+
+```bash
+INGRESS_CONTROLLER_SERVICE=kube-system/traefik ./scripts/install.py --local-registry --enable-ingress
+```
+
+The installer says so when it skips, and skipping is all it does: an unreadable or empty
+Corefile ends the patch rather than being written back, since applying one would take DNS
+down for the whole cluster.
+
+### The installer exits 2 saying "No such option"
+
+A flag was misspelled. This is deliberately fatal rather than a warning, because the flags
+most worth typo-proofing are the ones that make a run safe — `--dry-rnu` is not a dry run,
+and a misspelled `--skip-secret` replaces a registry secret you meant to keep. Nothing has
+contacted the cluster at that point. The same applies to an option value beginning with a
+dash: in `--enable-ingress -f values.yaml`, `-f` is read as the next option, not as the
+ingress class.
+
 ### `--enable-ingress` is set but the Ingress URLs don't resolve
 
 This installer never installs an ingress controller for you — `--enable-ingress` only

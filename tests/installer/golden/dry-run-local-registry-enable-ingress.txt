@@ -8,7 +8,7 @@ exit: 0
 ["helm", "version", "--short"]
 ["kubectl", "get", "storageclass", "-o", "jsonpath={range .items[*]}{.metadata.name}{\"=\"}{.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class}{\"=\"}{.metadata.annotations.storageclass\\.beta\\.kubernetes\\.io/is-default-class}{\"\\n\"}{end}"]
 ["kubectl", "get", "ingressclass", "nginx"]
-["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\" \"}{range .spec.ports[*]}{.nodePort}{\"\\n\"}{end}{end}"]
+["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.annotations.meta\\.helm\\.sh/release-name}{\" \"}{range .spec.ports[*]}{.nodePort}{\"\\n\"}{end}{end}"]
 ["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.memory}{\"\\n\"}{end}"]
 ["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.ephemeral-storage}{\"\\n\"}{end}"]
 ["helm", "repo", "add", "mlrun-ce", "https://mlrun.github.io/ce"]

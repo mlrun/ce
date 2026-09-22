@@ -184,7 +184,7 @@ matters:
 `make installer-test-golden` compares the **calls** the installer makes — argv and exit
 codes — against recorded expectations, under stubbed binaries. It says nothing about what
 the installer *prints*. The access-URL table shipped with garbage in the URL column through
-32 green cases for exactly this reason. Anything the user reads needs a test in
+a full sweep of green cases for exactly this reason. Anything the user reads needs a test in
 `tests/installer/test_regressions.py`.
 
 Conversely, the unit suites patch the command wrappers, so a flag that parses correctly but

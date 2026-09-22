@@ -332,15 +332,38 @@ def test_nodeport_in_use_elsewhere_warns_with_the_conflicting_port(
     monkeypatch, settings, capture_logs
 ):
     settings.namespace = "mlrun"
+    settings.release_name = "mlrun-ce"
     logs = capture_logs(validators)
-    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns 30093\nmlrun 30010\n")})
+    install_kubectl(
+        monkeypatch,
+        {"get svc": Result(0, "other-ns/something 30093\nmlrun/mlrun-ce 30010\n")},
+    )
 
     assert validators.validate_nodeport_conflicts(settings) is True
     assert "NodePort conflict" in log_text(logs)
     assert "30093" in log_text(logs)
-    # 30010 belongs to a previous release in our own namespace — helm will adopt it, so
+    # 30010 belongs to a previous revision of this same release — helm will adopt it, so
     # reporting it as a conflict would send a user chasing a non-problem.
     assert "30010" not in log_text(logs)
+
+
+def test_nodeport_held_by_a_foreign_service_in_our_namespace_is_a_conflict(
+    monkeypatch, settings, capture_logs
+):
+    settings.namespace = "mlrun"
+    settings.release_name = "mlrun-ce"
+    logs = capture_logs(validators)
+    # Same namespace, but owned by nothing (a hand-made Service) and by another release.
+    # install.sh skipped the whole namespace and called this clear, and the install then
+    # failed on the port: helm will not adopt a Service it does not own.
+    install_kubectl(
+        monkeypatch,
+        {"get svc": Result(0, "mlrun/ 30040\nmlrun/other-release 30050\n")},
+    )
+
+    assert validators.validate_nodeport_conflicts(settings) is True
+    assert "30040" in log_text(logs)
+    assert "30050" in log_text(logs)
 
 
 def test_nodeport_check_reports_no_conflicts_when_ports_are_free(
@@ -348,7 +371,7 @@ def test_nodeport_check_reports_no_conflicts_when_ports_are_free(
 ):
     settings.namespace = "mlrun"
     logs = capture_logs(validators)
-    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns 40000\n")})
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/something 40000\n")})
 
     assert validators.validate_nodeport_conflicts(settings) is True
     assert "no conflicts detected" in log_text(logs)

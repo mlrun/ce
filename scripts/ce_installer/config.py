@@ -25,6 +25,10 @@ import yaml
 from .console import InstallerError, die, log_error, log_warn
 from .settings import Settings, env_str
 
+# The only values installer.chartSource.kind may take; anything else is a config error
+# rather than a silent fall-back to the default.
+CHART_SOURCE_KINDS = ("repo", "path")
+
 
 def as_text(value) -> str:
     """Render a YAML scalar the way `yq eval` would.
@@ -87,9 +91,23 @@ def load_config(settings: Settings) -> None:
     if not settings.kube_context and cfg_kube_context:
         settings.kube_context = cfg_kube_context
 
+    if not settings.ingress_controller_service:
+        settings.ingress_controller_service = cfg(
+            data, "installer", "localRegistry", "ingressControllerService"
+        )
+
     cfg_chart_kind = cfg(data, "installer", "chartSource", "kind")
     cfg_chart_version = cfg(data, "installer", "chartSource", "chartVersion")
     cfg_chart_path = cfg(data, "installer", "chartSource", "chartPath")
+    # Checked rather than defaulted: 'kind' selects where the chart comes from, so a typo
+    # like 'pth' would otherwise fall through to repo mode and quietly install the
+    # published chart instead of the local one the file is asking for.
+    if cfg_chart_kind and cfg_chart_kind not in CHART_SOURCE_KINDS:
+        expected = ", ".join(CHART_SOURCE_KINDS)
+        raise die(
+            f"ce-config.yaml sets installer.chartSource.kind: {cfg_chart_kind} — "
+            f"expected one of {expected}."
+        )
     if not settings.ce_version and cfg_chart_version:
         settings.ce_version = cfg_chart_version
     if not settings.chart_path and cfg_chart_kind == "path" and cfg_chart_path:
@@ -118,16 +136,23 @@ def load_config(settings: Settings) -> None:
     # opentelemetry-operator/opentelemetry.* values disabled by default (unlike components.*,
     # which default enabled), so each key here opts IN, mirroring the --enable-otel-* flags
     # rather than the --disable-* pattern. Independently settable so a user can enable e.g.
-    # just the operator+collector without the namespace-wide auto-instrumentation. A
-    # flag/env-set toggle still always wins — same "add, never override" rule as above.
-    for attr, key in (
-        ("enable_otel_operator", "operator"),
-        ("enable_otel_collector", "collector"),
-        ("enable_otel_namespace_label", "namespaceLabel"),
-        ("enable_otel_instrumentation", "instrumentation"),
-    ):
-        if not getattr(settings, attr) and cfg(data, "installer", "otel", key) == "true":
-            setattr(settings, attr, True)
+    # just the operator+collector without the namespace-wide auto-instrumentation.
+    #
+    # The whole block is skipped when any otel flag was passed, because unlike the
+    # --disable-* toggles above, an otel flag can legitimately resolve to False: a MODE
+    # names the complete state, so `--enable-otel off` and `collector` both turn things
+    # *off*. Reading a per-attribute "is it still False?" cannot tell that apart from
+    # "never mentioned", and would let the file switch back on what the flag just
+    # disabled — inverting the documented flag-over-config precedence.
+    if not settings.otel_set_by_cli:
+        for attr, key in (
+            ("enable_otel_operator", "operator"),
+            ("enable_otel_collector", "collector"),
+            ("enable_otel_namespace_label", "namespaceLabel"),
+            ("enable_otel_instrumentation", "instrumentation"),
+        ):
+            if not getattr(settings, attr) and cfg(data, "installer", "otel", key) == "true":
+                setattr(settings, attr, True)
 
     # chartPath is a pure config-authoring error with no flag/env/prompt fallback, so it is
     # checked unconditionally rather than only in --non-interactive mode.

@@ -32,14 +32,15 @@ cluster. Re-record only after reading the diff (`make installer-test-golden-upda
 
 ### Deliberate divergences from the bash behaviour
 
-Five, recorded here because each is a behaviour change users can observe, and because the
-golden expectations bake them in — a reader comparing against the old bash script would
-otherwise read them as regressions:
+Recorded here because each is a behaviour change users can observe, and because the golden
+expectations bake them in — a reader comparing against the old bash script would otherwise
+read them as regressions. The first five came out of the port itself; the rest out of the
+review on #315, where a faithful port turned out to have faithfully carried a bug across.
 
 1. **`docker` is not a prerequisite.** `check_requirements` no longer gates on
    `docker info`; `validate_registry_auth` reports `skipped (docker not available)`. The
-   pull secret is created by `kubectl create secret docker-registry`, never by Docker, so
-   the only thing lost is a best-effort `docker login` that already degraded to a warning.
+   pull secret is a Secret manifest applied with kubectl, never built by Docker, so the
+   only thing lost is a best-effort `docker login` that already degraded to a warning.
    This is what makes in-pod execution possible — a containerd/CRI-O node has no daemon.
 2. **`--chart-path` prefers `helm dependency build`.** `update` re-resolves
    `requirements.yaml` and rewrites the lock, which is the maintainer operation;
@@ -65,6 +66,56 @@ otherwise read them as regressions:
    cluster as part of the manifest, and `parse_major_minor` takes the first `vN.N` anywhere
    in its input, so a deprecation warning naming a Kubernetes version would be read as the
    cluster's own. Found while porting the validator tests.
+6. **An unrecognised option is fatal.** bash logged `Unknown option: X (ignored)` and
+   carried on, which meant a typo silently changed what the run did: `--dry-rnu` performed
+   a real install, and a misspelled `--skip-secret` rewrote a registry secret the user
+   meant to keep. There is no forward-compatibility argument on the other side, because
+   the installer ships with the chart and its flags and its chart are one version. click's
+   own default behaviour, reached by dropping `ignore_unknown_options`/`allow_extra_args`;
+   exit code 2, not 1.
+7. **An option value may not start with a dash.** bash tested `!= --*`, so
+   `--enable-ingress -f values.yaml` read `-f` as the ingress class and stranded the path.
+   Everything that takes a value — ingress class, otel mode, chart path, values file,
+   version — now treats any dash-prefixed token as the next option instead. Under (6) the
+   stranded argument is a hard error rather than a warning, so the invocation fails
+   outright instead of installing something subtly different from what was asked for.
+8. **`installer.chartSource.kind` is validated.** Only `repo`, `path` or unset. `kind: pth`
+   used to fall through to repo mode and install the *published* chart while the file was
+   plainly asking for the local one — the difference between testing your branch and
+   testing whatever is on the chart repo, reported neither way.
+9. **A `--config` file cannot override an `--enable-otel` mode.** The four otel booleans
+   are the one set where a flag legitimately resolves to `False`, so "still False" cannot
+   be read as "unset": `--enable-otel off` looked identical to silence, and any
+   `otel.*: true` in the file switched back on what the flag had just turned off.
+   `otel_set_by_cli` records that the CLI spoke, and `load_config` then leaves the whole
+   block alone. Same rule the flags already follow — a MODE names the complete state.
+10. **The `-f` path is checked before anything touches the cluster.** It used to be
+    validated after `ensure_namespace` and `deploy_local_registry`, so a mistyped path left
+    a namespace and a running registry Deployment behind on the way to reporting that the
+    file was never there.
+11. **The pull secret is piped in as a manifest.** `kubectl create secret docker-registry`
+    takes the password as an argv element, which puts it in the process table for the
+    length of the call and — via the `Command failed: …` message `run` prints on a
+    `check=True` failure — into stderr and any CI log capturing it. `docker_config_secret`
+    renders the identical `kubernetes.io/dockerconfigjson` Secret and `kubectl apply -f -`
+    reads it from stdin. `shell.redact` masks known credential flags in that message as
+    well, so a future call site that does pass one is not a fresh leak.
+12. **`REGISTRY_PASSWORD_FILE` is not exported.** bash assigned the file's contents to
+    `REGISTRY_PASSWORD`, which every helm, kubectl and docker subprocess then inherited —
+    defeating the point of supplying it as a file. It is a local variable now.
+13. **The NodePort check is scoped by ownership, not by namespace.** bash skipped every
+    Service in the target namespace as "probably ours". NodePorts are cluster-wide and helm
+    will not adopt a Service it does not own, so an unrelated Service in `mlrun` holding
+    30040 was reported as "no conflicts detected" and the install then failed on it. The
+    jsonpath now carries `meta.helm.sh/release-name` and only this release's own Services
+    are skipped.
+14. **The ingress controller Service is looked for where it usually is.** bash hardcoded
+    `ingress-nginx-controller` in the release namespace; a stock ingress-nginx installs
+    into `ingress-nginx`, so on most clusters the CoreDNS patch was quietly skipped.
+    `ingress-nginx/ingress-nginx-controller` is tried first and the release namespace
+    second, and `INGRESS_CONTROLLER_SERVICE` (or
+    `installer.localRegistry.ingressControllerService`) names it outright for Traefik and
+    anything else that cannot be guessed at.
 
 One bug the port fixes for free: `curl -sSL … | bash` makes the script itself bash's stdin,
 so `read -r -p` consumes script text instead of the user's answer and the interactive
@@ -94,18 +145,21 @@ default). Nothing below `cli.py` and `config.py` reads `os.environ` for a tunabl
 
 ### Why the argv pre-parse in `cli.py` exists
 
-click cannot express three things the bash `parse_args` does, so raw argv is rewritten
+click cannot express two things the bash `parse_args` does, so raw argv is rewritten
 before click sees it:
 
 1. `--enable-ingress [CLASS]` and `--enable-otel [MODE]` take an *optional* value, consumed
-   only when the next token does not start with `--`. Rewritten to `--flag=value`.
+   only when the next token is not itself an option. Rewritten to `--flag=value`.
 2. The otel flags are **order-sensitive** — a MODE names a complete state, so
    `--enable-otel collector --enable-otel-instrumentation` ends with instrumentation on and
    the reverse order does not. click does not preserve inter-option order, so
    `resolve_otel_flags` folds the *raw* argv left to right. The five otel parameters on the
    typer command exist only so they render in `--help`; their parsed values are unused.
-3. An unrecognised option warns and is ignored rather than aborting
-   (`ignore_unknown_options` + `allow_extra_args`, then a warn loop over `ctx.args`).
+   `otel_flags_present` reads the same raw argv for divergence 9 — whether the CLI said
+   anything about otel at all, which the resolved booleans cannot answer.
+
+The third thing bash did here, tolerating unknown options, is divergence 6: click rejects
+them and the pre-parse does not intervene.
 
 One click trap worth knowing: with `standalone_mode=False`, `command.main()` **returns** a
 `typer.Exit`'s code instead of raising it. `main()` has to honour the return value or every
@@ -211,7 +265,7 @@ the two entry paths, and both declarations have to be kept in step:
 | Declared in | Consumed by | Form |
 |---|---|---|
 | the PEP 723 header in `install.py` | `uv run --script`, i.e. the clone path | pinned via `install.py.lock` |
-| `[project.dependencies]` in `pyproject.toml` | `uvx --from git+…`, `--with-editable ./scripts` | floors, resolved fresh |
+| `[project.dependencies]` in `pyproject.toml` | `uvx --from git+…`, `--with-editable ./scripts` | a range, resolved fresh |
 
 `scripts/install.py.lock` is committed, and it is what makes `./scripts/install.py`
 reproducible: `uv run --script` otherwise re-resolves the four on every user's machine, so a
@@ -225,12 +279,20 @@ uv lock --script scripts/install.py
 Forgetting is caught — CI runs `uv lock --script scripts/install.py --check`, which exits 1
 on a stale lock — but only after a push, so it is worth doing in the same commit.
 
-The two declarations stay floors-and-pins rather than pins-and-pins on purpose. The
+The two declarations stay ranges-and-pins rather than pins-and-pins on purpose. The
 installed path may land in an environment a user already has, so pinning there would cause
 conflicts it has no business causing; the script path owns its environment outright, so it
-can afford exact pins. Note that the floors are what `make installer-test` resolves against,
+can afford exact pins. Note that the ranges are what `make installer-test` resolves against,
 via `--with-editable ./scripts` — the lock does not constrain the test run, which is why CI
 tests both 3.9 and 3.13 rather than trusting one resolution.
+
+The ranges carry upper bounds (`typer<1`, `click<9`, `rich<15`, `pyyaml<7`) because the
+lock does **not** reach the `uvx --from "git+…#subdirectory=scripts"` path the README
+recommends to users without a clone. Open-ended floors there meant a release-tagged install
+resolved whatever those projects had published that morning, which is not what a tag is
+for; a ceiling at the next major keeps it inside a range this chart was tested against
+while still letting a patch land without a chart release.
+`test_every_declared_dependency_has_an_upper_bound` enforces it.
 
 `scripts/uv.lock` is a local development artifact and is gitignored; nothing consumes it.
 Do not confuse either with `charts/mlrun-ce/requirements.lock`, which pins the chart's
@@ -318,6 +380,18 @@ node image is the safest choice.
   thing anyone looks at when an install is suspected of having gone wrong.
 
 ## Fixed bugs
+
+- **A click usage error was a traceback on Python 3.10+ and a clean line on 3.9** (found
+  while making unknown options fatal). typer >= 0.24 ships a vendored copy of click as
+  `typer._click`, so the command `typer.main.get_command` builds raises *that* copy's
+  `ClickException` — not a subclass of the `click.ClickException` `main()` was catching.
+  Python 3.9 resolves typer 0.23, which still uses the real click, so the same invocation
+  behaved differently on the two versions CI tests. It stayed hidden because nothing
+  routine reached click's error path until unknown options stopped being ignored;
+  `--dry-rnu` then printed a stack trace and exited 1 instead of one line and exit 2.
+  `click_exception_types()` catches whichever applies. Worth remembering when catching
+  anything else from click: the class depends on the resolved typer version, which depends
+  on the user's Python.
 
 - **The access-URL table put the wrong text in the URL column** (found by the first live
   install of the port, on an rke2 lab). `print_notes_table` assigned *every* non-empty line
@@ -433,15 +507,17 @@ the suites are shaped the way they are.
 ### Golden argv suite (`make installer-test-golden`)
 
 The successor to the differential harness, and the main guard on behaviour.
-`tests/installer/test_golden_argv.py` runs the whole installer as a subprocess over 32
+`tests/installer/test_golden_argv.py` runs the whole installer as a subprocess over 34
 invocations with `tests/installer/stub.py` symlinked onto a temporary PATH as `helm`,
 `kubectl`, `docker` and `minikube`, then compares the recorded calls and exit code against
 `tests/installer/golden/`. No cluster is contacted and the temp PATH is torn down after.
 
 Those expectations are not arbitrary snapshots. They were recorded from `install.py` while
-`install.sh` still existed, and the differential harness confirmed all 32 identical between
-the two on the same commit — so they encode the bash script's behaviour, which is what makes
-deleting it safe.
+`install.sh` still existed, and the differential harness confirmed all 32 of the cases that
+existed then identical between the two on the same commit — so they encode the bash
+script's behaviour, which is what makes deleting it safe. Where a line has since moved, the
+divergence list above says why; `dry-rnu.txt` (empty, exit 2) is the clearest of them,
+recording that a typo now reaches nothing at all.
 
 - The stub derives its answers from the arguments rather than returning fixed values, so a
   test cannot pass by accident once the installer stops asking the question it was supposed
@@ -449,7 +525,7 @@ deleting it safe.
   `STUB_HELM_EXIT`, `STUB_NODE_MEMORY`, …).
 - Add a case to `CASES` whenever a flag gains behaviour that reaches helm or kubectl.
   Refusals belong there too — *how* the installer rejects a bad value is as much a contract
-  as how it succeeds, and five of the 32 cases exist only to pin that.
+  as how it succeeds, and six of the 34 cases exist only to pin that.
 - **The config-file cases carry an env rule.** `--config` supplies the registry identity,
   and flag/env beats file, so `run_case` drops `REGISTRY_URL`/`USERNAME`/`EMAIL` and
   `EXTERNAL_HOST_ADDRESS` for those invocations — otherwise the recording would look the

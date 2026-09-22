@@ -102,21 +102,31 @@ def test_short_v_is_accepted_for_version(ran, capsys):
     assert "mlrun-ce installer" in capsys.readouterr().out
 
 
-def test_an_unknown_option_warns_and_is_ignored_rather_than_aborting(ran, capsys):
-    code, settings = ran("--bogus-flag", "--dry-run")
-    assert code == 0, "an unrecognised flag must not abort the run"
-    assert settings.dry_run is True
-    assert "Unknown option" in capsys.readouterr().out
+def test_an_unknown_option_aborts_rather_than_being_ignored(ran):
+    # install.sh warned and carried on, which meant a typo changed what the run did:
+    # this invocation would have performed a real install, the --dry-run never reaching it.
+    code, settings = ran("--dry-rnu")
+    assert code != 0, "an unrecognised flag must abort before anything touches the cluster"
+    assert settings is None, "the command body must not run at all"
 
 
-def test_an_unknown_option_is_reported_even_alongside_version(ran, capsys):
-    # bash walked argv in order, so it warned before printing the version. Losing the
-    # warning would hide a typo behind an unrelated flag.
+def test_an_unknown_option_aborts_even_alongside_version(ran):
     code, _ = ran("--bogus-flag", "--version")
-    assert code == 0
-    out = capsys.readouterr().out
-    assert "Unknown option" in out
-    assert "mlrun-ce installer" in out
+    assert code != 0, "a typo must not be masked by an unrelated flag that exits early"
+
+
+def test_an_unknown_option_is_one_clean_line_and_exit_2(ran, capsys):
+    code, _ = ran("--dry-rnu")
+
+    # click's own usage-error handling, which means the exception has to be caught as the
+    # class typer actually raises. typer >= 0.24 vendors click, so `click.ClickException`
+    # alone let it escape as a traceback on Python 3.10+ while 3.9 printed this — a split
+    # that only appeared once unknown options started reaching click at all.
+    assert code == 2
+    printed = capsys.readouterr()
+    combined = printed.out + printed.err
+    assert "--dry-rnu" in combined
+    assert "Traceback" not in combined
 
 
 # ------------------------------------------------------------------------------------------
@@ -263,10 +273,11 @@ def test_values_file_rejects_an_empty_value():
         cli.normalize_argv(["-f", ""])
 
 
-def test_values_file_accepts_a_flag_looking_value():
-    # bash only rejected an empty value here, not a following flag; keeping that means a
-    # path that starts with a dash still works.
-    assert cli.normalize_argv(["-f", "--odd-name.yaml"]) == ["-f", "--odd-name.yaml"]
+def test_values_file_rejects_a_flag_looking_value():
+    # bash accepted this, so `-f --dry-run` silently installed a values file named
+    # "--dry-run" and dropped the flag. No real path begins with a dash.
+    with pytest.raises(InstallerError):
+        cli.normalize_argv(["-f", "--odd-name.yaml"])
 
 
 @pytest.mark.parametrize(
@@ -488,6 +499,36 @@ def test_enable_ingress_does_not_swallow_the_next_flag_as_a_class(ran):
     assert settings.dry_run is True
 
 
+def test_enable_ingress_does_not_swallow_a_following_short_option(ran, tmp_path):
+    # bash tested `!= --*`, so a single-dash option was fair game as the class: this read
+    # "-f" as the ingress class and left "values.yaml" stranded as a bare word.
+    values = tmp_path / "values.yaml"
+    values.write_text("global: {}\n")
+
+    _, settings = ran("--enable-ingress", "-f", str(values))
+
+    assert settings.enable_ingress is True
+    assert settings.ingress_class == "nginx"
+    assert settings.values_file == str(values)
+
+
+def test_enable_otel_does_not_swallow_a_following_short_option(ran, tmp_path):
+    values = tmp_path / "values.yaml"
+    values.write_text("global: {}\n")
+
+    _, settings = ran("--enable-otel", "-f", str(values))
+
+    # Bare --enable-otel means full, and "-f" is an option rather than the MODE.
+    assert settings.enable_otel_instrumentation is True
+    assert settings.values_file == str(values)
+
+
+@pytest.mark.parametrize("flag", ["--chart-path", "--ce-version", "--config"])
+def test_a_value_requiring_option_rejects_a_following_short_option(flag):
+    with pytest.raises(InstallerError):
+        cli.normalize_argv([flag, "-f"])
+
+
 # ------------------------------------------------------------------------------------------
 # Version floors
 # ------------------------------------------------------------------------------------------
@@ -581,12 +622,20 @@ def test_a_values_file_with_config_still_creates_the_secret(monkeypatch, tmp_pat
 
 
 def test_a_missing_values_file_is_refused_before_anything_runs(monkeypatch):
+    called = []
     monkeypatch.setattr(cli, "load_config", lambda s: None)
-    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
-    monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
+    monkeypatch.setattr(cli, "check_requirements", lambda s: called.append("requirements"))
+    monkeypatch.setattr(cli, "ensure_namespace", lambda s: called.append("namespace"))
+    monkeypatch.setattr(cli, "deploy_local_registry", lambda s: called.append("registry"))
+    monkeypatch.setattr(cli, "resolve_external_host", lambda s: None)
 
     with pytest.raises(InstallerError):
-        cli.execute(Settings(values_file="/nonexistent/values.yaml"))
+        cli.execute(Settings(values_file="/nonexistent/values.yaml", local_registry=True))
+
+    # The check used to sit after ensure_namespace and deploy_local_registry, so a mistyped
+    # -f created a namespace and a running registry Deployment on the way to reporting that
+    # the file does not exist — cluster state left behind by a run that never installed.
+    assert called == [], f"cluster was touched before the path was validated: {called}"
 
 
 def test_skip_secret_verifies_the_existing_one_instead(monkeypatch):

@@ -33,8 +33,14 @@ STORAGECLASS_JSONPATH = (
     r'{"\n"}{end}'
 )
 
+# "<namespace>/<owning release> <port>" for a Service's first port, then a bare port per
+# line for the rest. The release comes from the annotation helm writes on everything it
+# owns, and is empty for Services it does not; the "/" is always emitted, which is what
+# lets the parser tell a prefixed first line from a continuation one.
 NODEPORT_JSONPATH = (
-    r'{range .items[*]}{.metadata.namespace}{" "}{range .spec.ports[*]}{.nodePort}{"\n"}{end}{end}'
+    r'{range .items[*]}{.metadata.namespace}{"/"}'
+    r"{.metadata.annotations.meta\.helm\.sh/release-name}"
+    r'{" "}{range .spec.ports[*]}{.nodePort}{"\n"}{end}{end}'
 )
 
 
@@ -179,20 +185,31 @@ def validate_nodeport_conflicts(settings: Settings) -> bool:
     result = kubectl(
         settings, "get", "svc", "--all-namespaces", "-o", "jsonpath=" + NODEPORT_JSONPATH
     )
-    # Mirrors `awk -v ns=NS '$1 != ns { print $2 }'`: the jsonpath emits the namespace once
-    # per Service followed by one nodePort per line, so only the first line of each Service
-    # carries the namespace in $1.
+    # Only Services this release already owns are skipped, because those NodePorts are ours
+    # to take back on an upgrade. Everything else counts, including the rest of the target
+    # namespace: helm will not adopt a Service it does not own, so an unrelated one sitting
+    # on 30040 fails the install on a port the bash version reported as clear.
     used: List[str] = []
+    ours = False
     for line in result.out.splitlines() if result.ok else []:
         fields = line.split()
-        if fields and fields[0] != settings.namespace:
-            used.append(fields[1] if len(fields) > 1 else "")
+        if not fields:
+            continue
+        if "/" in fields[0]:
+            namespace, _, release = fields[0].partition("/")
+            ours = namespace == settings.namespace and release == settings.release_name
+            port = fields[1] if len(fields) > 1 else ""
+        else:
+            port = fields[0]
+        if port and not ours:
+            used.append(port)
 
     conflicts = [str(port) for port in REQUIRED_NODEPORTS if str(port) in used]
     if conflicts:
+        joined = " ".join(conflicts)
         log_warn(
-            "  NodePort conflict: already in use by another Service outside namespace "
-            "'{}': {}".format(settings.namespace, " ".join(conflicts))
+            "  NodePort conflict: already in use by a Service not owned by "
+            f"release '{settings.release_name}': {joined}"
         )
     else:
         log_info("  NodePorts: no conflicts detected")

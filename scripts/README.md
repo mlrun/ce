@@ -23,10 +23,17 @@ Three tools, and `uv` supplies the Python:
 | `helm` | [install](https://helm.sh/docs/intro/install/) |
 | `kubectl` | Configured and pointing at your cluster |
 
-`docker` is **not** required. The image pull secret is created by `kubectl create secret
-docker-registry`, never by Docker; the only thing a Docker daemon adds is a best-effort
-`docker login` in the pre-install validators, which reports `skipped` without it. That is
-also what lets the installer run from inside a pod, where there is no daemon at all.
+`docker` is **not** required. The image pull secret is a Kubernetes Secret the installer
+renders itself and applies with kubectl, never anything Docker builds; the only thing a
+Docker daemon adds is a best-effort `docker login` in the pre-install validators, which
+reports `skipped` without it. That is also what lets the installer run from inside a pod,
+where there is no daemon at all.
+
+The secret is piped to `kubectl apply` on standard input rather than passed as
+`kubectl create secret docker-registry --docker-password …`, so your registry password is
+never a command-line argument: not in the process table, and not in the command text the
+installer prints if a kubectl call fails. Worth knowing if you run this in CI, where that
+output is usually captured and kept.
 
 ---
 
@@ -49,6 +56,12 @@ runs it, leaving nothing behind on your system Python.
 Substituting `development` for the tag always gets the newest installer, but it moves with
 every merge, so two runs a day apart can differ. Prefer a tag anywhere reproducibility
 matters, CI especially.
+
+A tag pins the installer, not its dependencies down to the patch: this path resolves typer,
+click, rich and pyyaml fresh, within the ranges `scripts/pyproject.toml` declares. The clone
+path below is the exactly-pinned one, via the committed `scripts/install.py.lock`. If you
+need that guarantee without a clone, install into an environment you control and lock it
+there.
 
 ### Install as a named command
 

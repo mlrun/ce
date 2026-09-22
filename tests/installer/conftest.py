@@ -62,6 +62,7 @@ INSTALLER_ENV_VARS = (
     "DISABLE_MODEL_MONITORING",
     "ENABLE_INGRESS",
     "INGRESS_CLASS",
+    "INGRESS_CONTROLLER_SERVICE",
     "ENABLE_OTEL_OPERATOR",
     "ENABLE_OTEL_COLLECTOR",
     "ENABLE_OTEL_NAMESPACE_LABEL",
@@ -108,6 +109,10 @@ class Recorder:
 
     def __init__(self, answers=None, default=None):
         self.calls = []
+        # What was piped in per call, positionally aligned with `calls`. Anything the
+        # installer deliberately keeps out of argv — the registry secret, rendered
+        # manifests — is only visible here.
+        self.inputs = []
         self.answers = answers or {}
         self.default = default if default is not None else Result(0, "")
 
@@ -118,6 +123,7 @@ class Recorder:
         else:
             argv = list(args[0])
         self.calls.append(argv)
+        self.inputs.append(kwargs.get("input_data") or "")
         for needle, answer in self.answers.items():
             if needle in " ".join(argv):
                 return answer

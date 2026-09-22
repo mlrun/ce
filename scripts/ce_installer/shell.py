@@ -35,6 +35,37 @@ class Result:
         return self.code == 0
 
 
+# Flags whose value is a credential. Nothing in the installer passes one today — the
+# registry secret is piped as a manifest on stdin precisely so it cannot appear here — but
+# a failed command prints its own argv, so anything that did would land in a CI log.
+SECRET_FLAGS = ("--docker-password", "--password", "--token")
+
+
+def redact(cmd: Sequence[str]) -> List[str]:
+    """Mask credential values in a command about to be printed.
+
+    Handles both `--flag value` and `--flag=value`, since click-style and kubectl-style
+    call sites differ and a leak is not worth being clever about.
+    """
+    masked: List[str] = []
+    mask_next = False
+    for token in cmd:
+        if mask_next:
+            masked.append("<redacted>")
+            mask_next = False
+            continue
+        if token in SECRET_FLAGS:
+            mask_next = True
+            masked.append(token)
+            continue
+        flag = token.split("=", 1)[0]
+        if "=" in token and flag in SECRET_FLAGS:
+            masked.append(f"{flag}=<redacted>")
+            continue
+        masked.append(token)
+    return masked
+
+
 def run(
     cmd: Sequence[str],
     *,
@@ -75,7 +106,7 @@ def run(
         detail = result.err.strip() or result.out.strip()
         if detail:
             err.print(detail)
-        raise die("Command failed: {}".format(" ".join(cmd)), result.code)
+        raise die("Command failed: {}".format(" ".join(redact(cmd))), result.code)
     return result
 
 
@@ -121,10 +152,10 @@ def helm(settings: Settings, *args: str, **kwargs) -> Result:
 def docker_available() -> bool:
     """docker is optional: the install never needs it.
 
-    The registry secret is created by `kubectl create secret docker-registry`, not by
-    Docker. The only real use is the best-effort `docker login` in validate_registry_auth,
-    which already degrades to a warning. Requiring it would also make the installer
-    unusable from inside a pod on a containerd/CRI-O cluster, where there is no daemon.
+    The registry secret is a manifest applied with kubectl, not anything Docker builds.
+    The only real use is the best-effort `docker login` in validate_registry_auth, which
+    already degrades to a warning. Requiring it would also make the installer unusable
+    from inside a pod on a containerd/CRI-O cluster, where there is no daemon.
 
     Cached because both check_requirements and validate_registry_auth ask, and `docker
     info` against an unreachable daemon is not free — the bash installer probed once into

@@ -98,6 +98,12 @@ class Settings:
     )
     helm_timeout: str = field(default_factory=lambda: env_str("HELM_TIMEOUT", DEFAULT_HELM_TIMEOUT))
     registry_password_file: str = field(default_factory=lambda: env_str("REGISTRY_PASSWORD_FILE"))
+    # 'namespace/name' of the ingress controller Service, for the --local-registry CoreDNS
+    # patch. Unset means try the well-known ingress-nginx locations; see
+    # registry.ingress_controller_candidates.
+    ingress_controller_service: str = field(
+        default_factory=lambda: env_str("INGRESS_CONTROLLER_SERVICE")
+    )
     external_host_address: str = field(default_factory=lambda: env_str("EXTERNAL_HOST_ADDRESS"))
     kube_context: str = field(default_factory=lambda: env_str("KUBE_CONTEXT"))
     mlrun_version: str = field(default_factory=lambda: env_str("MLRUN_VERSION"))
@@ -127,6 +133,9 @@ class Settings:
     enable_otel_collector: bool = False
     enable_otel_namespace_label: bool = False
     enable_otel_instrumentation: bool = False
+    # Set when any --enable-otel* flag appeared, so load_config knows the four booleans
+    # above are a deliberate complete state and not just unset defaults.
+    otel_set_by_cli: bool = False
     local_registry: bool = False
     ce_version: str = ""
     chart_path: str = ""
