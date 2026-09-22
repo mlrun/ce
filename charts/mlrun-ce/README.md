@@ -199,8 +199,8 @@ To persist KFP artifacts to cloud storage, enable `seaweedfs.remote`. SeaweedFS 
 
 The chart deploys:
 
-- A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and mounts the remote bucket into the filer (`s3-bucket-init` is skipped when remote is enabled). By default the mount uses `-nonempty` so upgrades succeed even when `/buckets/<local>` already contains pipeline artifacts
-- A **gateway Deployment** (Helm post-install/upgrade hook, weight 9) that keeps the local and remote buckets in sync — after the remote mount from the config Job is in place
+- A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and mounts the remote bucket into the filer (`s3-bucket-init` is skipped when remote is enabled with `mount.mountExisting: true`). By default the mount uses `-nonempty` so upgrades succeed even when `/buckets/<local>` already contains pipeline artifacts
+- A **gateway Deployment** that keeps the local and remote buckets in sync — its init containers wait for the filer and for the remote mount from the config Job
 
 Example overlays (copy and customize, or pass as `-f` values files). See `examples/README.md` for deploy commands and Azure auth options:
 
@@ -219,7 +219,13 @@ helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
   -f charts/mlrun-ce/examples/seaweedfs-remote-s3-overlay.yaml
 ```
 
-**Azure Blob example** — see `examples/README.md` for account-key and connection-string options.
+**Azure Blob example** (customize placeholders in the overlay first; see `examples/README.md` for account-key and connection-string options):
+
+```bash
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
+  -f <your-environment-values>.yaml \
+  -f charts/mlrun-ce/examples/seaweedfs-remote-azure-overlay.yaml
+```
 
 Key values under `seaweedfs.remote`:
 
@@ -231,6 +237,7 @@ Key values under `seaweedfs.remote`:
 | `name`                | Remote name for SeaweedFS — letters and numbers only (default: `cloudstorage`)                                                               |
 | `bucket`              | Remote AWS bucket or Azure container name (for Azure, must match `storage.azure.containerName`)                                              |
 | `s3.endpoint`         | Regional S3 endpoint (required when `provider: s3`)                                                                                          |
+| `s3.forcePathStyle`   | Path-style S3 URLs (default: `false` for AWS; set `true` for MinIO and other path-style endpoints)                                             |
 | `mount.mountExisting` | Mount an existing remote bucket/container (default: `true`)                                                                                  |
 | `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
 

@@ -6,28 +6,22 @@ metadata:
   labels:
     {{- include "mlrun-ce.common.labels" . | nindent 4 }}
     app.kubernetes.io/component: seaweedfs-remote-gateway
-  annotations:
-    helm.sh/hook: post-install,post-upgrade
-    # Same weight as seaweedfs-remote-config Job; init container waits for remote mount.
-    helm.sh/hook-weight: "9"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "mlrun-ce.common.labels" . | nindent 6 }}
-      app.kubernetes.io/component: seaweedfs-remote-gateway
+      {{- include "mlrun-ce.seaweedfs.remote.gateway.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "mlrun-ce.common.labels" . | nindent 8 }}
-        app.kubernetes.io/component: seaweedfs-remote-gateway
+        {{- include "mlrun-ce.seaweedfs.remote.gateway.selectorLabels" . | nindent 8 }}
     spec:
       initContainers:
         - name: wait-for-filer
           image: busybox:1.37
           env:
             - name: FILER_HOST
-              value: seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local
+              value: {{ include "mlrun-ce.seaweedfs.allInOne.fqdn" . | quote }}
             - name: FILER_PORT
               value: {{ include "mlrun-ce.seaweedfs.filer.port" . | quote }}
           command:
