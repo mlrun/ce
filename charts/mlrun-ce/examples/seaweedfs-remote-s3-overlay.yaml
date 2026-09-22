@@ -1,3 +1,6 @@
+# storage.s3.* feeds seaweedfs.remote (KFP pipeline artifacts sync to AWS S3 via the remote gateway).
+# storage.mode controls MLRun/Jupyter only and defaults to local (in-cluster SeaweedFS).
+# Set storage.mode: s3 if you also want MLRun/Jupyter artifacts in S3.
 storage:
   s3:
     bucket: <BUCKET_NAME>
@@ -12,4 +15,3 @@ seaweedfs:
     s3:
       endpoint: s3.<REGION>.amazonaws.com
       region: <REGION> # e.g. us-east-2
-      forcePathStyle: false

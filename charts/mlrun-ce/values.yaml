@@ -360,6 +360,7 @@ seaweedfs:
   # Disable individual component pods - allInOne runs everything in a single deployment
   master:
     enabled: false
+    port: 9333
   volume:
     enabled: false
     dataDirs:
@@ -403,7 +404,7 @@ seaweedfs:
     enabled: true
     port: 23646
     # Point admin at the allInOne service since the standalone master StatefulSet
-    # is disabled. Without this the chart cannot auto-discover the master address.
+    # is disabled. Must match {seaweedfs.fullnameOverride}-all-in-one:{seaweedfs.master.port}.
     masters: "seaweedfs-all-in-one:9333"
     secret:
       adminUser: "seaweed"
@@ -459,7 +460,8 @@ seaweedfs:
       # Regional endpoint, e.g. s3.us-east-2.amazonaws.com (https:// added by the configure job)
       endpoint: ""
       region: us-east-1
-      forcePathStyle: true
+      # false for AWS S3; set true for path-style endpoints (MinIO, etc.)
+      forcePathStyle: false
       storageClass: STANDARD
     gateway:
       # When false, local bucket name is mirrored to remote without a random suffix
@@ -562,10 +564,10 @@ pipelines:
         tag: 1.16.0
     metadataEnvoy:
       repository: ghcr.io/kubeflow/kfp-metadata-envoy
-      tag: 2.15.0
+      tag: 2.16.0
     metadataWriter:
       repository: ghcr.io/kubeflow/kfp-metadata-writer
-      tag: 2.15.0
+      tag: 2.16.0
     mysql:
       repository: gcr.io/iguazio/mysql
       tag: "8.4"

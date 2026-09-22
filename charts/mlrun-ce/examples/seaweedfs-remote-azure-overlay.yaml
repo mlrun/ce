@@ -1,3 +1,6 @@
+# storage.azure.* feeds seaweedfs.remote (KFP pipeline artifacts sync to Azure via the remote gateway).
+# storage.mode controls MLRun/Jupyter only and defaults to local (in-cluster SeaweedFS).
+# Set storage.mode: azure-blob if you also want MLRun/Jupyter artifacts in Azure.
 storage:
   azure:
     accountName: <ACCOUNT_NAME>

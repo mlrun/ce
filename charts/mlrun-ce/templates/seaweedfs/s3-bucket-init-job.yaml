@@ -1,4 +1,7 @@
-{{- if and .Values.seaweedfs.enabled (not (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true")) }}
+{{- $remoteEnabled := eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true" }}
+{{- $mountExisting := eq (include "mlrun-ce.seaweedfs.remote.mount.mountExisting" . | toString) "true" }}
+{{- $skipBucketInit := and $remoteEnabled $mountExisting }}
+{{- if and .Values.seaweedfs.enabled (not $skipBucketInit) }}
 apiVersion: batch/v1
 kind: Job
 metadata:

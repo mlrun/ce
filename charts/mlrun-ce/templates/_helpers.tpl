@@ -219,18 +219,30 @@ SeaweedFS S3 Bucket - sourced from storage.local.bucket.
 {{- end -}}
 
 {{/*
-SeaweedFS cluster addresses (allInOne mode with fullnameOverride: seaweedfs).
+SeaweedFS cluster addresses (allInOne mode; service name is {fullnameOverride}-all-in-one).
 */}}
+{{- define "mlrun-ce.seaweedfs.allInOne.serviceName" -}}
+{{- printf "%s-all-in-one" (.Values.seaweedfs.fullnameOverride | default "seaweedfs") -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.allInOne.fqdn" -}}
+{{- printf "%s.%s.svc.cluster.local" (include "mlrun-ce.seaweedfs.allInOne.serviceName" .) .Release.Namespace -}}
+{{- end -}}
+
 {{- define "mlrun-ce.seaweedfs.filer.port" -}}
 {{- .Values.seaweedfs.filer.port | default 8888 -}}
 {{- end -}}
 
+{{- define "mlrun-ce.seaweedfs.master.port" -}}
+{{- .Values.seaweedfs.master.port | default 9333 -}}
+{{- end -}}
+
 {{- define "mlrun-ce.seaweedfs.filerAddress" -}}
-seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local:{{ include "mlrun-ce.seaweedfs.filer.port" . }}
+{{- include "mlrun-ce.seaweedfs.allInOne.fqdn" . -}}:{{ include "mlrun-ce.seaweedfs.filer.port" . }}
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.masterAddress" -}}
-seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local:9333
+{{- include "mlrun-ce.seaweedfs.allInOne.fqdn" . -}}:{{ include "mlrun-ce.seaweedfs.master.port" . }}
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.image" -}}
@@ -241,6 +253,33 @@ seaweedfs-all-in-one.{{ .Release.Namespace }}.svc.cluster.local:9333
 
 {{- define "mlrun-ce.seaweedfs.remote.enabled" -}}
 {{- and .Values.seaweedfs.enabled .Values.seaweedfs.remote.enabled -}}
+{{- end -}}
+
+{{/*
+SeaweedFS remote gateway selector labels (immutable Deployment selector).
+*/}}
+{{- define "mlrun-ce.seaweedfs.remote.gateway.selectorLabels" -}}
+{{ include "mlrun-ce.common.selectorLabels" . }}
+app.kubernetes.io/component: seaweedfs-remote-gateway
+{{- end -}}
+
+{{/*
+Bool mount flags — sprig "default true" treats false as empty; preserve explicit false.
+*/}}
+{{- define "mlrun-ce.seaweedfs.remote.mount.mountExisting" -}}
+{{- if kindIs "bool" .Values.seaweedfs.remote.mount.mountExisting -}}
+{{- .Values.seaweedfs.remote.mount.mountExisting -}}
+{{- else -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.remote.mount.nonempty" -}}
+{{- if kindIs "bool" .Values.seaweedfs.remote.mount.nonempty -}}
+{{- .Values.seaweedfs.remote.mount.nonempty -}}
+{{- else -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.remote.localBucket" -}}
