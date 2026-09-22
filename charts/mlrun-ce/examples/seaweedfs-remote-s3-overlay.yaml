@@ -1,5 +1,4 @@
 storage:
-  mode: local
   s3:
     bucket: <BUCKET_NAME>
     accessKey: <ACCESS_KEY>
@@ -8,17 +7,8 @@ storage:
 seaweedfs:
   remote:
     enabled: true
-    name: cloudstorage
     provider: s3
     bucket: <BUCKET_NAME>
     s3:
       endpoint: s3.<REGION>.amazonaws.com
       region: <REGION> # e.g. us-east-2
-      forcePathStyle: false
-    mount:
-      mountExisting: true
-
-pipelines:
-  images:
-    mysql:
-      tag: "8.4"

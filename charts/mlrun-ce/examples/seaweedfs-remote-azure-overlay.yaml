@@ -1,5 +1,4 @@
 storage:
-  mode: local
   azure:
     accountName: <ACCOUNT_NAME>
     accountKey: <ACCOUNT_KEY>
@@ -8,13 +7,5 @@ storage:
 seaweedfs:
   remote:
     enabled: true
-    name: cloudstorage
     provider: azure
     bucket: <CONTAINER_NAME>
-    mount:
-      mountExisting: true
-
-pipelines:
-  images:
-    mysql:
-      tag: "8.4"
