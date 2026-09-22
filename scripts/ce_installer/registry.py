@@ -256,9 +256,31 @@ def patch_coredns_for_registry(settings: Settings, registry_host: str) -> None:
         "-o",
         "yaml",
     )
-    kubectl(settings, "apply", "-f", "-", input_data=rendered.out)
-    kubectl(settings, "rollout", "restart", "deployment/coredns", "--namespace", "kube-system")
-    kubectl(
+    # Every step below was previously unchecked, so a reader with no write access to
+    # kube-system got the success line while the ConfigMap was untouched. Reading the
+    # Corefile and rewriting it are the easy half; report only what actually landed.
+    if not rendered.ok or not rendered.out.strip():
+        log_warn("Could not render the patched CoreDNS ConfigMap; skipping CoreDNS patch.")
+        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
+        return
+
+    if not kubectl(settings, "apply", "-f", "-", input_data=rendered.out).ok:
+        log_warn("Could not update the CoreDNS ConfigMap; leaving cluster DNS as it was.")
+        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
+        return
+
+    # The entry is in the ConfigMap from here on, so the patch has taken effect even if the
+    # restart below cannot be driven — CoreDNS reloads the Corefile on its own within a
+    # minute or two. Warn about the slower path rather than calling the whole thing off.
+    restarted = kubectl(
+        settings, "rollout", "restart", "deployment/coredns", "--namespace", "kube-system"
+    )
+    if not restarted.ok:
+        log_warn("CoreDNS ConfigMap updated, but the restart could not be triggered.")
+        log_warn(f"{registry_host} will resolve once CoreDNS reloads the Corefile on its own.")
+        return
+
+    if not kubectl(
         settings,
         "rollout",
         "status",
@@ -266,7 +288,13 @@ def patch_coredns_for_registry(settings: Settings, registry_host: str) -> None:
         "--namespace",
         "kube-system",
         "--timeout=60s",
-    )
+    ).ok:
+        log_warn("CoreDNS restart did not report ready within 60s; continuing anyway.")
+        log_warn(
+            f"If {registry_host} fails to resolve, check "
+            "`kubectl -n kube-system rollout status deployment/coredns`."
+        )
+        return
 
     log_info(f"CoreDNS patched: {registry_host} -> {clusterip}")
 
@@ -342,28 +370,33 @@ def verify_existing_registry_secret(settings: Settings) -> None:
         raise InstallerError(code=1)
 
 
-def _replace_existing_secret(settings: Settings) -> None:
-    if kubectl(
-        settings, "get", "secret", settings.registry_secret_name, "--namespace", settings.namespace
-    ).ok:
-        log_info(f"Secret '{settings.registry_secret_name}' already exists; replacing...")
-        kubectl(
-            settings,
-            "delete",
-            "secret",
-            settings.registry_secret_name,
-            "--namespace",
-            settings.namespace,
-        )
+def _apply_registry_secret(settings: Settings, manifest: str) -> None:
+    """Create or update the pull secret in a single call.
 
+    `apply` updates an existing Secret in place. The bash installer deleted first because
+    its `kubectl create secret` refused to overwrite, and the port inherited that even
+    after moving to `apply` — which left a window where the release had no credentials,
+    and lost them outright if anything failed between the delete and the create.
 
-def _create_local_registry_secret(settings: Settings) -> None:
-    if settings.dry_run:
-        log_info(f"Dry-run: would create local registry secret '{settings.registry_secret_name}'")
+    The one thing `apply` cannot do is change a Secret's `type`, which is immutable, so a
+    name already taken by an Opaque secret still needs a replace. Fall back only there.
+    """
+    applied = kubectl(
+        settings, "apply", "-f", "-", "--namespace", settings.namespace, input_data=manifest
+    )
+    if applied.ok:
         return
 
-    _replace_existing_secret(settings)
-    log_info(f"Creating local registry secret '{settings.registry_secret_name}'...")
+    log_warn(f"Could not update secret '{settings.registry_secret_name}' in place; replacing it.")
+    kubectl(
+        settings,
+        "delete",
+        "secret",
+        settings.registry_secret_name,
+        "--namespace",
+        settings.namespace,
+        "--ignore-not-found",
+    )
     kubectl(
         settings,
         "apply",
@@ -371,7 +404,20 @@ def _create_local_registry_secret(settings: Settings) -> None:
         "-",
         "--namespace",
         settings.namespace,
-        input_data=docker_config_secret(
+        input_data=manifest,
+        check=True,
+    )
+
+
+def _create_local_registry_secret(settings: Settings) -> None:
+    if settings.dry_run:
+        log_info(f"Dry-run: would create local registry secret '{settings.registry_secret_name}'")
+        return
+
+    log_info(f"Creating local registry secret '{settings.registry_secret_name}'...")
+    _apply_registry_secret(
+        settings,
+        docker_config_secret(
             name=settings.registry_secret_name,
             namespace=settings.namespace,
             server=settings.local_registry_url,
@@ -379,7 +425,6 @@ def _create_local_registry_secret(settings: Settings) -> None:
             password="local",
             email="local@local",
         ),
-        check=True,
     )
 
 
@@ -438,16 +483,10 @@ def create_registry_secret(settings: Settings) -> None:
         log_info(f"Dry-run: would create registry secret '{settings.registry_secret_name}'")
         return
 
-    _replace_existing_secret(settings)
     log_info(f"Creating Docker registry secret '{settings.registry_secret_name}'...")
-    kubectl(
+    _apply_registry_secret(
         settings,
-        "apply",
-        "-f",
-        "-",
-        "--namespace",
-        settings.namespace,
-        input_data=docker_config_secret(
+        docker_config_secret(
             name=settings.registry_secret_name,
             namespace=settings.namespace,
             server=server,
@@ -455,5 +494,4 @@ def create_registry_secret(settings: Settings) -> None:
             password=password,
             email=email,
         ),
-        check=True,
     )

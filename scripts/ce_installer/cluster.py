@@ -90,6 +90,17 @@ def gather_install_params(settings: Settings) -> None:
     if settings.local_registry:
         settings.local_registry_url = resolve_local_registry_url(settings)
         log_info(f"Local registry URL: {settings.local_registry_url}")
+        if not settings.enable_ingress:
+            # kaniko builds from inside the cluster and resolves this name fine, but the
+            # image reference it writes is pulled by the node's container runtime, which
+            # reads the host resolver and generally knows nothing about svc.cluster.local.
+            # So the build succeeds and the function pod then fails to pull it.
+            log_warn("Local registry is only addressable as in-cluster DNS without ingress.")
+            log_warn(
+                f"Nodes typically cannot resolve {settings.local_registry_url}, so MLRun "
+                "builds may push and then fail at image pull. Add --enable-ingress for a "
+                "node-resolvable name."
+            )
         settings.registry_url = settings.local_registry_url
         return
 
@@ -146,7 +157,19 @@ def chart_deps_satisfied(chart_dir: Path) -> bool:
 def resolve_chart_source(settings: Settings) -> None:
     if not settings.chart_path:
         log_info("Adding Helm repository...")
-        helm(settings, "repo", "add", "mlrun-ce", settings.helm_repo_url)
+        # --force-update because plain `repo add` errors out when the `mlrun-ce` alias is
+        # already bound to some other URL. bash swallowed that error, so an alias left over
+        # from an earlier run silently decided where the chart came from, whatever
+        # --helm-repo-url said. Checked, so the source is the one that was asked for.
+        helm(
+            settings,
+            "repo",
+            "add",
+            "--force-update",
+            "mlrun-ce",
+            settings.helm_repo_url,
+            check=True,
+        )
         helm(settings, "repo", "update")
         settings.chart_ref = "mlrun-ce/mlrun-ce"
         return

@@ -174,8 +174,9 @@ checks against the target cluster:
   e.g. `-f`-only mode), an IngressClass matching `--enable-ingress`'s class exists
   (skipped when `--enable-ingress` isn't used — this installer never installs a
   controller itself), the chart's fixed NodePorts
-  (`30010/20/40/50/60/70`, `30093/94`, `30100`, `30110`) already in use by another
-  Service outside the target namespace, and total cluster node capacity below the
+  (`30010/20/40/50/60/70`, `30093/94`, `30100`, `30110`) already in use by a Service this
+  release does not own — NodePorts are cluster-wide, so a same-namespace Service belonging
+  to something else is a conflict too, and total cluster node capacity below the
   documented floor (8Gi allocatable RAM / 8Gi allocatable ephemeral storage).
 
 All checks run and report together — a blocking failure doesn't stop the others from

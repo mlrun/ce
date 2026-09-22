@@ -35,7 +35,8 @@ cluster. Re-record only after reading the diff (`make installer-test-golden-upda
 Recorded here because each is a behaviour change users can observe, and because the golden
 expectations bake them in — a reader comparing against the old bash script would otherwise
 read them as regressions. The first five came out of the port itself; the rest out of the
-review on #315, where a faithful port turned out to have faithfully carried a bug across.
+two review rounds on #315, where a faithful port turned out to have faithfully carried a
+bug across.
 
 1. **`docker` is not a prerequisite.** `check_requirements` no longer gates on
    `docker info`; `validate_registry_auth` reports `skipped (docker not available)`. The
@@ -116,6 +117,40 @@ review on #315, where a faithful port turned out to have faithfully carried a bu
     second, and `INGRESS_CONTROLLER_SERVICE` (or
     `installer.localRegistry.ingressControllerService`) names it outright for Traefik and
     anything else that cannot be guessed at.
+15. **`helm repo add` is forced and checked.** bash ran it as `… 2>/dev/null || true`, and
+    plain `repo add` errors when the `mlrun-ce` alias already points somewhere else — so an
+    alias left from an earlier run decided where the chart came from and `--helm-repo-url`
+    was silently ignored. `--force-update` plus `check=True` makes the requested URL the
+    one that serves the chart.
+16. **kaniko is told the local registry is insecure in both modes.** bash gated
+    `mlrun.api.kaniko.insecureRegistry` on `LOCAL_REGISTRY && ENABLE_INGRESS`. `registry:2`
+    serves plain HTTP on its ClusterIP exactly as it does behind the ingress, so
+    `--local-registry` on its own had kaniko pushing to an `https://` URL and failing on
+    TLS. The condition is now just `--local-registry`.
+17. **The CoreDNS patch reports only what landed.** The render, the apply and the rollout
+    were all unchecked, so a user who could read `kube-system` but not write it got
+    `CoreDNS patched: …` over an untouched ConfigMap. Each step is checked now. A failed
+    restart is a warning rather than an abort, because the ConfigMap is already updated at
+    that point and CoreDNS reloads it on its own within a minute or two.
+18. **The pull secret is updated in place.** The delete-then-create was required by bash's
+    `kubectl create secret`, which refuses to overwrite; the port kept it after switching to
+    `apply`, which does not need it. That left a window with no credentials on the release,
+    and lost them outright if anything failed in between. The delete survives only as a
+    fallback for the one thing `apply` cannot do — change a Secret's immutable `type`.
+19. **`--show-progress` only takes over a terminal.** The progress UI already returned
+    immediately off a tty, but helm was still being run into a temp file that a successful
+    run then deleted — so `--show-progress` under CI produced no install output at all.
+    bash had the same hole. The terminal check moved into the branch condition, so a
+    redirected run streams helm's own output, which is what the docstring always claimed.
+
+Known limitation, not a divergence: with `--local-registry` and no `--enable-ingress` the
+registry is addressed as `local-registry.<ns>.svc.cluster.local:5000`. kaniko resolves that
+from inside the cluster and pushes fine, but the image reference it writes is pulled by the
+node's container runtime, which reads the host resolver and generally knows nothing about
+cluster DNS — so the build succeeds and the function pod then fails to pull. bash had the
+same shape and fixing it properly means exposing a node-resolvable endpoint (a NodePort, or
+requiring ingress), which is a design change rather than a review fix. `gather_install_params`
+warns about it at the point it prints the registry URL.
 
 One bug the port fixes for free: `curl -sSL … | bash` makes the script itself bash's stdin,
 so `read -r -p` consumes script text instead of the user's answer and the interactive

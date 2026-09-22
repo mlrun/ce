@@ -37,7 +37,7 @@
 #
 # Without a clone — pin a release tag, see https://github.com/mlrun/ce/releases;
 # "development" also works but moves with every merge:
-#   uvx --from "git+https://github.com/mlrun/ce@mlrun-ce-0.12.0-rc.12#subdirectory=scripts" \
+#   uvx --from "git+https://github.com/mlrun/ce@mlrun-ce-0.12.0-rc.14#subdirectory=scripts" \
 #     mlrun-ce-installer install
 #
 # Commands: install (the default), uninstall, version, help. Flags may be passed with no

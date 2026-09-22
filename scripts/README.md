@@ -45,7 +45,7 @@ Pin to a release tag. Pick one from [the releases page](https://github.com/mlrun
 — the installer from tag `mlrun-ce-X` is the one tested against chart `X`:
 
 ```bash
-CE_TAG=mlrun-ce-0.12.0-rc.12
+CE_TAG=mlrun-ce-0.12.0-rc.14
 uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
   mlrun-ce-installer install
 ```
@@ -66,7 +66,7 @@ there.
 ### Install as a named command
 
 ```bash
-CE_TAG=mlrun-ce-0.12.0-rc.12
+CE_TAG=mlrun-ce-0.12.0-rc.14
 uv tool install "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts"
 mlrun-ce-installer version
 ```

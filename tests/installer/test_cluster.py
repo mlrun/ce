@@ -139,9 +139,12 @@ def test_published_repo_mode_registers_the_repo_before_using_it(monkeypatch, set
 
     # Without the add, `mlrun-ce/mlrun-ce` resolves against whatever the user already has
     # registered under that name; without the update, a stale cache hides new versions.
+    # --force-update is what makes the add authoritative: plain `repo add` fails when the
+    # alias already points elsewhere, and the pre-existing URL would then serve the chart.
     assert rec.argv_containing("repo add")[0] == [
         "repo",
         "add",
+        "--force-update",
         "mlrun-ce",
         settings.helm_repo_url,
     ]

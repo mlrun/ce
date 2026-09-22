@@ -412,3 +412,120 @@ def test_every_declared_dependency_has_an_upper_bound():
     assert declared, "no dependencies found — did the pyproject layout change?"
     for requirement in declared:
         assert "<" in requirement, f"{requirement} has no upper bound"
+
+
+# ------------------------------------------------------------------------------------------
+# The documented install commands pin a tag that has to match the chart
+# ------------------------------------------------------------------------------------------
+
+
+def test_the_documented_install_tag_matches_the_chart_version():
+    # Every `uvx --from git+...@mlrun-ce-<v>` line in the docs names a tag cut at release
+    # from Chart.yaml. Bump the chart without bumping these and the recommended command
+    # points at a tag that will never exist, so it fails before the installer starts.
+    root = Path(__file__).resolve().parents[2]
+    chart_version = re.search(
+        r"^version:\s*(\S+)", (root / "charts" / "mlrun-ce" / "Chart.yaml").read_text(), re.M
+    ).group(1)
+
+    for relative in ("README.md", "scripts/README.md", "scripts/install.py"):
+        pins = re.findall(r"mlrun-ce-(\d\S*?)(?=[\"#\s])", (root / relative).read_text())
+        assert pins, f"{relative} no longer pins a tag — did the install example move?"
+        for pinned in pins:
+            assert pinned == chart_version, (
+                f"{relative} pins mlrun-ce-{pinned}, but Chart.yaml is {chart_version}"
+            )
+
+
+# ------------------------------------------------------------------------------------------
+# kaniko was told the registry is plain HTTP only in the ingress mode
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("with_ingress", [False, True])
+def test_kaniko_is_told_the_local_registry_is_insecure_in_either_mode(settings, with_ingress):
+    # registry:2 serves plain HTTP on its ClusterIP just as it does behind the ingress, so
+    # gating this on --enable-ingress left `--local-registry` alone pushing to an https://
+    # URL and failing on TLS.
+    settings.local_registry = True
+    settings.enable_ingress = with_ingress
+
+    assert "mlrun.api.kaniko.insecureRegistry=true" in helm_ops.build_set_flags(settings)
+
+
+def test_kaniko_is_not_told_anything_when_the_registry_is_not_local(settings):
+    settings.local_registry = False
+
+    flags = helm_ops.build_set_flags(settings)
+    assert not [flag for flag in flags if "kaniko" in flag]
+
+
+# ------------------------------------------------------------------------------------------
+# --show-progress off a terminal threw the helm output away
+# ------------------------------------------------------------------------------------------
+
+
+def test_show_progress_off_a_terminal_falls_back_to_helm_output(monkeypatch, settings):
+    # The progress UI returns immediately when stdout is not a tty, but helm was still
+    # writing into a temp file that a successful run deleted — so --show-progress in CI
+    # produced no install output at all.
+    settings.show_progress = True
+    monkeypatch.setattr(helm_ops, "resolve_chart_source", lambda s: None)
+    # rich exposes is_terminal as a read-only property, so the class is the only seam.
+    monkeypatch.setattr(type(helm_ops.out), "is_terminal", property(lambda self: False))
+    monkeypatch.setattr(
+        helm_ops, "_install_with_progress_ui", lambda s, cmd: pytest.fail("used the progress UI")
+    )
+    streamed = []
+    monkeypatch.setattr(helm_ops, "stream", lambda cmd: streamed.append(cmd) or 0)
+    monkeypatch.setattr(helm_ops, "helm", lambda *a, **k: Result(1, ""))
+
+    helm_ops.helm_install(settings)
+
+    assert streamed, "helm was never streamed to the terminal"
+
+
+# ------------------------------------------------------------------------------------------
+# The pull secret was deleted before being re-applied
+# ------------------------------------------------------------------------------------------
+
+
+def test_an_existing_pull_secret_is_updated_without_being_deleted_first(
+    monkeypatch, settings, recorder
+):
+    # Left over from the `kubectl create secret` era, which refused to overwrite. `apply`
+    # updates in place, so the delete only opened a window with no credentials — and lost
+    # them entirely if anything failed before the re-create.
+    rec = recorder()
+    monkeypatch.setattr(registry, "kubectl", rec)
+    settings.local_registry = True
+    settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
+
+    registry.create_registry_secret(settings)
+
+    assert not rec.ran("delete secret")
+    assert rec.ran("apply")
+
+
+class _ImmutableOnFirstApply(Recorder):
+    """Fails the first `apply` the way the API server rejects a Secret type change."""
+
+    def __call__(self, *args, **kwargs):
+        result = super().__call__(*args, **kwargs)
+        if self.calls[-1][:1] == ["apply"] and len(self.argv_containing("apply")) == 1:
+            return Result(1, "", 'Secret "registry-credentials" is invalid: type: immutable')
+        return result
+
+
+def test_a_secret_that_cannot_be_updated_in_place_is_replaced(monkeypatch, settings):
+    # A name already taken by a Secret of another type cannot be applied over, because
+    # `type` is immutable — that case, and only that case, still warrants the delete.
+    rec = _ImmutableOnFirstApply()
+    monkeypatch.setattr(registry, "kubectl", rec)
+    settings.local_registry = True
+    settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
+
+    registry.create_registry_secret(settings)
+
+    assert rec.ran("delete secret")
+    assert len(rec.argv_containing("apply")) == 2

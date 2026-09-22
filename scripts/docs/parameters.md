@@ -105,7 +105,7 @@ Options:
 | `DISABLE_SPARK`        | `false`                           | Set to `true` to disable the Spark operator              |
 | `DISABLE_MPI`          | `false`                           | Set to `true` to disable MPI operator resources          |
 | `DISABLE_MODEL_MONITORING` | `false`                       | Set to `true` to disable Kafka + TimescaleDB components  |
-| `SHOW_PROGRESS`        | `false`                           | Set to `true` for live progress UI                       |
+| `SHOW_PROGRESS`        | `false`                           | Set to `true` for live progress UI (ignored when stdout is not a terminal, where helm's own output is streamed instead) |
 | `PROGRESS_INTERVAL_SEC`| `10`                              | Refresh interval (seconds) for progress UI               |
 | `ENABLE_INGRESS`       | `false`                           | Set to `true` to enable the chart's Ingress resources (requires your own controller) |
 | `SKIP_DEPENDENCY_UPDATE` | `false`                         | Set to `true` to skip fetching chart dependencies with `--chart-path` |

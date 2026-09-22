@@ -77,6 +77,24 @@ it's wrong for your cluster):
    Docker-network IP, so it's a better generic guess than a node-IP lookup that's often
    unreachable from the host.
 
+### `--local-registry` without ingress: builds succeed, then function pods can't pull
+
+Without `--enable-ingress` the registry is only addressable by its in-cluster name,
+`local-registry.<namespace>.svc.cluster.local:5000`. kaniko runs inside the cluster and
+resolves that fine, so the build and push succeed. The image reference it writes is then
+pulled by the node's container runtime, which reads the node's own `/etc/resolv.conf` and
+on most clusters knows nothing about cluster DNS — so the function pod fails with an image
+pull error naming a host it cannot resolve.
+
+Add `--enable-ingress` to get a name that resolves from the node as well:
+
+```bash
+./scripts/install.py --local-registry --enable-ingress
+```
+
+The installer warns about this when it prints the registry URL. If you cannot use ingress,
+drop `--local-registry` and set `REGISTRY_URL` to a registry the nodes can already reach.
+
 ### Docker Desktop: pushing to `--local-registry --enable-ingress` fails with a TLS error
 
 The local registry serves plain HTTP through your ingress controller (port 80). Docker
@@ -106,8 +124,9 @@ docker push registry.host.docker.internal/myimage
 **2. Kaniko inside the cluster**
 
 The installer automatically passes `mlrun.api.kaniko.insecureRegistry=true` to the Helm
-chart when `--local-registry --enable-ingress` are both set, so MLRun build jobs use HTTP
-when pushing to the local registry. No manual action needed.
+chart whenever `--local-registry` is used, with or without ingress — `registry:2` serves
+plain HTTP on its ClusterIP too — so MLRun build jobs use HTTP when pushing to the local
+registry. No manual action needed.
 
 For reference, once installed, the registry is reachable at
 `registry.host.docker.internal` from everywhere:

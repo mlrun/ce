@@ -21,7 +21,7 @@ For a scripted install, [`scripts/install.py`](scripts/README.md) wraps those st
 secret, pre-install validation and `helm install` — behind a single command:
 
 ```bash
-CE_TAG=mlrun-ce-0.12.0-rc.12
+CE_TAG=mlrun-ce-0.12.0-rc.14
 uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
   mlrun-ce-installer install
 ```

@@ -85,8 +85,11 @@ def build_set_flags(settings: Settings) -> List[str]:
     if settings.enable_otel_instrumentation:
         flags += ["--set", "opentelemetry.instrumentation.enabled=true"]
 
-    if settings.local_registry and settings.enable_ingress:
-        # The local registry serves HTTP via nginx; tell kaniko to push/pull without TLS.
+    if settings.local_registry:
+        # registry:2 serves plain HTTP, through the ingress and on its ClusterIP alike, so
+        # kaniko needs this in either mode. bash gated it on --enable-ingress as well and
+        # the port copied that, which left `--local-registry` on its own pushing to
+        # https://local-registry...:5000 and failing on TLS.
         flags += ["--set", "mlrun.api.kaniko.insecureRegistry=true"]
 
     return flags
@@ -154,7 +157,11 @@ def helm_install(settings: Settings) -> None:
 
     cmd = build_helm_install_command(settings)
 
-    if settings.show_progress and not settings.dry_run:
+    # `out.is_terminal` is part of the condition, not just a guard inside the progress UI:
+    # the UI returns immediately off a terminal, but helm is still writing into a temp file
+    # that a successful run then deletes, so `--show-progress` in CI used to throw the
+    # install output away. Off a terminal there is nothing to animate anyway.
+    if settings.show_progress and not settings.dry_run and out.is_terminal:
         _install_with_progress_ui(settings, cmd)
     else:
         helm_exit = stream(cmd)

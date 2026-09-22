@@ -11,6 +11,6 @@ exit: 0
 ["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.annotations.meta\\.helm\\.sh/release-name}{\" \"}{range .spec.ports[*]}{.nodePort}{\"\\n\"}{end}{end}"]
 ["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.memory}{\"\\n\"}{end}"]
 ["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.ephemeral-storage}{\"\\n\"}{end}"]
-["helm", "repo", "add", "mlrun-ce", "https://mlrun.github.io/ce"]
+["helm", "repo", "add", "--force-update", "mlrun-ce", "https://mlrun.github.io/ce"]
 ["helm", "repo", "update"]
 ["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--dry-run=server", "--set", "global.registry.url=index.docker.io/someone", "--set", "global.registry.secretName=registry-credentials", "--set", "global.externalHostAddress=localhost", "--set", "opentelemetry-operator.enabled=true", "--set", "opentelemetry.collector.enabled=true", "--set", "opentelemetry.instrumentation.enabled=true"]
