@@ -1,6 +1,12 @@
-# storage.s3.* feeds seaweedfs.remote (KFP pipeline artifacts sync to AWS S3 via the remote gateway).
-# storage.mode controls MLRun/Jupyter only and defaults to local (in-cluster SeaweedFS).
-# Set storage.mode: s3 if you also want MLRun/Jupyter artifacts in S3.
+# KFP pipeline artifacts: in-cluster SeaweedFS (emptyDir) + background sync to AWS S3.
+#
+# storage.s3.* feeds seaweedfs.remote. storage.mode controls MLRun/Jupyter only
+# (defaults to local). Set storage.mode: s3 to store MLRun/Jupyter artifacts in S3 too.
+#
+# emptyDir (lab/dev): no SeaweedFS PVC — local tier is ephemeral pod disk. Cloud is the durable
+# copy after sync. Not recommended for production (pod restart wipes local state; run helm upgrade
+# to re-run remote.configure/remote.mount if the gateway stalls after restart).
+
 storage:
   s3:
     bucket: <BUCKET_NAME>
@@ -8,6 +14,9 @@ storage:
     secretKey: <SECRET_KEY>
 
 seaweedfs:
+  allInOne:
+    data:
+      type: emptyDir
   remote:
     enabled: true
     provider: s3
