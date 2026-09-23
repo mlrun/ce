@@ -1,6 +1,12 @@
-# storage.azure.* feeds seaweedfs.remote (KFP pipeline artifacts sync to Azure via the remote gateway).
-# storage.mode controls MLRun/Jupyter only and defaults to local (in-cluster SeaweedFS).
-# Set storage.mode: azure-blob if you also want MLRun/Jupyter artifacts in Azure.
+# KFP pipeline artifacts: in-cluster SeaweedFS (emptyDir) + background sync to Azure Blob.
+#
+# storage.azure.* feeds seaweedfs.remote. storage.mode controls MLRun/Jupyter only
+# (defaults to local). Set storage.mode: azure-blob to store MLRun/Jupyter artifacts in Azure too.
+#
+# emptyDir (lab/dev): no SeaweedFS PVC — local tier is ephemeral pod disk. Cloud is the durable
+# copy after sync. Not recommended for production (pod restart wipes local state; run helm upgrade
+# to re-run remote.configure/remote.mount if the gateway stalls after restart).
+
 storage:
   azure:
     accountName: <ACCOUNT_NAME>
@@ -8,6 +14,9 @@ storage:
     containerName: <CONTAINER_NAME>
 
 seaweedfs:
+  allInOne:
+    data:
+      type: emptyDir
   remote:
     enabled: true
     provider: azure
