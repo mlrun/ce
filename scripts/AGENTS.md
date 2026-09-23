@@ -12,211 +12,25 @@ places.
 For chart-side conventions (values.yaml layout, `requirements.lock`, adding components) see
 the repo-root `AGENTS.md`/`CONTRIBUTING.md`. This file covers the installer only.
 
-## The port from bash, and what survives it
+## What pins the installer's behaviour
 
-`install.py` + the `ce_installer/` package is **the** installer. It replaced `install.sh`
-(single-file bash, ~1545 lines), which was never released alongside it: the bash script
-stayed in the tree only while the port needed something to be checked against, and was
-deleted once that role ended.
+`install.py` plus the `ce_installer/` package is **the** installer. What it does to a
+cluster is pinned by `tests/installer/golden/`: one recorded file per invocation, holding
+every `helm`/`kubectl`/`docker` argv it issues and the exit code it ends on. The source is
+free to be refactored; those recordings are not, unless you mean to change behaviour.
 
-**The contract is the argv log, not the source.** While both existed,
-`tests/installer/matrix.sh` ran them over 32 invocations with recording stubs standing in
-for helm/kubectl/docker and failed if the calls or exit codes differed. At cutover all 32
-were identical, and that log was frozen into `tests/installer/golden/` as the expectation
-for `install.py` alone. So the guard did not disappear with the oracle — it changed from
-"these two agree" to "this one still does what it did on the day they agreed", which is the
-same property with one fewer moving part.
+Practically: if `make installer-test-golden` fails, you changed what the installer does to
+a cluster. Read the diff before re-recording with `make installer-test-golden-update` —
+every changed line is something a user can observe.
 
-Practically: if `make installer-test-golden` fails, you changed what the installer does to a
-cluster. Re-record only after reading the diff (`make installer-test-golden-update`).
-
-### Deliberate divergences from the bash behaviour
-
-Recorded here because each is a behaviour change users can observe, and because the golden
-expectations bake them in — a reader comparing against the old bash script would otherwise
-read them as regressions. The first five came out of the port itself; the rest out of the
-two review rounds on #315, where a faithful port turned out to have faithfully carried a
-bug across.
-
-1. **`docker` is not a prerequisite.** `check_requirements` no longer gates on
-   `docker info`; `validate_registry_auth` reports `skipped (docker not available)`. The
-   pull secret is a Secret manifest applied with kubectl, never built by Docker, so the
-   only thing lost is a best-effort `docker login` that already degraded to a warning.
-   This is what makes in-pod execution possible — a containerd/CRI-O node has no daemon.
-2. **`--chart-path` prefers `helm dependency build`.** `update` re-resolves
-   `requirements.yaml` and rewrites the lock, which is the maintainer operation;
-   consumers want the lock honoured. `chart_deps_satisfied()` skips the fetch entirely
-   when `charts/` already holds every tarball `requirements.lock` names, and
-   `--skip-dependency-update` suppresses it unconditionally. Both exist so an
-   egress-restricted host is not forced to reach the upstream Helm repos.
-   Tarball names do not always equal the dependency name — the lock's
-   `strimzi-kafka-operator` ships as `strimzi-kafka-operator-helm-3-chart-<v>.tgz` — so the
-   match is a name prefix plus a version suffix, not an exact filename.
-3. **No `yq`.** `--config` is parsed with pyyaml.
-4. **A malformed config file is now fatal.** bash ran `yq eval … 2>/dev/null || true`, so a
-   YAML syntax error read as an empty value for *every* field and the install continued on
-   built-in defaults — the user got a working-looking run that silently ignored their
-   config. The port raises `Could not parse config file`. Related: bash could not tell YAML
-   null from the string `null` and blanked both, so `url: "null"` came through empty there
-   and stays `"null"` here.
-5. **stderr is no longer folded into stdout.** `shell.run` captures the two separately.
-   Merging them was the bash behaviour only by accident (`2>/dev/null` discarded stderr
-   outright), and it actively broke things once output started being parsed rather than
-   just displayed: `deploy_local_registry` pipes rendered YAML from one kubectl into the
-   stdin of the next, where a single kubectl warning line would have been applied to the
-   cluster as part of the manifest, and `parse_major_minor` takes the first `vN.N` anywhere
-   in its input, so a deprecation warning naming a Kubernetes version would be read as the
-   cluster's own. Found while porting the validator tests.
-6. **An unrecognised option is fatal.** bash logged `Unknown option: X (ignored)` and
-   carried on, which meant a typo silently changed what the run did: `--dry-rnu` performed
-   a real install, and a misspelled `--skip-secret` rewrote a registry secret the user
-   meant to keep. There is no forward-compatibility argument on the other side, because
-   the installer ships with the chart and its flags and its chart are one version. click's
-   own default behaviour, reached by dropping `ignore_unknown_options`/`allow_extra_args`;
-   exit code 2, not 1.
-7. **An option value may not start with a dash.** bash tested `!= --*`, so
-   `--enable-ingress -f values.yaml` read `-f` as the ingress class and stranded the path.
-   Everything that takes a value — ingress class, otel mode, chart path, values file,
-   version — now treats any dash-prefixed token as the next option instead. Under (6) the
-   stranded argument is a hard error rather than a warning, so the invocation fails
-   outright instead of installing something subtly different from what was asked for.
-8. **`installer.chartSource.kind` is validated.** Only `repo`, `path` or unset. `kind: pth`
-   used to fall through to repo mode and install the *published* chart while the file was
-   plainly asking for the local one — the difference between testing your branch and
-   testing whatever is on the chart repo, reported neither way.
-9. **A `--config` file cannot override an `--enable-otel` mode.** The four otel booleans
-   are the one set where a flag legitimately resolves to `False`, so "still False" cannot
-   be read as "unset": `--enable-otel off` looked identical to silence, and any
-   `otel.*: true` in the file switched back on what the flag had just turned off.
-   `otel_set_by_cli` records that the CLI spoke, and `load_config` then leaves the whole
-   block alone. Same rule the flags already follow — a MODE names the complete state.
-10. **The `-f` path is checked before anything touches the cluster.** It used to be
-    validated after `ensure_namespace` and `deploy_local_registry`, so a mistyped path left
-    a namespace and a running registry Deployment behind on the way to reporting that the
-    file was never there.
-11. **The pull secret is piped in as a manifest.** `kubectl create secret docker-registry`
-    takes the password as an argv element, which puts it in the process table for the
-    length of the call and — via the `Command failed: …` message `run` prints on a
-    `check=True` failure — into stderr and any CI log capturing it. `docker_config_secret`
-    renders the identical `kubernetes.io/dockerconfigjson` Secret and `kubectl apply -f -`
-    reads it from stdin. `shell.redact` masks known credential flags in that message as
-    well, so a future call site that does pass one is not a fresh leak.
-12. **`REGISTRY_PASSWORD_FILE` is not exported.** bash assigned the file's contents to
-    `REGISTRY_PASSWORD`, which every helm, kubectl and docker subprocess then inherited —
-    defeating the point of supplying it as a file. It is a local variable now.
-13. **The NodePort check is scoped by ownership, not by namespace.** bash skipped every
-    Service in the target namespace as "probably ours". NodePorts are cluster-wide and helm
-    will not adopt a Service it does not own, so an unrelated Service in `mlrun` holding
-    30040 was reported as "no conflicts detected" and the install then failed on it. The
-    jsonpath now carries `meta.helm.sh/release-name` and only this release's own Services
-    are skipped.
-14. **The ingress controller Service is looked for where it usually is.** bash hardcoded
-    `ingress-nginx-controller` in the release namespace; a stock ingress-nginx installs
-    into `ingress-nginx`, so on most clusters the CoreDNS patch was quietly skipped.
-    `ingress-nginx/ingress-nginx-controller` is tried first and the release namespace
-    second, and `INGRESS_CONTROLLER_SERVICE` (or
-    `installer.localRegistry.ingressControllerService`) names it outright for Traefik and
-    anything else that cannot be guessed at.
-15. **`helm repo add` is forced and checked.** bash ran it as `… 2>/dev/null || true`, and
-    plain `repo add` errors when the `mlrun-ce` alias already points somewhere else — so an
-    alias left from an earlier run decided where the chart came from and `--helm-repo-url`
-    was silently ignored. `--force-update` plus `check=True` makes the requested URL the
-    one that serves the chart.
-16. **kaniko is told the local registry is insecure, in both modes and at a key a chart
-    reads.** Two bugs in one flag. bash gated it on `LOCAL_REGISTRY && ENABLE_INGRESS`, but
-    `registry:2` serves plain HTTP on its ClusterIP exactly as it does behind the ingress,
-    so `--local-registry` alone had kaniko pushing to an `https://` URL and failing on TLS
-    — the condition is now just `--local-registry`. The flag itself was also
-    `mlrun.api.kaniko.insecureRegistry`, which no chart in the umbrella has ever read: the
-    builder is nuclio's dashboard (`nuclio.dashboard.containerBuilderKind: kaniko`) and the
-    keys are `nuclio.dashboard.kaniko.insecurePushRegistry` / `insecurePullRegistry`. helm
-    accepts an unknown `--set` path silently, so the flag looked present and did nothing for
-    as long as it existed. `--disable-mpi` had the same disease: `mpi-operator.rbac.create`
-    does not exist, the subchart splits it into `rbac.clusterResources.create` and
-    `rbac.namespaced.create`, and the latter defaults on — so disabling MPI still created
-    the operator's ServiceAccount and RoleBinding. `test_every_set_flag_names_a_key_the_
-    chart_declares` resolves every non-`global.*` `--set` path against the umbrella's
-    values merged with each vendored subchart's, so a third one cannot be added quietly.
-17. **The CoreDNS hosts entry is reported, not applied.** bash rewrote the `kube-system`
-    `coredns` ConfigMap with a regex and restarted the Deployment. That is cluster-wide
-    configuration nothing in the release namespace owns, in a file format the installer does
-    not control; a bad rewrite takes DNS down for every workload on the cluster, and
-    `--uninstall` never took the entry back out. `report_coredns_entry_for_registry` prints
-    the `ip host` line and the two commands to apply it, and touches nothing. The
-    ingress-controller ClusterIP lookup is kept — it is what supplies the IP in the message.
-18. **The pull secret is updated in place.** The delete-then-create was required by bash's
-    `kubectl create secret`, which refuses to overwrite; the port kept it after switching to
-    `apply`, which does not need it. That left a window with no credentials on the release,
-    and lost them outright if anything failed in between. The delete survives only as a
-    fallback for the one thing `apply` cannot do — change a Secret's immutable `type`.
-19. **`--show-progress` only takes over a terminal.** The progress UI already returned
-    immediately off a tty, but helm was still being run into a temp file that a successful
-    run then deleted — so `--show-progress` under CI produced no install output at all.
-    bash had the same hole. The terminal check moved into the branch condition, so a
-    redirected run streams helm's own output, which is what the docstring always claimed.
-20. **`--dry-run` is honoured on the uninstall path.** It was only ever read while building
-    the install command, so `--uninstall --hard-clean --dry-run` really removed the release
-    and really deleted every PVC and bound PV. The reads still run — listing what would go
-    is the point — and every mutation is now guarded and reported instead.
-21. **`--non-interactive` works on the documented CI path.** Three separate stops. The
-    required-field check was the last statement of `load_config`, which returns early when
-    there is no `--config`, so an env-var-only run got no up-front check and instead died
-    later, one variable at a time, inside `prompt_or_env`; it moved to `execute()`. It also
-    ran ahead of the uninstall branch, so tearing a release down demanded registry
-    credentials. And `REGISTRY_EMAIL` — which registries stopped caring about years ago —
-    had no default, so "no default available" made it mandatory; `prompt_or_env` grew an
-    `allow_empty` for fields whose real value is empty rather than unset.
-22. **A Service with no ports no longer hides every NodePort conflict behind it.** The
-    newline in `NODEPORT_JSONPATH` sat inside the `.spec.ports[*]` range, so a portless
-    Service emitted no line terminator, the next Service's `ns/release` prefix was parsed as
-    its port number, and every real port on that line fell out of the parser's reach. The
-    newline terminates the Service now and each line is one Service.
-23. **`--dry-run` degrades instead of failing on Helm below 3.13.** `--dry-run` only became
-    a string flag in 3.13; before that `--dry-run=server` is an invalid boolean and the
-    install never starts. The chart's own floor is 3.6, so the documented flag was unusable
-    on most supported helms. `dry_run_flag` checks the version and falls back to a
-    client-side dry run with a warning saying what that no longer covers.
-24. **A bad `--chart-path` is caught before the cluster is touched.** `resolve_chart_source`
-    validates it, but only runs after `ensure_namespace` and `deploy_local_registry` — so a
-    typo left a namespace and a running registry behind on the way to the error message.
-    `validate_chart_path` is called from `execute()` first, the same fix `-f` already had.
-25. **A dry run does not log in to the registry.** `validate_registry_auth` runs a real
-    `docker login`, and a successful one rewrites the invoking user's
-    `~/.docker/config.json` — the one thing a dry run promises not to do to the machine it
-    runs on. It is skipped under `--dry-run` and says so.
-26. **The reported Kubernetes version is the API server's.** It came from
-    `.items[0].status.nodeInfo.kubeletVersion`: an arbitrary node's kubelet, which is
-    allowed to trail the control plane by two minor versions and can be either side of the
-    split on a cluster mid-upgrade. `kubectl version -o json` asks the API server, and needs
-    a much smaller permission than listing nodes.
-27. **Every default StorageClass is named.** The validator matched them all and then printed
-    `matched[0]`, so a cluster with two defaults — a misconfiguration Kubernetes accepts and
-    then resolves arbitrarily — was reported as a healthy single default. All are listed,
-    with a warning when there is more than one.
-28. **A hard clean leaves PVs that are still Bound.** The phase was fetched into the
-    `custom-columns` query and then ignored, so every PV whose `claimRef` named the
-    namespace was deleted, including ones still bound to a live PVC that the release may not
-    own. Only `Released` and `Failed` are deleted; anything else is listed as skipped.
-29. **`minikube ip` is asked once.** `resolve_external_host` called it to test the exit code
-    and again to read the answer, doubling the wait on every run for a value it already had.
-30. **The user's helm repository list is left alone.** `helm repo add --force-update
-    mlrun-ce` rewrites `~/.config/helm/repositories.yaml`, permanently rebinding an alias the
-    user may have pointed elsewhere, and nothing put it back. The run gets a throwaway
-    `HELM_REPOSITORY_CONFIG` unless the user named one themselves.
-
-Known limitation, not a divergence: with `--local-registry` and no `--enable-ingress` the
-registry is addressed as `local-registry.<ns>.svc.cluster.local:5000`. kaniko resolves that
-from inside the cluster and pushes fine, but the image reference it writes is pulled by the
-node's container runtime, which reads the host resolver and generally knows nothing about
-cluster DNS — so the build succeeds and the function pod then fails to pull. bash had the
-same shape and fixing it properly means exposing a node-resolvable endpoint (a NodePort, or
-requiring ingress), which is a design change rather than a review fix. `gather_install_params`
-warns about it at the point it prints the registry URL.
-
-One bug the port fixes for free: `curl -sSL … | bash` makes the script itself bash's stdin,
-so `read -r -p` consumes script text instead of the user's answer and the interactive
-prompts are unusable. uv writes the script to a file before running it, leaving stdin
-attached to the terminal.
+Known limitation: with `--local-registry` and no `--enable-ingress`, the registry is
+addressed as `local-registry.<ns>.svc.cluster.local:5000`. kaniko resolves that from inside
+the cluster and pushes fine, but the image reference it writes is pulled by the node's
+container runtime, which reads the host resolver and generally knows nothing about cluster
+DNS — so the build succeeds and the function pod then fails to pull. Fixing it properly
+means exposing a node-resolvable endpoint (a NodePort, or requiring ingress), which is a
+design change rather than a bug fix. `gather_install_params` warns about it at the point it
+prints the registry URL.
 
 ### Module layout (`ce_installer/`)
 
@@ -241,8 +55,8 @@ default). Nothing below `cli.py` and `config.py` reads `os.environ` for a tunabl
 
 ### Why the argv pre-parse in `cli.py` exists
 
-click cannot express two things the bash `parse_args` does, so raw argv is rewritten
-before click sees it:
+click cannot express two things this CLI needs, so raw argv is rewritten before click
+sees it:
 
 1. `--enable-ingress [CLASS]` and `--enable-otel [MODE]` take an *optional* value, consumed
    only when the next token is not itself an option. Rewritten to `--flag=value`.
@@ -251,11 +65,15 @@ before click sees it:
    the reverse order does not. click does not preserve inter-option order, so
    `resolve_otel_flags` folds the *raw* argv left to right. The five otel parameters on the
    typer command exist only so they render in `--help`; their parsed values are unused.
-   `otel_flags_present` reads the same raw argv for divergence 9 — whether the CLI said
-   anything about otel at all, which the resolved booleans cannot answer.
+   `otel_flags_present` reads the same raw argv to answer a question the resolved booleans
+   cannot: whether the CLI said anything about otel at all. `ce-config.yaml`'s otel block is
+   skipped entirely when it did, because a MODE can legitimately resolve to all-off, and
+   "still False" cannot be told apart from "never mentioned".
 
-The third thing bash did here, tolerating unknown options, is divergence 6: click rejects
-them and the pre-parse does not intervene.
+Unknown options are rejected, and the pre-parse deliberately does not intervene to soften
+that. The flags most worth typo-proofing are the ones that make a run safe: `--dry-rnu` is
+not a dry run, and a misspelled `--skip-secret` replaces a registry secret you meant to
+keep.
 
 One click trap worth knowing: with `standalone_mode=False`, `command.main()` **returns** a
 `typer.Exit`'s code instead of raising it. `main()` has to honour the return value or every
@@ -267,8 +85,7 @@ failure raised inside the command silently exits 0.
    off the front, leaving the rest in `COMMAND_ARGS`. Kept out of `parse_args` so that stays
    a pure flag parser. No verb (or a leading flag) means `install`, which is what every
    invocation predating commands relied on; an unrecognised bare word is an error rather
-   than an install, so a typo can't deploy. `main()` expands `COMMAND_ARGS` with the
-   `${a[@]+"${a[@]}"}` guard — bash < 4.4 treats an empty array as unset under `set -u`
+   than an install, so a typo can't deploy.
 1. `parse_args` — flags/env, precedence flag > env > default
 2. `check_requirements` — helm, kubectl, docker present and reachable
 3. `ensure_namespace` — creates `NAMESPACE`; in `--dry-run` only logs what it would do (no cluster mutation)
@@ -429,13 +246,13 @@ node image is the safest choice.
   server. If the target cluster lacks the Prometheus Operator CRDs, the
   `kube-prometheus-stack` subchart's `PrometheusRule`/`ServiceMonitor` resources
   fail server-side validation. This is a Helm limitation (charts with CRDs
-  can't fully dry-run without those CRDs present), not an `install.sh` bug.
+  can't fully dry-run without those CRDs present), not an installer bug.
 - **Two `mlrun-ce` releases can't coexist on one cluster**, even in different
   namespaces with different release/secret names and NodePort overrides via `-f`.
   Confirmed live: the chart's `workflow-controller` `PriorityClass` is
   cluster-scoped with a hardcoded name (no values.yaml knob), so a second
   release's `helm install` fails immediately with an ownership-metadata error
-  once one release already owns it. Not an `install.sh` bug — the chart itself
+  once one release already owns it. Not an installer bug — the chart itself
   has no multi-release story on a shared cluster short of patching that template.
 - `helm uninstall` (and `--hard-clean`) leaves orphaned Strimzi `Kafka`/
   `KafkaNodePool`/`StrimziPodSet` custom resources and their broker pod behind, so the
@@ -498,12 +315,9 @@ node image is the safest choice.
   a combined `-  ... credentials: <user> / <pass>` line is read as credentials, and a
   service with only one half no longer renders a dangling `postgres / `.
 
-  `install.sh` had the identical bug (`url="$line"` in its own `print_notes_table`) and was
-  left alone, since it was already scheduled for deletion. That is the point worth keeping:
-  the differential harness compared the helm/kubectl calls two implementations made, not
-  what they printed, so no number of matrix cases would have caught this — and the golden
-  suite that replaced it has the same blind spot. Output formatting needs its own tests or a
-  live run.
+  The point worth keeping: the golden suite compares the helm/kubectl calls the installer
+  makes, not what it prints, so no number of golden cases would have caught this. Output
+  formatting needs its own tests or a live run.
 
 - **`helm_install`'s `--wait` had no `--timeout`, so a slow image pull failed the release**
   (found via live testing against a real remote cluster): both helm invocations in
@@ -563,7 +377,7 @@ node image is the safest choice.
   apply under dry-run, the URL still resolving, and a real run still applying.
 
 - **`resolve_external_host()`'s docker-desktop/minikube autodetect ignored `KUBE_CONTEXT`**
-  (install.sh:602, found via live testing against a remote `--kube-context`): the
+  (found via live testing against a remote `--kube-context`): the
   `kubectl config current-context` check always reports the kubeconfig's *ambient*
   current-context, not the one selected by `--context`/`KUBE_CONTEXT` — that flag
   has no effect on that particular subcommand. So targeting a non-current
@@ -602,18 +416,17 @@ the suites are shaped the way they are.
 
 ### Golden argv suite (`make installer-test-golden`)
 
-The successor to the differential harness, and the main guard on behaviour.
-`tests/installer/test_golden_argv.py` runs the whole installer as a subprocess over 34
-invocations with `tests/installer/stub.py` symlinked onto a temporary PATH as `helm`,
-`kubectl`, `docker` and `minikube`, then compares the recorded calls and exit code against
-`tests/installer/golden/`. No cluster is contacted and the temp PATH is torn down after.
+The main guard on behaviour. `tests/installer/test_golden_argv.py` runs the whole
+installer as a subprocess over 36 invocations with `tests/installer/stub.py` symlinked onto
+a temporary PATH as `helm`, `kubectl`, `docker` and `minikube`, then compares the recorded
+calls and exit code against `tests/installer/golden/`. No cluster is contacted and the temp
+PATH is torn down after.
 
-Those expectations are not arbitrary snapshots. They were recorded from `install.py` while
-`install.sh` still existed, and the differential harness confirmed all 32 of the cases that
-existed then identical between the two on the same commit — so they encode the bash
-script's behaviour, which is what makes deleting it safe. Where a line has since moved, the
-divergence list above says why; `dry-rnu.txt` (empty, exit 2) is the clearest of them,
-recording that a typo now reaches nothing at all.
+These files are the specification, not a snapshot of whatever the code happened to do. A
+reviewer can read `git diff tests/installer/golden/` and see the full behavioural effect of
+a change without reading a line of Python — which commands run, in what order, with which
+flags, and what the installer exits with. `dry-rnu.txt` is the clearest example: empty, exit
+2, recording that a misspelled safety flag reaches nothing at all.
 
 - The stub derives its answers from the arguments rather than returning fixed values, so a
   test cannot pass by accident once the installer stops asking the question it was supposed
@@ -621,7 +434,7 @@ recording that a typo now reaches nothing at all.
   `STUB_HELM_EXIT`, `STUB_NODE_MEMORY`, …).
 - Add a case to `CASES` whenever a flag gains behaviour that reaches helm or kubectl.
   Refusals belong there too — *how* the installer rejects a bad value is as much a contract
-  as how it succeeds, and six of the 34 cases exist only to pin that.
+  as how it succeeds, and six of the 36 cases exist only to pin that.
 - **The config-file cases carry an env rule.** `--config` supplies the registry identity,
   and flag/env beats file, so `run_case` drops `REGISTRY_URL`/`USERNAME`/`EMAIL` and
   `EXTERNAL_HOST_ADDRESS` for those invocations — otherwise the recording would look the
@@ -634,20 +447,16 @@ recording that a typo now reaches nothing at all.
 - **Watch for jsonpath escaping in the stub.** Annotation keys reach kubectl as
   `storageclass\.kubernetes\.io/is-default-class`; `jsonpath_of()` strips the backslashes
   before matching, because matching the escaped form made every lookup silently miss and
-  turned the StorageClass validator permanently red — which, when two implementations were
-  being compared, *looked* like parity.
+  turned the StorageClass validator permanently red while looking, in a diff, like nothing
+  was wrong.
 
 ### Unit suites (`make installer-test-unit`)
 
-182 tests across `test_cli.py`, `test_config.py`, `test_validators.py`, `test_cluster.py`,
+253 tests across `test_cli.py`, `test_config.py`, `test_validators.py`, `test_cluster.py`,
 `test_registry.py` and `test_regressions.py`. They patch the helm/kubectl wrappers and
 exercise one function at a time, covering what the golden suite structurally cannot: values
 computed and never sent to a command, text printed to the user, and the precedence rules
 between flags, environment variables and `ce-config.yaml`.
-
-Most were ported from the 118-case bats suite that covered `install.sh`. One case did not
-survive: bash needed `yq` to read a config file and had a test for its absence, where the
-Python port parses YAML with pyyaml and has no such dependency.
 
 #### Regression tests
 
@@ -673,7 +482,7 @@ would report, so a failure says what regressed.
 
 Every installer tunable is an environment variable, so a shell that has been used to drive a
 real cluster is a hostile test environment. A leftover `export KUBE_CONTEXT=<lab>` once made
-the bash suite's `resolve_external_host` test fail with `localhost`, which reads exactly like
+the `resolve_external_host` test fail with `localhost`, which reads exactly like
 a code regression — `KUBE_CONTEXT` makes that function skip the local heuristics by design.
 The hunt for a bug that did not exist cost more than the test was worth.
 

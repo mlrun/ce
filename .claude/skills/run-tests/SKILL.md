@@ -69,11 +69,9 @@ compares every `helm`/`kubectl`/`docker` call against a recorded file in
 parses correctly but never reaches helm, a step that runs in the wrong order, an argument
 dropped between layers.
 
-These expectations were generated while the bash installer still existed and were confirmed
-identical to its behaviour across the 32 cases that existed then, so they carry the
-authority the old differential harness did. Where one has since been deliberately changed,
-`scripts/AGENTS.md`'s "Deliberate divergences" list says which and why — check there before
-concluding a recorded line is simply what bash did.
+These files are the specification, not a snapshot of whatever the code happened to do. A
+recorded line is a promise about what the installer does to a cluster, so treat a diff in
+them as a behaviour change to justify, never as noise to re-record away.
 
 ### When the golden suite fails
 

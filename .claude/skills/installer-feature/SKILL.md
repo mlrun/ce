@@ -12,9 +12,7 @@ description: >-
 
 The installer is `scripts/install.py` — a launcher carrying
 [PEP 723](https://peps.python.org/pep-0723/) metadata — plus the `scripts/ce_installer`
-package beside it. It replaced a bash script, `scripts/install.sh`, which was deleted once
-its behaviour had been recorded as test expectations — you may still see it referenced in
-the bug log as history. See `scripts/AGENTS.md` for the full design notes and
+package beside it. See `scripts/AGENTS.md` for the full design notes and
 [`run-tests`](../run-tests/SKILL.md) for the test workflow.
 
 ## Before you write anything
