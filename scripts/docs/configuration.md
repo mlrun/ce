@@ -170,7 +170,8 @@ checks against the target cluster:
   StorageClass exists.
 - **Warning only** (logged, install continues): the cluster's Kubernetes version (reported
   always, and compared only against an explicitly set `MIN_K8S_VERSION`), registry login with the resolved
-  credentials (skipped for `--local-registry` or when no credentials were resolved yet,
+  credentials (skipped for `--local-registry`, for `--dry-run` since a successful login
+  rewrites your `~/.docker/config.json`, and when no credentials were resolved yet,
   e.g. `-f`-only mode), an IngressClass matching `--enable-ingress`'s class exists
   (skipped when `--enable-ingress` isn't used — this installer never installs a
   controller itself), the chart's fixed NodePorts
@@ -237,8 +238,9 @@ installer:
     chartVersion: 0.11.0         # repo mode -> --ce-version
     chartPath: ""                # path mode -> --chart-path; REQUIRED (and validated) when kind: path
   localRegistry:
-    ingressControllerService: "" # namespace/name of your ingress controller Service, used by
-                                  # --local-registry to patch CoreDNS. Omitted tries
+    ingressControllerService: "" # namespace/name of your ingress controller Service. Its
+                                  # ClusterIP is what --local-registry reports as the CoreDNS
+                                  # hosts entry to add. Omitted tries
                                   # ingress-nginx/ingress-nginx-controller, then the release
                                   # namespace. Set it for Traefik or a non-standard install.
   versions:

@@ -66,6 +66,11 @@ def handle_kubectl(args):
     if verb == "config" and len(args) > 1 and args[1] == "current-context":
         return 0, os.environ.get("STUB_CURRENT_CONTEXT", "stub-context")
 
+    if verb == "version":
+        return 0, json.dumps(
+            {"serverVersion": {"gitVersion": os.environ.get("STUB_K8S_VERSION", "v1.30.2")}}
+        )
+
     if verb == "get":
         what = args[1] if len(args) > 1 else ""
         path = jsonpath_of(args)
@@ -88,8 +93,6 @@ def handle_kubectl(args):
                 fields.append(os.environ.get("STUB_SC_BETA", ""))
             return 0, "=".join(fields)
         if what in ("nodes", "node"):
-            if "kubeletVersion" in path:
-                return 0, os.environ.get("STUB_K8S_VERSION", "v1.30.2")
             if "allocatable.memory" in path:
                 return 0, os.environ.get("STUB_NODE_MEMORY", "16384000Ki")
             if "allocatable.ephemeral-storage" in path:

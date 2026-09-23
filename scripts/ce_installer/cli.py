@@ -22,8 +22,13 @@ from typing import List, Optional, Sequence
 import click
 import typer
 
-from .cluster import ensure_namespace, gather_install_params, resolve_external_host
-from .config import load_config
+from .cluster import (
+    ensure_namespace,
+    gather_install_params,
+    resolve_external_host,
+    validate_chart_path,
+)
+from .config import check_required_non_interactive, load_config
 from .console import InstallerError, die, log_info, out
 from .helm_ops import do_uninstall, helm_install
 from .registry import (
@@ -260,11 +265,19 @@ def execute(settings: Settings) -> None:
         do_uninstall(settings)
         return
 
+    # After the uninstall branch, so tearing a release down does not demand registry
+    # credentials, and outside load_config, so an env-var-only --non-interactive run is
+    # checked too.
+    check_required_non_interactive(settings)
+
     # Before anything touches the cluster. Further down this sat after ensure_namespace and
     # deploy_local_registry, so a mistyped -f left a namespace and a running registry behind
     # on the way to reporting that the file was never there.
     if settings.values_file and not Path(settings.values_file).is_file():
         raise die(f"Values file not found: {settings.values_file}")
+    # Same reasoning: resolve_chart_source only reaches its path checks after the namespace
+    # exists and a local registry is running.
+    validate_chart_path(settings)
 
     check_requirements(settings)
     ensure_namespace(settings)
@@ -444,7 +457,10 @@ def install(
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
-        help="Render the helm chart without deploying (passes --dry-run=server to helm)",
+        help=(
+            "Show what would happen without changing anything. Renders the chart via helm "
+            "--dry-run=server, and on 'uninstall' reports what would be removed"
+        ),
     ),
     non_interactive: bool = typer.Option(
         False,

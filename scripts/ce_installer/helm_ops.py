@@ -24,6 +24,7 @@ from .console import InstallerError, die, err, log_error, log_info, log_warn, ou
 from .settings import Settings
 from .shell import check_requirements, helm, helm_cmd, kubectl, stream
 from .ui import print_notes_table, run_deployment_progress_ui
+from .validators import parse_major_minor
 
 
 def build_set_flags(settings: Settings) -> List[str]:
@@ -60,7 +61,12 @@ def build_set_flags(settings: Settings) -> List[str]:
     if settings.disable_mpi:
         flags += ["--set", "mpi-operator.deployment.create=false"]
         flags += ["--set", "mpi-operator.crd.create=false"]
-        flags += ["--set", "mpi-operator.rbac.create=false"]
+        # The subchart splits RBAC in two and has no `rbac.create` at all, so the single
+        # key bash used was silently doing nothing and --disable-mpi still created the
+        # operator's ServiceAccount and RoleBinding. namespaced.create is the one that
+        # defaults on; clusterResources.create is set for completeness.
+        flags += ["--set", "mpi-operator.rbac.clusterResources.create=false"]
+        flags += ["--set", "mpi-operator.rbac.namespaced.create=false"]
     if settings.disable_model_monitoring:
         flags += ["--set", "strimzi-kafka-operator.enabled=false"]
         flags += ["--set", "kafka.enabled=false"]
@@ -87,12 +93,39 @@ def build_set_flags(settings: Settings) -> List[str]:
 
     if settings.local_registry:
         # registry:2 serves plain HTTP, through the ingress and on its ClusterIP alike, so
-        # kaniko needs this in either mode. bash gated it on --enable-ingress as well and
-        # the port copied that, which left `--local-registry` on its own pushing to
-        # https://local-registry...:5000 and failing on TLS.
-        flags += ["--set", "mlrun.api.kaniko.insecureRegistry=true"]
+        # the builder has to be told not to try TLS in either mode.
+        #
+        # The builder is nuclio's dashboard, not mlrun — values.yaml sets
+        # nuclio.dashboard.containerBuilderKind: kaniko, and dashboard.yaml reads these two
+        # keys. bash set `mlrun.api.kaniko.insecureRegistry`, which no chart has ever read;
+        # helm accepts an unknown --set path silently, so the flag looked present and did
+        # nothing for as long as it existed.
+        flags += ["--set", "nuclio.dashboard.kaniko.insecurePushRegistry=true"]
+        flags += ["--set", "nuclio.dashboard.kaniko.insecurePullRegistry=true"]
 
     return flags
+
+
+def dry_run_flag(settings: Settings) -> str:
+    """`--dry-run=server` where helm understands it, plain `--dry-run` below 3.13.
+
+    --dry-run only became a string flag in helm 3.13. Before that it is a bool, and
+    `--dry-run=server` parses as an invalid boolean value, so the whole install fails to
+    start. The chart's own floor is 3.6, so the documented `--dry-run` was unusable on any
+    supported helm older than 3.13.
+
+    The client-side fallback renders without talking to the API server, so it cannot catch
+    what a server dry run would — hence the warning rather than a silent downgrade.
+    """
+    parsed = parse_major_minor(helm(settings, "version", "--short").out.strip())
+    if parsed is None or parsed >= (3, 13):
+        return "--dry-run=server"
+    log_warn(
+        f"Helm {parsed[0]}.{parsed[1]} has no server-side dry run (added in 3.13); "
+        "falling back to a client-side one."
+    )
+    log_warn("  Admission webhooks and server-side validation will not be exercised.")
+    return "--dry-run"
 
 
 def build_helm_install_command(settings: Settings) -> List[str]:
@@ -113,7 +146,7 @@ def build_helm_install_command(settings: Settings) -> List[str]:
     if settings.ce_version and not settings.chart_path:
         cmd += ["--version", settings.ce_version]
     if settings.dry_run:
-        cmd += ["--dry-run=server"]
+        cmd += [dry_run_flag(settings)]
     cmd += build_set_flags(settings)
     return cmd
 
@@ -178,6 +211,10 @@ def helm_install(settings: Settings) -> None:
 
 
 def do_hard_clean(settings: Settings) -> None:
+    # The reads below run under --dry-run too: listing what would be destroyed is the whole
+    # point of dry-running a hard clean, and neither `get` touches anything.
+    if settings.dry_run:
+        log_warn(f"Dry-run: listing what a hard clean would delete in '{settings.namespace}'.")
     log_warn(f"Hard clean: deleting all PVCs in namespace '{settings.namespace}'...")
     result = kubectl(
         settings,
@@ -193,6 +230,9 @@ def do_hard_clean(settings: Settings) -> None:
     if not pvcs:
         log_info(f"No PVCs found in namespace '{settings.namespace}'.")
     for pvc in pvcs:
+        if settings.dry_run:
+            log_info(f"  Dry-run: would delete PVC: {pvc}")
+            continue
         log_info(f"  Deleting PVC: {pvc}")
         graceful = kubectl(
             settings, "delete", "pvc", pvc, "--namespace", settings.namespace, "--timeout", "60s"
@@ -225,14 +265,28 @@ def do_hard_clean(settings: Settings) -> None:
         "-o",
         "custom-columns=:metadata.name,:spec.claimRef.namespace,:status.phase",
     )
+    # The phase was fetched and then ignored, so this deleted every PV whose claimRef named
+    # the namespace — including ones still Bound to a live PVC, which is how a hard clean
+    # could take out a volume belonging to something the release does not own. Released and
+    # Failed are the phases with nothing left using them.
     pvs = []
+    skipped = []
     for line in result.out.splitlines() if result.ok else []:
         fields = line.split()
-        if len(fields) >= 2 and fields[1] == settings.namespace:
+        if len(fields) < 3 or fields[1] != settings.namespace:
+            continue
+        if fields[2] in ("Released", "Failed"):
             pvs.append(fields[0])
+        else:
+            skipped.append(f"{fields[0]} ({fields[2]})")
+    if skipped:
+        log_info("  Leaving PVs that are not released or failed: " + ", ".join(skipped))
     if not pvs:
-        log_info(f"No PVs found for namespace '{settings.namespace}'.")
+        log_info(f"No released or failed PVs found for namespace '{settings.namespace}'.")
     for pv in pvs:
+        if settings.dry_run:
+            log_info(f"  Dry-run: would delete PV: {pv}")
+            continue
         log_info(f"  Deleting PV: {pv}")
         graceful = kubectl(settings, "delete", "pv", pv, "--timeout", "60s")
         if not graceful.ok:
@@ -248,6 +302,15 @@ def do_uninstall(settings: Settings) -> None:
         log_warn(
             f"Release '{settings.release_name}' not found in namespace "
             f"'{settings.namespace}' (already uninstalled?)."
+        )
+    elif settings.dry_run:
+        # --dry-run used to be read only on the install path, so
+        # `--uninstall --hard-clean --dry-run` really removed the release and really
+        # deleted every PVC and bound PV. helm uninstall has no --dry-run of its own worth
+        # using here, so the report is ours to print.
+        log_info(
+            f"Dry-run: would uninstall release '{settings.release_name}' "
+            f"from namespace '{settings.namespace}'."
         )
     else:
         log_info(

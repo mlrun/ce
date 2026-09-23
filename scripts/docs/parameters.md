@@ -71,7 +71,10 @@ Options:
                                  charts/ is already vendored and the host cannot reach the upstream
                                  Helm repos
   --ce-version VERSION           Pin the MLRun CE Helm chart version (default: latest; ignored with --chart-path)
-  --dry-run                      Render the chart without deploying (helm --dry-run=server)
+  --dry-run                      Show what would happen without changing anything. Renders the chart
+                                 via helm --dry-run=server, and on 'uninstall' reports what would be
+                                 removed. Below Helm 3.13, which has no server-side dry run, it falls
+                                 back to a client-side one and says so
   --non-interactive              Never prompt; fail with exit 1 if a required value is missing
                                  (auto-set when CI=true)
   --config FILE                  Read defaults from a ce-config.yaml file's 'installer:' block
@@ -110,7 +113,7 @@ Options:
 | `ENABLE_INGRESS`       | `false`                           | Set to `true` to enable the chart's Ingress resources (requires your own controller) |
 | `SKIP_DEPENDENCY_UPDATE` | `false`                         | Set to `true` to skip fetching chart dependencies with `--chart-path` |
 | `INGRESS_CLASS`        | `nginx`                           | Ingress class name                                       |
-| `INGRESS_CONTROLLER_SERVICE` | —                           | `namespace/name` of your ingress controller Service, used by `--local-registry` to patch CoreDNS. Unset tries `ingress-nginx/ingress-nginx-controller`, then the release namespace |
+| `INGRESS_CONTROLLER_SERVICE` | —                           | `namespace/name` of your ingress controller Service. `--local-registry` reports its ClusterIP as the CoreDNS hosts entry to add. Unset tries `ingress-nginx/ingress-nginx-controller`, then the release namespace |
 | `ENABLE_OTEL_OPERATOR`        | `false`                     | Set to `true` for `--set opentelemetry-operator.enabled=true`  |
 | `ENABLE_OTEL_COLLECTOR`       | `false`                     | Set to `true` for `--set opentelemetry.collector.enabled=true` |
 | `ENABLE_OTEL_NAMESPACE_LABEL` | `false`                     | Set to `true` for `--set opentelemetry.namespaceLabel.enabled=true` |

@@ -6,4 +6,5 @@ exit: 0
 ["kubectl", "get", "namespace", "mlrun"]
 ["helm", "repo", "add", "--force-update", "mlrun-ce", "https://mlrun.github.io/ce"]
 ["helm", "repo", "update"]
+["helm", "version", "--short"]
 ["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--dry-run=server", "--set", "global.registry.url=index.docker.io/someone", "--set", "global.registry.secretName=registry-credentials", "--set", "global.externalHostAddress=localhost"]

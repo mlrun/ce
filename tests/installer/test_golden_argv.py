@@ -85,9 +85,13 @@ CASES = [
     "--dry-run --config tests/installer/fixtures/ce-config.yaml "
     "-f tests/installer/fixtures/values.yaml",
     "--dry-run --config tests/installer/fixtures/nonexistent.yaml",
-    # Uninstall, including the destructive path
+    # Uninstall, including the destructive path and its dry runs. The dry-run pair is the
+    # point of the group: --dry-run was read only on the install path, so these two used to
+    # record a real `helm uninstall` and real PVC/PV deletes.
     "uninstall",
     "uninstall --hard-clean",
+    "uninstall --dry-run",
+    "uninstall --hard-clean --dry-run",
     # Refusals: the installer must keep declining these, and for the same reason
     "--hard-clean",
     "badverb",
@@ -140,6 +144,19 @@ def run_case(args, tmp_path):
     )
     for leaked in ("CI", "KUBE_CONTEXT", "CHART_PATH", "CE_VERSION", "CONFIG_FILE"):
         env.pop(leaked, None)
+
+    # The uninstall cases exist to record what gets destroyed, so they need something to
+    # destroy. With the stub's defaults there is no release and no volumes, and the dry-run
+    # recording is then indistinguishable from the for-real one — which is exactly the bug
+    # the pair was added to catch. The Bound PV is there to stay put in both.
+    if args.startswith("uninstall"):
+        env.update(
+            {
+                "STUB_RELEASE_EXISTS": "1",
+                "STUB_PVCS": "data-mlrun-db-0\n",
+                "STUB_PVS": "pv-released mlrun Released\npv-live mlrun Bound\n",
+            }
+        )
 
     # A config file supplies the registry identity itself, and a flag or env var always
     # beats the file, so leaving these set would mask the values the case exists to

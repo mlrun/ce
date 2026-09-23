@@ -162,8 +162,6 @@ def load_config(settings: Settings) -> None:
             "installer.chartSource.chartPath is empty."
         )
 
-    check_required_non_interactive(settings)
-
 
 def check_required_non_interactive(settings: Settings) -> None:
     """Report every missing required field at once, rather than one exit-1 at a time.
@@ -173,6 +171,12 @@ def check_required_non_interactive(settings: Settings) -> None:
     bypasses the username/password checks. Pure -f-only mode (no --config) bypasses the
     whole block, since the run skips secret creation and param gathering entirely there;
     -f combined with --config does not, since --config still drives secret creation.
+
+    Called from execute(), not from load_config(): it used to sit at the end of load_config,
+    which returns immediately when there is no --config, so `--non-interactive` driven purely
+    by environment variables got no up-front check at all and failed later, one variable at a
+    time, from inside prompt_or_env. execute() also calls it after the uninstall branch, since
+    an uninstall needs no registry credentials.
     """
     if not settings.non_interactive:
         return

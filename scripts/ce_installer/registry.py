@@ -15,7 +15,6 @@
 
 import base64
 import json
-import re
 from pathlib import Path
 from typing import List
 
@@ -122,45 +121,6 @@ def docker_config_secret(
     )
 
 
-def insert_hosts_entry(corefile: str, ip: str, host: str) -> str:
-    """Add an `ip host` line to CoreDNS's Corefile.
-
-    CoreDNS only allows one hosts{} block per server. If one already exists (e.g. Docker
-    Desktop adds host.docker.internal), insert the entry inside it before 'fallthrough'.
-    Otherwise create a new hosts{} block before the first 'forward' line.
-    """
-    lines = corefile.splitlines()
-    entry = f"        {ip} {host}"
-    result: List[str] = []
-    inserted = False
-
-    if "hosts {" in corefile:
-        in_hosts = False
-        for line in lines:
-            if "hosts {" in line:
-                in_hosts = True
-            if in_hosts and re.match(r"^\s*}", line):
-                if not inserted:
-                    result.append(entry)
-                    inserted = True
-                in_hosts = False
-            elif not inserted and in_hosts and "fallthrough" in line:
-                result.append(entry)
-                inserted = True
-            result.append(line)
-    else:
-        for line in lines:
-            if not inserted and re.search(r"forward ", line):
-                result.append("    hosts {")
-                result.append(entry)
-                result.append("        fallthrough")
-                result.append("    }")
-                inserted = True
-            result.append(line)
-
-    return "\n".join(result)
-
-
 def ingress_controller_candidates(settings: Settings) -> List[str]:
     """Where to look for the ingress controller Service, best guess first.
 
@@ -202,101 +162,33 @@ def resolve_ingress_controller_ip(settings: Settings) -> str:
     return ""
 
 
-def patch_coredns_for_registry(settings: Settings, registry_host: str) -> None:
+def report_coredns_entry_for_registry(settings: Settings, registry_host: str) -> None:
+    """Print the CoreDNS hosts entry a local-registry install needs, and how to add it.
+
+    This used to edit the cluster's CoreDNS ConfigMap and restart the Deployment. That is
+    shared, cluster-wide infrastructure owned by nobody in this namespace: the rewrite was
+    a regex over a file whose format the installer does not control, an unrelated hosts{}
+    block could be rewritten, the entry survived `--uninstall`, and getting it wrong takes
+    DNS down for every workload on the cluster, not just MLRun. An installer scoped to one
+    release should not be making that edit unasked, so it reports and lets the operator
+    decide.
+
+    Nothing here mutates anything, so it runs under --dry-run unchanged.
+    """
     clusterip = resolve_ingress_controller_ip(settings)
+    log_warn(f"Pods cannot resolve {registry_host} until CoreDNS knows about it.")
     if not clusterip:
-        log_warn("Could not get ingress controller ClusterIP; skipping CoreDNS patch.")
+        log_warn("  Could not find the ingress controller Service to get its ClusterIP.")
         log_warn(
-            "Set INGRESS_CONTROLLER_SERVICE (or installer.localRegistry."
+            "  Set INGRESS_CONTROLLER_SERVICE (or installer.localRegistry."
             "ingressControllerService) to 'namespace/name' if your controller is elsewhere."
         )
-        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
         return
 
-    corefile_result = kubectl(
-        settings,
-        "get",
-        "configmap",
-        "coredns",
-        "-n",
-        "kube-system",
-        "-o",
-        "jsonpath={.data.Corefile}",
-    )
-    # An unreadable or empty Corefile must not be treated as "no entries yet": the patch
-    # below would then apply an empty Corefile and restart CoreDNS, taking cluster DNS down
-    # while reporting success. There is nothing to patch safely, so leave it alone.
-    if not corefile_result.ok or not corefile_result.out.strip():
-        log_warn("Could not read the CoreDNS Corefile; skipping CoreDNS patch.")
-        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
-        return
-    corefile = corefile_result.out
-
-    if registry_host in corefile:
-        log_info(f"CoreDNS already has an entry for {registry_host}; skipping patch.")
-        return
-
-    patched = insert_hosts_entry(corefile, clusterip, registry_host)
-    # insert_hosts_entry has nowhere to put the entry in a Corefile with neither a hosts{}
-    # block nor a forward line, and returns it unchanged rather than guessing.
-    if f"{clusterip} {registry_host}" not in patched:
-        log_warn("Could not find a place to insert the hosts entry; skipping CoreDNS patch.")
-        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
-        return
-
-    rendered = kubectl(
-        settings,
-        "create",
-        "configmap",
-        "coredns",
-        f"--from-literal=Corefile={patched}",
-        "--namespace",
-        "kube-system",
-        "--dry-run=client",
-        "-o",
-        "yaml",
-    )
-    # Every step below was previously unchecked, so a reader with no write access to
-    # kube-system got the success line while the ConfigMap was untouched. Reading the
-    # Corefile and rewriting it are the easy half; report only what actually landed.
-    if not rendered.ok or not rendered.out.strip():
-        log_warn("Could not render the patched CoreDNS ConfigMap; skipping CoreDNS patch.")
-        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
-        return
-
-    if not kubectl(settings, "apply", "-f", "-", input_data=rendered.out).ok:
-        log_warn("Could not update the CoreDNS ConfigMap; leaving cluster DNS as it was.")
-        log_warn(f"Pods may not resolve {registry_host} — add a hosts entry manually if needed.")
-        return
-
-    # The entry is in the ConfigMap from here on, so the patch has taken effect even if the
-    # restart below cannot be driven — CoreDNS reloads the Corefile on its own within a
-    # minute or two. Warn about the slower path rather than calling the whole thing off.
-    restarted = kubectl(
-        settings, "rollout", "restart", "deployment/coredns", "--namespace", "kube-system"
-    )
-    if not restarted.ok:
-        log_warn("CoreDNS ConfigMap updated, but the restart could not be triggered.")
-        log_warn(f"{registry_host} will resolve once CoreDNS reloads the Corefile on its own.")
-        return
-
-    if not kubectl(
-        settings,
-        "rollout",
-        "status",
-        "deployment/coredns",
-        "--namespace",
-        "kube-system",
-        "--timeout=60s",
-    ).ok:
-        log_warn("CoreDNS restart did not report ready within 60s; continuing anyway.")
-        log_warn(
-            f"If {registry_host} fails to resolve, check "
-            "`kubectl -n kube-system rollout status deployment/coredns`."
-        )
-        return
-
-    log_info(f"CoreDNS patched: {registry_host} -> {clusterip}")
+    log_warn("  Add this to the hosts{} block of the CoreDNS Corefile:")
+    log_warn(f"      {clusterip} {registry_host}")
+    log_warn("  Then: kubectl -n kube-system edit configmap coredns")
+    log_warn("        kubectl -n kube-system rollout restart deployment/coredns")
 
 
 def deploy_local_registry(settings: Settings) -> None:
@@ -343,7 +235,7 @@ def deploy_local_registry(settings: Settings) -> None:
     )
     settings.local_registry_url = f"registry.{settings.external_host_address}"
     log_info(f"Local registry ingress created: {settings.local_registry_url}")
-    patch_coredns_for_registry(settings, settings.local_registry_url)
+    report_coredns_entry_for_registry(settings, settings.local_registry_url)
 
     # /etc/hosts needs a real IP; host.docker.internal is already localhost on Docker Desktop.
     hosts_ip = settings.external_host_address
@@ -469,7 +361,11 @@ def create_registry_secret(settings: Settings) -> None:
         settings.config_registry_server or DEFAULT_DOCKER_SERVER,
     )
     email = prompt_or_env(
-        settings, "REGISTRY_EMAIL", "Docker registry email", settings.config_registry_email
+        settings,
+        "REGISTRY_EMAIL",
+        "Docker registry email",
+        settings.config_registry_email,
+        allow_empty=True,
     )
 
     if not username or not password:

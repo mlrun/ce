@@ -13,7 +13,10 @@
 # limitations under the License.
 """Namespace, external-host resolution and chart-source selection."""
 
+import atexit
+import os
 import shutil
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -54,14 +57,19 @@ def resolve_external_host(settings: Settings) -> None:
         )
         if node_ip.ok and node_ip.out.strip():
             suggested = node_ip.out.strip()
-    elif shutil.which("minikube") and run(["minikube", "ip"]).ok:
-        suggested = run(["minikube", "ip"]).out.strip() or suggested
     else:
-        current = kubectl(settings, "config", "current-context")
-        if current.ok and "docker-desktop" in current.out:
-            # host.docker.internal resolves to the host from both pods and the host
-            # terminal on Docker Desktop.
-            suggested = "host.docker.internal"
+        # Asked once, not once to test and once to read: `minikube ip` shells out to the
+        # node container, so the second call doubled the wait on every run for an answer
+        # the first had already produced.
+        minikube_ip = run(["minikube", "ip"]) if shutil.which("minikube") else None
+        if minikube_ip is not None and minikube_ip.ok and minikube_ip.out.strip():
+            suggested = minikube_ip.out.strip()
+        else:
+            current = kubectl(settings, "config", "current-context")
+            if current.ok and "docker-desktop" in current.out:
+                # host.docker.internal resolves to the host from both pods and the host
+                # terminal on Docker Desktop.
+                suggested = "host.docker.internal"
     # No heuristic matched (e.g. kind/k3d, or a local cluster type not special-cased):
     # `suggested` keeps its "localhost" default. Those tools typically NodePort-map to
     # localhost rather than an internal Docker-network IP, so this is a better generic
@@ -154,8 +162,46 @@ def chart_deps_satisfied(chart_dir: Path) -> bool:
     return True
 
 
+def validate_chart_path(settings: Settings) -> None:
+    """Check that --chart-path names a chart directory. No-op when it is not set.
+
+    Called from execute() before anything touches the cluster as well as from
+    resolve_chart_source, which runs long after the namespace is created and a local
+    registry is deployed — a typo in the path used to leave both of those behind on the way
+    to reporting that the directory was never there.
+    """
+    if not settings.chart_path:
+        return
+    chart_dir = Path(settings.chart_path)
+    if not chart_dir.is_dir():
+        raise die(f"Chart path not found: {settings.chart_path}")
+    if not (chart_dir / "Chart.yaml").is_file():
+        raise die(
+            f"No Chart.yaml found in {settings.chart_path} — is this a valid Helm chart directory?"
+        )
+
+
+def isolate_helm_repo_config() -> None:
+    """Point helm's repository list at a throwaway file for the rest of this process.
+
+    `helm repo add --force-update mlrun-ce` rewrites ~/.config/helm/repositories.yaml, so a
+    single install permanently rebinds an `mlrun-ce` alias the user may have pointed
+    somewhere else — a change to their machine that outlives the install and that nothing
+    here undoes. A private file gives the run the alias it needs and leaves theirs alone.
+
+    An explicit HELM_REPOSITORY_CONFIG is left as-is: that is the user naming a file on
+    purpose.
+    """
+    if os.environ.get("HELM_REPOSITORY_CONFIG"):
+        return
+    directory = tempfile.mkdtemp(prefix="mlrun-ce-helm-repos-")
+    os.environ["HELM_REPOSITORY_CONFIG"] = str(Path(directory) / "repositories.yaml")
+    atexit.register(shutil.rmtree, directory, True)
+
+
 def resolve_chart_source(settings: Settings) -> None:
     if not settings.chart_path:
+        isolate_helm_repo_config()
         log_info("Adding Helm repository...")
         # --force-update because plain `repo add` errors out when the `mlrun-ce` alias is
         # already bound to some other URL. bash swallowed that error, so an alias left over
@@ -174,13 +220,8 @@ def resolve_chart_source(settings: Settings) -> None:
         settings.chart_ref = "mlrun-ce/mlrun-ce"
         return
 
+    validate_chart_path(settings)
     chart_dir = Path(settings.chart_path)
-    if not chart_dir.is_dir():
-        raise die(f"Chart path not found: {settings.chart_path}")
-    if not (chart_dir / "Chart.yaml").is_file():
-        raise die(
-            f"No Chart.yaml found in {settings.chart_path} — is this a valid Helm chart directory?"
-        )
     if settings.ce_version:
         log_warn(
             "--ce-version is ignored in local-path mode (chart version comes from "

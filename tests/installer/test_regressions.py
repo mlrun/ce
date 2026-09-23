@@ -23,14 +23,20 @@ Each test name ends in the symptom a user would have reported, so a future failu
 what regressed rather than which assertion tripped.
 """
 
+import glob
+import os
 import re
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
-from ce_installer import cluster, helm_ops, registry, shell, ui, validators
+from ce_installer import cli, cluster, config, helm_ops, registry, shell, ui, validators
+from ce_installer.config import check_required_non_interactive
 from ce_installer.console import InstallerError
+from ce_installer.settings import prompt_or_env
 from ce_installer.shell import Result
 
 from .conftest import Recorder
@@ -450,7 +456,18 @@ def test_kaniko_is_told_the_local_registry_is_insecure_in_either_mode(settings, 
     settings.local_registry = True
     settings.enable_ingress = with_ingress
 
-    assert "mlrun.api.kaniko.insecureRegistry=true" in helm_ops.build_set_flags(settings)
+    flags = helm_ops.build_set_flags(settings)
+    assert "nuclio.dashboard.kaniko.insecurePushRegistry=true" in flags
+    assert "nuclio.dashboard.kaniko.insecurePullRegistry=true" in flags
+
+
+def test_the_insecure_registry_flag_names_a_key_a_chart_actually_reads(settings):
+    # The bug this pins: bash set `mlrun.api.kaniko.insecureRegistry`, the mlrun chart has
+    # never had a kaniko key, and helm accepts an unknown --set path in silence — so the
+    # flag read as present and did nothing. nuclio's dashboard is the container builder.
+    settings.local_registry = True
+
+    assert not [flag for flag in helm_ops.build_set_flags(settings) if "mlrun.api.kaniko" in flag]
 
 
 def test_kaniko_is_not_told_anything_when_the_registry_is_not_local(settings):
@@ -458,6 +475,372 @@ def test_kaniko_is_not_told_anything_when_the_registry_is_not_local(settings):
 
     flags = helm_ops.build_set_flags(settings)
     assert not [flag for flag in flags if "kaniko" in flag]
+
+
+def deep_merge(base: dict, over: dict) -> dict:
+    """Merge `over` onto `base` the way helm layers a parent's values onto a subchart's.
+
+    Recursive, not shallow: the umbrella declares `nuclio.dashboard.ingress` without
+    repeating the subchart's `nuclio.dashboard.kaniko`, and a shallow merge would drop the
+    half it does not mention.
+    """
+    result = dict(base)
+    for key, value in over.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+# ------------------------------------------------------------------------------------------
+# --dry-run was ignored on the uninstall path, which really deleted things
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_dry_run_uninstall_reports_instead_of_uninstalling(monkeypatch, settings, recorder):
+    # execute() routed to do_uninstall before anything considered dry_run, and neither it
+    # nor do_hard_clean read the flag — so this combination really removed the release.
+    helm_rec = recorder(answers={"status": Result(0, "STATUS: deployed")})
+    monkeypatch.setattr(helm_ops, "helm", helm_rec)
+    monkeypatch.setattr(helm_ops, "kubectl", recorder())
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+    settings.uninstall = True
+    settings.dry_run = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert not helm_rec.ran("uninstall")
+    assert helm_rec.ran("status"), "the read that reports what would go should still run"
+
+
+def test_a_dry_run_hard_clean_lists_the_volumes_without_deleting_them(
+    monkeypatch, settings, recorder
+):
+    kube_rec = recorder(
+        answers={
+            "get pvc": Result(0, "data-mlrun-db-0\n"),
+            "get pv": Result(0, "pvc-abc mlrun Released\n"),
+        }
+    )
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    settings.dry_run = True
+
+    helm_ops.do_hard_clean(settings)
+
+    assert kube_rec.ran("get pvc") and kube_rec.ran("get pv")
+    assert not kube_rec.ran("delete")
+
+
+# ------------------------------------------------------------------------------------------
+# --non-interactive was unusable on the documented CI path
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_registry_with_no_email_does_not_stop_a_non_interactive_run(monkeypatch, settings):
+    # Registries stopped requiring an email years ago, but prompt_or_env treated "empty and
+    # no default" as fatal, so a CI run with a complete set of credentials still died here.
+    monkeypatch.delenv("REGISTRY_EMAIL", raising=False)
+    settings.non_interactive = True
+    settings.config_registry_email = ""
+
+    assert (
+        prompt_or_env(settings, "REGISTRY_EMAIL", "Docker registry email", "", allow_empty=True)
+        == ""
+    )
+
+
+def test_a_genuinely_required_value_still_stops_a_non_interactive_run(monkeypatch, settings):
+    monkeypatch.delenv("REGISTRY_URL", raising=False)
+    settings.non_interactive = True
+
+    with pytest.raises(InstallerError):
+        prompt_or_env(settings, "REGISTRY_URL", "Docker registry URL")
+
+
+def test_a_non_interactive_uninstall_does_not_demand_registry_credentials(
+    monkeypatch, settings, recorder
+):
+    # check_required_non_interactive ran from inside load_config, ahead of the uninstall
+    # branch, so tearing a release down asked for a registry URL and a password.
+    for var in ("REGISTRY_URL", "REGISTRY_USERNAME", "REGISTRY_PASSWORD"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
+    monkeypatch.setattr(helm_ops, "kubectl", recorder())
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+    settings.non_interactive = True
+    settings.uninstall = True
+    settings.dry_run = True
+
+    cli.execute(settings)  # the regression was a SystemExit out of this call
+
+
+def test_missing_credentials_are_reported_up_front_without_a_config_file(
+    monkeypatch, settings, capture_logs
+):
+    # The check lived at the end of load_config, which returns early when there is no
+    # --config — so an env-var-driven CI run got no up-front check and instead failed
+    # later, one missing variable at a time, from inside prompt_or_env.
+    for var in ("REGISTRY_URL", "REGISTRY_USERNAME", "REGISTRY_PASSWORD"):
+        monkeypatch.delenv(var, raising=False)
+    settings.non_interactive = True
+    settings.config_file = ""
+
+    logs = capture_logs(config)
+    with pytest.raises(InstallerError):
+        check_required_non_interactive(settings)
+
+    text = "\n".join(logs)
+    assert "REGISTRY_URL" in text and "REGISTRY_PASSWORD" in text, (
+        "every missing field should be named in one report, not one exit per variable"
+    )
+
+
+# ------------------------------------------------------------------------------------------
+# A Service with no ports hid every NodePort conflict behind it
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_service_with_no_ports_does_not_hide_a_later_nodeport_conflict(
+    monkeypatch, settings, recorder, capture_logs
+):
+    # The newline used to sit inside the ports range, so the portless Service below emitted
+    # no line terminator and the next Service's "default/" prefix was read as its port.
+    listing = "kube-system/ \ndefault/ 30040 \n"
+    monkeypatch.setattr(validators, "kubectl", recorder(answers={"get svc": Result(0, listing)}))
+    logs = capture_logs(validators)
+
+    validators.validate_nodeport_conflicts(settings)
+
+    assert any("30040" in line for line in logs), (
+        "a conflict on a chart NodePort should be reported, not swallowed"
+    )
+
+
+def test_a_nodeport_owned_by_this_release_is_not_a_conflict(
+    monkeypatch, settings, recorder, capture_logs
+):
+    listing = f"{settings.namespace}/{settings.release_name} 30040 30050 \n"
+    monkeypatch.setattr(validators, "kubectl", recorder(answers={"get svc": Result(0, listing)}))
+    logs = capture_logs(validators)
+
+    validators.validate_nodeport_conflicts(settings)
+
+    assert any("no conflicts" in line for line in logs)
+
+
+# ------------------------------------------------------------------------------------------
+# Things that happened in the wrong order, or that a dry run should not have done
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_bad_chart_path_is_caught_before_the_namespace_is_created(monkeypatch, settings):
+    # resolve_chart_source validates the path, but only runs after ensure_namespace and
+    # deploy_local_registry — so a typo left a namespace and a running registry behind.
+    settings.chart_path = "/no/such/chart"
+
+    with pytest.raises(InstallerError):
+        cluster.validate_chart_path(settings)
+
+
+def test_a_directory_without_a_chart_yaml_is_rejected(settings, tmp_path):
+    settings.chart_path = str(tmp_path)
+
+    with pytest.raises(InstallerError):
+        cluster.validate_chart_path(settings)
+
+
+def test_a_helm_older_than_313_gets_a_client_side_dry_run(
+    monkeypatch, settings, recorder, capture_logs
+):
+    # --dry-run only became a string flag in helm 3.13; before that `--dry-run=server` is an
+    # invalid boolean and the install never starts. The chart's own floor is 3.6.
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"version": Result(0, "v3.12.3")}))
+    logs = capture_logs(helm_ops)
+    settings.dry_run = True
+
+    assert helm_ops.dry_run_flag(settings) == "--dry-run"
+    assert any("3.13" in message for message in logs), "the downgrade must not be silent"
+
+
+def test_a_helm_new_enough_still_gets_the_server_side_dry_run(monkeypatch, settings, recorder):
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"version": Result(0, "v3.16.2")}))
+    settings.dry_run = True
+
+    assert helm_ops.dry_run_flag(settings) == "--dry-run=server"
+
+
+def test_a_dry_run_does_not_log_in_to_the_registry(monkeypatch, settings, recorder):
+    # A successful `docker login` rewrites ~/.docker/config.json, which is the one thing a
+    # dry run is promising not to do to the machine it runs on.
+    rec = recorder()
+    monkeypatch.setattr(validators, "run", rec)
+    monkeypatch.setattr(validators, "docker_available", lambda: True)
+    settings.dry_run = True
+    settings.registry_username_value = "user"
+    settings.registry_password_value = "pass"
+
+    validators.validate_registry_auth(settings)
+
+    assert not rec.ran("login"), f"no login may be attempted: {rec.joined}"
+
+
+# ------------------------------------------------------------------------------------------
+# Wrong source, first-match-only, called twice, unfiltered, and written to the user's home
+# ------------------------------------------------------------------------------------------
+
+
+def test_the_reported_kubernetes_version_is_the_api_servers(
+    monkeypatch, settings, recorder, capture_logs
+):
+    # A kubelet may trail the control plane by two minor versions, and .items[0] picks an
+    # arbitrary node — so a mid-upgrade cluster reported whichever side it landed on.
+    payload = '{"serverVersion": {"gitVersion": "v1.31.4"}}'
+    rec = recorder(answers={"version": Result(0, payload)})
+    monkeypatch.setattr(validators, "kubectl", rec)
+    logs = capture_logs(validators)
+
+    validators.validate_k8s_version(settings)
+
+    assert not rec.ran("get nodes"), "the node list is neither authoritative nor needed here"
+    assert any("1.31" in message for message in logs)
+
+
+def test_every_default_storage_class_is_named_not_just_the_first(
+    monkeypatch, settings, recorder, capture_logs
+):
+    # Two defaults is a misconfiguration Kubernetes accepts and then resolves arbitrarily.
+    # Reporting only the first made it look like a healthy single default.
+    listing = "fast=true\nslow=true\n"
+    monkeypatch.setattr(
+        validators, "kubectl", recorder(answers={"get storageclass": Result(0, listing)})
+    )
+    logs = capture_logs(validators)
+
+    assert validators.validate_storage_class(settings)
+
+    reported = "\n".join(logs)
+    assert "fast" in reported and "slow" in reported
+
+
+def test_minikube_ip_is_asked_once(monkeypatch, settings, recorder):
+    rec = recorder(answers={"minikube ip": Result(0, "192.168.49.2")})
+    monkeypatch.setattr(cluster, "run", rec)
+    monkeypatch.setattr(cluster.shutil, "which", lambda name: "/usr/bin/minikube")
+    monkeypatch.setattr(cluster, "kubectl", recorder())
+    monkeypatch.setenv("EXTERNAL_HOST_ADDRESS", "")
+    settings.non_interactive = True
+    settings.kube_context = ""
+
+    cluster.resolve_external_host(settings)
+
+    assert settings.external_host_address == "192.168.49.2"
+    assert len([call for call in rec.calls if "minikube" in " ".join(call)]) == 1
+
+
+def test_a_hard_clean_leaves_a_bound_pv_alone(monkeypatch, settings, recorder):
+    # The phase was fetched and then ignored, so a PV still Bound to a live PVC — possibly
+    # one this release does not own — was deleted along with the released ones.
+    rec = recorder(
+        answers={
+            "get pvc": Result(0, ""),
+            "get pv": Result(
+                0, f"pv-gone {settings.namespace} Released\npv-live {settings.namespace} Bound\n"
+            ),
+        }
+    )
+    monkeypatch.setattr(helm_ops, "kubectl", rec)
+
+    helm_ops.do_hard_clean(settings)
+
+    assert rec.ran("delete pv pv-gone")
+    assert not rec.ran("pv-live"), f"a Bound PV must survive: {rec.joined}"
+
+
+def test_the_users_helm_repository_list_is_not_rewritten(monkeypatch, tmp_path):
+    # `helm repo add --force-update mlrun-ce` rebinds the alias in the user's own
+    # repositories.yaml, and nothing put it back afterwards.
+    monkeypatch.delenv("HELM_REPOSITORY_CONFIG", raising=False)
+
+    cluster.isolate_helm_repo_config()
+
+    configured = Path(os.environ["HELM_REPOSITORY_CONFIG"])
+    assert configured != Path.home() / ".config" / "helm" / "repositories.yaml"
+    assert not configured.exists(), "helm creates it; the installer only names the location"
+
+
+def test_an_explicit_helm_repository_config_is_respected(monkeypatch):
+    monkeypatch.setenv("HELM_REPOSITORY_CONFIG", "/somewhere/mine.yaml")
+
+    cluster.isolate_helm_repo_config()
+
+    assert os.environ["HELM_REPOSITORY_CONFIG"] == "/somewhere/mine.yaml"
+
+
+def chart_values_with_subcharts(chart_dir: Path) -> dict:
+    """The umbrella's values.yaml with each vendored subchart's own values under its name."""
+    merged = yaml.safe_load((chart_dir / "values.yaml").read_text()) or {}
+    for tarball in sorted(glob.glob(str(chart_dir / "charts" / "*.tgz"))):
+        with tarfile.open(tarball) as archive:
+            names = archive.getnames()
+            chart_yaml = [n for n in names if re.fullmatch(r"[^/]+/Chart\.yaml", n)]
+            values_yaml = [n for n in names if re.fullmatch(r"[^/]+/values\.yaml", n)]
+            if not chart_yaml:
+                continue
+            name = yaml.safe_load(archive.extractfile(chart_yaml[0]).read())["name"]
+            sub = (
+                yaml.safe_load(archive.extractfile(values_yaml[0]).read() or b"{}")
+                if values_yaml
+                else {}
+            )
+            over = merged.get(name)
+            merged[name] = deep_merge(sub or {}, over if isinstance(over, dict) else {})
+    return merged
+
+
+def test_every_set_flag_names_a_key_the_chart_declares(settings):
+    # helm accepts any --set path, whether or not something reads it, which is how the
+    # kaniko flag stayed a no-op. Resolving each path against the chart's own values is
+    # the only cheap way to notice; `global.*` is helm's cross-chart namespace and is
+    # deliberately not declared anywhere, so it is exempt.
+    chart_dir = Path(__file__).resolve().parents[2] / "charts" / "mlrun-ce"
+    if not glob.glob(str(chart_dir / "charts" / "*.tgz")):
+        pytest.skip("subcharts not vendored — run `make helm-update-dependencies` first")
+
+    values = chart_values_with_subcharts(chart_dir)
+    for field in (
+        "local_registry",
+        "enable_ingress",
+        "disable_system_monitoring",
+        "disable_spark",
+        "disable_mpi",
+        "disable_model_monitoring",
+        "enable_otel_operator",
+        "enable_otel_collector",
+        "enable_otel_namespace_label",
+        "enable_otel_instrumentation",
+    ):
+        setattr(settings, field, True)
+    settings.mlrun_version = "1.10.0"
+    settings.nuclio_version = "1.15.0"
+
+    flags = helm_ops.build_set_flags(settings)
+    paths = [
+        value.split("=", 1)[0]
+        for flag, value in zip(flags, flags[1:])
+        if flag == "--set" and not value.startswith("global.")
+    ]
+    assert paths, "no --set paths to check — did build_set_flags change shape?"
+
+    missing = []
+    for path in paths:
+        node = values
+        for part in path.split("."):
+            if not isinstance(node, dict) or part not in node:
+                missing.append(path)
+                break
+            node = node[part]
+    assert not missing, "--set paths no chart declares: " + ", ".join(missing)
 
 
 # ------------------------------------------------------------------------------------------

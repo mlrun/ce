@@ -23,6 +23,8 @@ so every test here asserts the return value *and* the message, never just one.
 Test names end in the symptom a user would report, matching test_regressions.py.
 """
 
+import json
+
 import pytest
 
 from ce_installer import cli, validators
@@ -40,9 +42,16 @@ from .conftest import Recorder
 DEFAULT_CLASS_ANNOTATION = r"storageclass\.kubernetes\.io/is-default-class"
 BETA_CLASS_ANNOTATION = r"storageclass\.beta\.kubernetes\.io/is-default-class"
 
-KUBELET_VERSION_QUERY = "nodeInfo.kubeletVersion"
+# The cluster version comes from the API server, not from an arbitrary node's kubelet —
+# kubelets are allowed to trail the control plane by a couple of minor versions.
+SERVER_VERSION_QUERY = "version -o json"
 MEMORY_QUERY = "allocatable.memory"
 EPHEMERAL_STORAGE_QUERY = "allocatable.ephemeral-storage"
+
+
+def server_version(raw):
+    """What `kubectl version -o json` returns for a cluster running `raw`."""
+    return Result(0, json.dumps({"serverVersion": {"gitVersion": raw}}))
 
 
 def log_text(logs):
@@ -68,7 +77,7 @@ def install_kubectl(monkeypatch, answers=None, default=None):
 
 def test_k8s_version_never_blocks_without_an_explicit_floor(monkeypatch, settings, capture_logs):
     logs = capture_logs(validators)
-    install_kubectl(monkeypatch, {KUBELET_VERSION_QUERY: Result(0, "v1.30.2")})
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.2")})
 
     assert validators.validate_k8s_version(settings) is True
     # The chart declares no kubeVersion and the README states no cluster version, so there
@@ -81,7 +90,7 @@ def test_k8s_version_reports_the_detected_version_with_no_floor_mentioned(
     monkeypatch, settings, capture_logs
 ):
     logs = capture_logs(validators)
-    install_kubectl(monkeypatch, {KUBELET_VERSION_QUERY: Result(0, "v1.34.0")})
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.34.0")})
 
     assert validators.validate_k8s_version(settings) is True
     assert "Kubernetes version: 1.34" in log_text(logs)
@@ -106,7 +115,7 @@ def test_min_k8s_version_only_warns_when_the_cluster_is_below_it(
     settings.min_k8s_version = "1.34"
     apply_version_floors(settings)
     logs = capture_logs(validators)
-    install_kubectl(monkeypatch, {KUBELET_VERSION_QUERY: Result(0, "v1.30.2")})
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.2")})
 
     # MIN_K8S_VERSION exists to tighten an environment, not to hand the installer a veto.
     assert validators.validate_k8s_version(settings) is True
@@ -425,7 +434,7 @@ def test_run_validators_reports_every_blocking_failure_before_exiting_once(
     logs = capture_logs(validators)
     # Old helm *and* no default StorageClass: both must be reported, so a user fixes the
     # cluster in one pass instead of discovering the second problem on the next run.
-    install_kubectl(monkeypatch, {KUBELET_VERSION_QUERY: Result(0, "v1.30.0")})
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.0")})
     monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v3.5.0+g12345")))
     monkeypatch.setattr(validators, "docker_available", lambda: False)
 

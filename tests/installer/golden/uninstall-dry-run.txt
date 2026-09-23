@@ -1,0 +1,6 @@
+exit: 0
+---
+["helm", "version", "--short"]
+["kubectl", "cluster-info"]
+["docker", "info"]
+["helm", "status", "mlrun-ce", "--namespace", "mlrun"]

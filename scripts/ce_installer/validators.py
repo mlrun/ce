@@ -18,6 +18,7 @@ Blocking: Helm version and default StorageClass. Everything else reports and con
 first one, so a user fixes everything in one pass.
 """
 
+import json
 import re
 from typing import List, Optional, Tuple
 
@@ -33,14 +34,19 @@ STORAGECLASS_JSONPATH = (
     r'{"\n"}{end}'
 )
 
-# "<namespace>/<owning release> <port>" for a Service's first port, then a bare port per
-# line for the rest. The release comes from the annotation helm writes on everything it
-# owns, and is empty for Services it does not; the "/" is always emitted, which is what
-# lets the parser tell a prefixed first line from a continuation one.
+# One line per Service: "<namespace>/<owning release> <port> <port> ...". The release comes
+# from the annotation helm writes on everything it owns, and is empty for Services it does
+# not.
+#
+# The newline terminates the Service, not each port. With it inside the ports range a
+# Service with no ports emitted no newline at all, so the next Service's "ns/release"
+# prefix landed on the same line and was parsed as that Service's port number — which then
+# shifted every real port on the line out of the parser's reach. One unported Service
+# anywhere in the cluster was enough to hide a genuine conflict.
 NODEPORT_JSONPATH = (
     r'{range .items[*]}{.metadata.namespace}{"/"}'
     r"{.metadata.annotations.meta\.helm\.sh/release-name}"
-    r'{" "}{range .spec.ports[*]}{.nodePort}{"\n"}{end}{end}'
+    r'{" "}{range .spec.ports[*]}{.nodePort}{" "}{end}{"\n"}{end}'
 )
 
 
@@ -57,10 +63,17 @@ def validate_k8s_version(settings: Settings) -> bool:
     Never blocks — neither the chart nor its README states a required cluster version.
     Warns only against an explicitly set MIN_K8S_VERSION.
     """
-    result = kubectl(
-        settings, "get", "nodes", "-o", "jsonpath={.items[0].status.nodeInfo.kubeletVersion}"
-    )
-    raw = result.out.strip() if result.ok else ""
+    # The kubelet version of an arbitrary node is not the cluster's version: kubelets are
+    # allowed to trail the control plane by a couple of minor versions, and on a managed
+    # cluster mid-upgrade .items[0] can be either side of the split. `version` asks the API
+    # server itself. A node listing is also a much bigger permission to need than this.
+    result = kubectl(settings, "version", "-o", "json")
+    raw = ""
+    if result.ok:
+        try:
+            raw = str(json.loads(result.out).get("serverVersion", {}).get("gitVersion", ""))
+        except (ValueError, AttributeError):
+            raw = ""
     if not raw:
         log_warn("  Could not determine Kubernetes version; skipping version check.")
         return True
@@ -123,7 +136,17 @@ def validate_storage_class(settings: Settings) -> bool:
             "StorageClass for its PVCs."
         )
         return False
-    log_info("  Default StorageClass: {}".format("\n".join(matched).split("=", 1)[0]))
+
+    # Every match, not just the first: a cluster with two defaults is a misconfiguration
+    # Kubernetes does not reject, and which one wins is then up to the API server. Naming
+    # only matched[0] reported it as a healthy single default.
+    names = [row.split("=", 1)[0] for row in matched]
+    log_info("  Default StorageClass: {}".format(", ".join(names)))
+    if len(names) > 1:
+        log_warn(
+            f"  {len(names)} StorageClasses are marked default; Kubernetes picks one "
+            "arbitrarily for PVCs that do not name a class."
+        )
     return True
 
 
@@ -164,6 +187,14 @@ def validate_registry_auth(settings: Settings) -> bool:
             "  Registry auth: skipped (docker not available — this check is the only use for it)"
         )
         return True
+    if settings.dry_run:
+        # The only validator that writes anywhere: a successful `docker login` rewrites the
+        # invoking user's ~/.docker/config.json. Harmless in a real install, but a dry run
+        # is supposed to leave the machine exactly as it found it.
+        log_info(
+            "  Registry auth: skipped (--dry-run; a login would rewrite ~/.docker/config.json)"
+        )
+        return True
 
     server = settings.registry_server_value or DEFAULT_DOCKER_SERVER
     result = run(
@@ -190,19 +221,14 @@ def validate_nodeport_conflicts(settings: Settings) -> bool:
     # namespace: helm will not adopt a Service it does not own, so an unrelated one sitting
     # on 30040 fails the install on a port the bash version reported as clear.
     used: List[str] = []
-    ours = False
     for line in result.out.splitlines() if result.ok else []:
         fields = line.split()
         if not fields:
             continue
-        if "/" in fields[0]:
-            namespace, _, release = fields[0].partition("/")
-            ours = namespace == settings.namespace and release == settings.release_name
-            port = fields[1] if len(fields) > 1 else ""
-        else:
-            port = fields[0]
-        if port and not ours:
-            used.append(port)
+        namespace, _, release = fields[0].partition("/")
+        if namespace == settings.namespace and release == settings.release_name:
+            continue
+        used.extend(fields[1:])
 
     conflicts = [str(port) for port in REQUIRED_NODEPORTS if str(port) in used]
     if conflicts:

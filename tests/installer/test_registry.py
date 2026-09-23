@@ -232,116 +232,39 @@ def test_skip_secret_with_an_existing_secret_passes_silently(monkeypatch, settin
 
 
 # ------------------------------------------------------------------------------------------
-# The CoreDNS patch, which edits a ConfigMap the whole cluster depends on
+# The CoreDNS hosts entry, which the installer reports rather than applies
 # ------------------------------------------------------------------------------------------
 
-COREFILE = """.:53 {
-    errors
-    forward . /etc/resolv.conf
-}
-"""
 
-# What `kubectl create configmap --dry-run=client -o yaml` hands back to be applied; only
-# its emptiness is load-bearing, since a blank render now aborts the patch.
-RENDERED_CONFIGMAP = """apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: coredns
-  namespace: kube-system
-"""
-
-
-def test_an_unreadable_corefile_skips_the_patch_rather_than_emptying_it(
+def test_the_coredns_entry_is_reported_and_the_cluster_configmap_left_alone(
     monkeypatch, settings, recorder, capture_logs
 ):
-    rec = recorder(
-        answers={"get svc": Result(0, "10.96.0.10"), "get configmap coredns": Result(1, "")}
-    )
+    # This used to rewrite the kube-system coredns ConfigMap with a regex and restart the
+    # Deployment: cluster-wide infrastructure, edited unasked, in a file format the
+    # installer does not own, and left behind by --uninstall.
+    rec = recorder(answers={"get svc": Result(0, "10.96.0.10")})
     monkeypatch.setattr(registry, "kubectl", rec)
     logs = capture_logs(registry)
 
-    registry.patch_coredns_for_registry(settings, "registry.example.com")
+    registry.report_coredns_entry_for_registry(settings, "registry.example.com")
 
-    # A failed read used to become Corefile="", which insert_hosts_entry returns unchanged,
-    # so the installer applied an empty Corefile and restarted CoreDNS — taking DNS down
-    # cluster-wide while logging "CoreDNS patched".
-    assert not rec.ran("apply"), f"nothing may be applied: {rec.joined}"
+    assert not rec.ran("apply"), f"nothing may be written: {rec.joined}"
     assert not rec.ran("rollout")
-    assert any("skipping CoreDNS patch" in message for message in logs)
+    assert not rec.ran("create configmap")
+    reported = "\n".join(logs)
+    assert "10.96.0.10 registry.example.com" in reported, "the entry itself must be printed"
+    assert "edit configmap coredns" in reported, "and how to apply it"
 
 
-def test_an_empty_corefile_skips_the_patch(monkeypatch, settings, recorder, capture_logs):
-    rec = recorder(
-        answers={"get svc": Result(0, "10.96.0.10"), "get configmap coredns": Result(0, "   ")}
-    )
-    monkeypatch.setattr(registry, "kubectl", rec)
-    logs = capture_logs(registry)
-
-    registry.patch_coredns_for_registry(settings, "registry.example.com")
-
-    assert not rec.ran("apply")
-    assert any("skipping CoreDNS patch" in message for message in logs)
-
-
-def test_a_corefile_with_nowhere_to_insert_skips_the_patch(
+def test_a_missing_ingress_controller_says_which_variable_to_set(
     monkeypatch, settings, recorder, capture_logs
 ):
-    # Neither a hosts{} block nor a forward line, so insert_hosts_entry has no anchor and
-    # returns the input untouched. Applying that would be a no-op ConfigMap write plus a
-    # pointless CoreDNS restart, reported as success.
-    rec = recorder(
-        answers={
-            "get svc": Result(0, "10.96.0.10"),
-            "get configmap coredns": Result(0, ".:53 {\n    errors\n}\n"),
-        }
-    )
-    monkeypatch.setattr(registry, "kubectl", rec)
+    monkeypatch.setattr(registry, "kubectl", recorder(answers={"get svc": Result(1, "")}))
     logs = capture_logs(registry)
 
-    registry.patch_coredns_for_registry(settings, "registry.example.com")
+    registry.report_coredns_entry_for_registry(settings, "registry.example.com")
 
-    assert not rec.ran("apply")
-    assert any("skipping CoreDNS patch" in message for message in logs)
-
-
-def test_a_healthy_corefile_is_patched_and_coredns_restarted(monkeypatch, settings, recorder):
-    rec = recorder(
-        answers={
-            "get svc": Result(0, "10.96.0.10"),
-            "get configmap coredns": Result(0, COREFILE),
-            "create configmap coredns": Result(0, RENDERED_CONFIGMAP),
-        }
-    )
-    monkeypatch.setattr(registry, "kubectl", rec)
-
-    registry.patch_coredns_for_registry(settings, "registry.example.com")
-
-    assert rec.ran("apply")
-    assert rec.ran("rollout restart")
-
-
-def test_a_coredns_configmap_that_cannot_be_written_is_not_reported_as_patched(
-    monkeypatch, settings, recorder, capture_logs
-):
-    # Reading kube-system and writing it are different permissions. The apply used to go
-    # unchecked, so a read-only user saw "CoreDNS patched" over an untouched ConfigMap and
-    # then had to work out for themselves why pods could not resolve the registry.
-    logs = capture_logs(registry)
-    rec = recorder(
-        answers={
-            "get svc": Result(0, "10.96.0.10"),
-            "get configmap coredns": Result(0, COREFILE),
-            "create configmap coredns": Result(0, RENDERED_CONFIGMAP),
-            "apply": Result(1, "", "Error from server (Forbidden)"),
-        }
-    )
-    monkeypatch.setattr(registry, "kubectl", rec)
-
-    registry.patch_coredns_for_registry(settings, "registry.example.com")
-
-    assert not rec.ran("rollout restart")
-    assert not any("CoreDNS patched" in message for message in logs)
-    assert any("Could not update the CoreDNS ConfigMap" in message for message in logs)
+    assert any("INGRESS_CONTROLLER_SERVICE" in message for message in logs)
 
 
 def test_the_ingress_controller_is_looked_for_where_ingress_nginx_installs_itself(settings):

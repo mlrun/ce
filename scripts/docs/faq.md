@@ -24,6 +24,11 @@ subchart's `PrometheusRule`/`ServiceMonitor` resources fail server-side validati
 is a Helm limitation (charts with CRDs can't fully dry-run without those CRDs present),
 not an `install.py` bug.
 
+On Helm older than 3.13, where `--dry-run` is a boolean flag and `--dry-run=server` does
+not parse, the installer falls back to a client-side dry run and warns that it has. That
+renders without talking to the API server, so this failure mode doesn't arise — and
+neither does the validation it would have caught.
+
 ### Can I install two `mlrun-ce` releases on one cluster?
 
 No, even in different namespaces with different release/secret names and NodePort
@@ -140,18 +145,30 @@ kubectl run test --rm -it --image=curlimages/curl --restart=Never \
   -n mlrun -- curl http://registry.host.docker.internal/v2/_catalog
 ```
 
-If pods can't resolve that host, the CoreDNS patch was skipped. It needs your ingress
-controller's ClusterIP, and it looks in `ingress-nginx` and then in the release namespace.
-A controller living elsewhere — Traefik, or an ingress-nginx someone put in `kube-system` —
-has to be named outright:
+Pods can't resolve that host until CoreDNS knows about it, and the installer does not edit
+CoreDNS for you — it prints the entry to add and leaves the decision to you:
+
+```
+[WARN] Pods cannot resolve registry.host.docker.internal until CoreDNS knows about it.
+[WARN]   Add this to the hosts{} block of the CoreDNS Corefile:
+[WARN]       10.96.0.10 registry.host.docker.internal
+[WARN]   Then: kubectl -n kube-system edit configmap coredns
+[WARN]         kubectl -n kube-system rollout restart deployment/coredns
+```
+
+The Corefile is cluster-wide configuration that nothing in the release namespace owns, and
+getting a rewrite of it wrong takes DNS down for every workload on the cluster, not just
+MLRun. It also would not be undone by `--uninstall`. So the installer reports rather than
+edits.
+
+The ClusterIP in that message comes from your ingress controller's Service, which the
+installer looks for in `ingress-nginx` and then in the release namespace. A controller
+living elsewhere — Traefik, or an ingress-nginx someone put in `kube-system` — has to be
+named outright, otherwise the message says it could not find one:
 
 ```bash
 INGRESS_CONTROLLER_SERVICE=kube-system/traefik ./scripts/install.py --local-registry --enable-ingress
 ```
-
-The installer says so when it skips, and skipping is all it does: an unreadable or empty
-Corefile ends the patch rather than being written back, since applying one would take DNS
-down for the whole cluster.
 
 ### The installer exits 2 saying "No such option"
 

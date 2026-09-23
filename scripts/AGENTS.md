@@ -122,16 +122,28 @@ bug across.
     alias left from an earlier run decided where the chart came from and `--helm-repo-url`
     was silently ignored. `--force-update` plus `check=True` makes the requested URL the
     one that serves the chart.
-16. **kaniko is told the local registry is insecure in both modes.** bash gated
-    `mlrun.api.kaniko.insecureRegistry` on `LOCAL_REGISTRY && ENABLE_INGRESS`. `registry:2`
-    serves plain HTTP on its ClusterIP exactly as it does behind the ingress, so
-    `--local-registry` on its own had kaniko pushing to an `https://` URL and failing on
-    TLS. The condition is now just `--local-registry`.
-17. **The CoreDNS patch reports only what landed.** The render, the apply and the rollout
-    were all unchecked, so a user who could read `kube-system` but not write it got
-    `CoreDNS patched: …` over an untouched ConfigMap. Each step is checked now. A failed
-    restart is a warning rather than an abort, because the ConfigMap is already updated at
-    that point and CoreDNS reloads it on its own within a minute or two.
+16. **kaniko is told the local registry is insecure, in both modes and at a key a chart
+    reads.** Two bugs in one flag. bash gated it on `LOCAL_REGISTRY && ENABLE_INGRESS`, but
+    `registry:2` serves plain HTTP on its ClusterIP exactly as it does behind the ingress,
+    so `--local-registry` alone had kaniko pushing to an `https://` URL and failing on TLS
+    — the condition is now just `--local-registry`. The flag itself was also
+    `mlrun.api.kaniko.insecureRegistry`, which no chart in the umbrella has ever read: the
+    builder is nuclio's dashboard (`nuclio.dashboard.containerBuilderKind: kaniko`) and the
+    keys are `nuclio.dashboard.kaniko.insecurePushRegistry` / `insecurePullRegistry`. helm
+    accepts an unknown `--set` path silently, so the flag looked present and did nothing for
+    as long as it existed. `--disable-mpi` had the same disease: `mpi-operator.rbac.create`
+    does not exist, the subchart splits it into `rbac.clusterResources.create` and
+    `rbac.namespaced.create`, and the latter defaults on — so disabling MPI still created
+    the operator's ServiceAccount and RoleBinding. `test_every_set_flag_names_a_key_the_
+    chart_declares` resolves every non-`global.*` `--set` path against the umbrella's
+    values merged with each vendored subchart's, so a third one cannot be added quietly.
+17. **The CoreDNS hosts entry is reported, not applied.** bash rewrote the `kube-system`
+    `coredns` ConfigMap with a regex and restarted the Deployment. That is cluster-wide
+    configuration nothing in the release namespace owns, in a file format the installer does
+    not control; a bad rewrite takes DNS down for every workload on the cluster, and
+    `--uninstall` never took the entry back out. `report_coredns_entry_for_registry` prints
+    the `ip host` line and the two commands to apply it, and touches nothing. The
+    ingress-controller ClusterIP lookup is kept — it is what supplies the IP in the message.
 18. **The pull secret is updated in place.** The delete-then-create was required by bash's
     `kubectl create secret`, which refuses to overwrite; the port kept it after switching to
     `apply`, which does not need it. That left a window with no credentials on the release,
@@ -142,6 +154,55 @@ bug across.
     run then deleted — so `--show-progress` under CI produced no install output at all.
     bash had the same hole. The terminal check moved into the branch condition, so a
     redirected run streams helm's own output, which is what the docstring always claimed.
+20. **`--dry-run` is honoured on the uninstall path.** It was only ever read while building
+    the install command, so `--uninstall --hard-clean --dry-run` really removed the release
+    and really deleted every PVC and bound PV. The reads still run — listing what would go
+    is the point — and every mutation is now guarded and reported instead.
+21. **`--non-interactive` works on the documented CI path.** Three separate stops. The
+    required-field check was the last statement of `load_config`, which returns early when
+    there is no `--config`, so an env-var-only run got no up-front check and instead died
+    later, one variable at a time, inside `prompt_or_env`; it moved to `execute()`. It also
+    ran ahead of the uninstall branch, so tearing a release down demanded registry
+    credentials. And `REGISTRY_EMAIL` — which registries stopped caring about years ago —
+    had no default, so "no default available" made it mandatory; `prompt_or_env` grew an
+    `allow_empty` for fields whose real value is empty rather than unset.
+22. **A Service with no ports no longer hides every NodePort conflict behind it.** The
+    newline in `NODEPORT_JSONPATH` sat inside the `.spec.ports[*]` range, so a portless
+    Service emitted no line terminator, the next Service's `ns/release` prefix was parsed as
+    its port number, and every real port on that line fell out of the parser's reach. The
+    newline terminates the Service now and each line is one Service.
+23. **`--dry-run` degrades instead of failing on Helm below 3.13.** `--dry-run` only became
+    a string flag in 3.13; before that `--dry-run=server` is an invalid boolean and the
+    install never starts. The chart's own floor is 3.6, so the documented flag was unusable
+    on most supported helms. `dry_run_flag` checks the version and falls back to a
+    client-side dry run with a warning saying what that no longer covers.
+24. **A bad `--chart-path` is caught before the cluster is touched.** `resolve_chart_source`
+    validates it, but only runs after `ensure_namespace` and `deploy_local_registry` — so a
+    typo left a namespace and a running registry behind on the way to the error message.
+    `validate_chart_path` is called from `execute()` first, the same fix `-f` already had.
+25. **A dry run does not log in to the registry.** `validate_registry_auth` runs a real
+    `docker login`, and a successful one rewrites the invoking user's
+    `~/.docker/config.json` — the one thing a dry run promises not to do to the machine it
+    runs on. It is skipped under `--dry-run` and says so.
+26. **The reported Kubernetes version is the API server's.** It came from
+    `.items[0].status.nodeInfo.kubeletVersion`: an arbitrary node's kubelet, which is
+    allowed to trail the control plane by two minor versions and can be either side of the
+    split on a cluster mid-upgrade. `kubectl version -o json` asks the API server, and needs
+    a much smaller permission than listing nodes.
+27. **Every default StorageClass is named.** The validator matched them all and then printed
+    `matched[0]`, so a cluster with two defaults — a misconfiguration Kubernetes accepts and
+    then resolves arbitrarily — was reported as a healthy single default. All are listed,
+    with a warning when there is more than one.
+28. **A hard clean leaves PVs that are still Bound.** The phase was fetched into the
+    `custom-columns` query and then ignored, so every PV whose `claimRef` named the
+    namespace was deleted, including ones still bound to a live PVC that the release may not
+    own. Only `Released` and `Failed` are deleted; anything else is listed as skipped.
+29. **`minikube ip` is asked once.** `resolve_external_host` called it to test the exit code
+    and again to read the answer, doubling the wait on every run for a value it already had.
+30. **The user's helm repository list is left alone.** `helm repo add --force-update
+    mlrun-ce` rewrites `~/.config/helm/repositories.yaml`, permanently rebinding an alias the
+    user may have pointed elsewhere, and nothing put it back. The run gets a throwaway
+    `HELM_REPOSITORY_CONFIG` unless the user named one themselves.
 
 Known limitation, not a divergence: with `--local-registry` and no `--enable-ingress` the
 registry is addressed as `local-registry.<ns>.svc.cluster.local:5000`. kaniko resolves that
@@ -169,7 +230,7 @@ launcher: PEP 723 metadata, the `_bootstrap()` uv re-exec, and a call to `main()
 | `shell.py` | `run`/`stream`, the KUBE_CONTEXT-aware `kubectl`/`helm` wrappers, `check_requirements` |
 | `config.py` | the `ce-config.yaml` `installer:` block |
 | `cluster.py` | namespace, external host address, chart source resolution |
-| `registry.py` | pull secret, the optional in-cluster registry, the CoreDNS patch |
+| `registry.py` | pull secret, the optional in-cluster registry, the CoreDNS entry report |
 | `validators.py` | pre-install checks, blocking and advisory |
 | `ui.py` | the live progress table and the access-URL table |
 | `helm_ops.py` | `--set` composition, install, uninstall, hard clean |

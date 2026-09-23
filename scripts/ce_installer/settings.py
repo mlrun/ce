@@ -177,17 +177,23 @@ def prompt_or_env(
     prompt_msg: str,
     default: str = "",
     secret: bool = False,
+    allow_empty: bool = False,
 ) -> str:
     """Resolve a value from the environment, then a prompt, then a default.
 
     Prompts go to stderr so that piping the installer's stdout somewhere still shows them.
+
+    `allow_empty` is for the fields that genuinely have no value rather than an unset one —
+    REGISTRY_EMAIL, which registries stopped caring about years ago. Without it, "no default
+    available" makes every such field mandatory under --non-interactive, which is how a CI
+    run with a complete set of credentials still died asking for an email address.
     """
     value = env_str(env_var)
     if value:
         return value
 
     if settings.non_interactive:
-        if default:
+        if default or allow_empty:
             return default
         raise die(
             f"Required value '{env_var}' is not set and no default is available "

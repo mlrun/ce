@@ -169,13 +169,23 @@ def test_chart_kind_path_without_a_chart_path_fails_even_interactively(settings,
 # ------------------------------------------------------------------------------------------
 
 
+def load_and_check(settings):
+    """load_config then the required-field check, in the order execute() runs them.
+
+    The check used to be the last statement of load_config, which returns early when there
+    is no --config; it moved to execute() so an env-var-only run is checked too.
+    """
+    config.load_config(settings)
+    config.check_required_non_interactive(settings)
+
+
 def test_every_missing_required_field_is_reported_in_one_run(settings, tmp_path, capture_logs):
     logs = capture_logs(config)
     settings.non_interactive = True
     settings.config_file = write_config(tmp_path, 'installer:\n  registry:\n    url: ""\n')
 
     with pytest.raises(InstallerError) as excinfo:
-        config.load_config(settings)
+        load_and_check(settings)
 
     # Reported together on purpose: a CI run that fails three times in a row, once per
     # field, costs three round trips to learn what one message could have said.
@@ -198,7 +208,7 @@ def test_local_registry_does_not_demand_a_registry_url(settings, tmp_path):
     # in-cluster Service, and the secret is created with fixed local/local credentials.
     # (The bash case also exported REGISTRY_PASSWORD; the exemption covers all three
     # fields, so leaving it unset asserts the same rule more completely.)
-    config.load_config(settings)
+    load_and_check(settings)
 
 
 def test_skip_secret_does_not_demand_registry_credentials(settings, tmp_path):
@@ -211,7 +221,7 @@ def test_skip_secret_does_not_demand_registry_credentials(settings, tmp_path):
 
     # Credentials are only ever needed to build the pull secret; --skip-secret says one
     # already exists, so requiring them would block a perfectly valid CI install.
-    config.load_config(settings)
+    load_and_check(settings)
 
 
 def test_values_file_alone_skips_the_required_field_check(settings):
@@ -220,7 +230,7 @@ def test_values_file_alone_skips_the_required_field_check(settings):
 
     # -f on its own is self-contained: the run creates no secret and gathers no params, so
     # there is nothing for these fields to feed.
-    config.load_config(settings)
+    load_and_check(settings)
 
     assert settings.config_registry_url == ""
 
@@ -234,7 +244,7 @@ def test_values_file_combined_with_config_still_demands_registry_fields(
     settings.config_file = write_config(tmp_path, "installer: {}\n")
 
     with pytest.raises(InstallerError) as excinfo:
-        config.load_config(settings)
+        load_and_check(settings)
 
     # Adding --config re-arms secret creation and param gathering, so the -f-only bypass
     # must not extend to the combination — otherwise the run fails later, mid-install.
