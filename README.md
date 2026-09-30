@@ -16,3 +16,15 @@ The Open source MLRun CE chart includes the following stack:
 ## Installation
 
 Refer to the installation instructions in the [README](charts/mlrun-ce/README.md) of the `mlrun-ce` chart.
+
+For a scripted install, [`scripts/install.py`](scripts/README.md) wraps those steps — registry
+secret, pre-install validation and `helm install` — behind a single command:
+
+```bash
+CE_TAG=mlrun-ce-0.12.0-rc.15
+uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
+  mlrun-ce-installer install
+```
+
+It needs [uv](https://docs.astral.sh/uv/), helm and kubectl; uv supplies the Python and the
+installer's dependencies itself.

@@ -1,0 +1,11 @@
+exit: 0
+---
+["helm", "version", "--short"]
+["kubectl", "cluster-info"]
+["docker", "info"]
+["helm", "status", "mlrun-ce", "--namespace", "mlrun"]
+["helm", "uninstall", "mlrun-ce", "--namespace", "mlrun", "--timeout", "960s"]
+["kubectl", "get", "pvc", "--namespace", "mlrun", "--no-headers", "-o", "custom-columns=:metadata.name"]
+["kubectl", "delete", "pvc", "data-mlrun-db-0", "--namespace", "mlrun", "--timeout", "60s"]
+["kubectl", "get", "pv", "--no-headers", "-o", "custom-columns=:metadata.name,:spec.claimRef.namespace,:status.phase"]
+["kubectl", "delete", "pv", "pv-released", "--timeout", "60s"]

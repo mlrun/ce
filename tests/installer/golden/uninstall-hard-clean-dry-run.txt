@@ -1,0 +1,8 @@
+exit: 0
+---
+["helm", "version", "--short"]
+["kubectl", "cluster-info"]
+["docker", "info"]
+["helm", "status", "mlrun-ce", "--namespace", "mlrun"]
+["kubectl", "get", "pvc", "--namespace", "mlrun", "--no-headers", "-o", "custom-columns=:metadata.name"]
+["kubectl", "get", "pv", "--no-headers", "-o", "custom-columns=:metadata.name,:spec.claimRef.namespace,:status.phase"]

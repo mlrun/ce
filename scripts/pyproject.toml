@@ -1,0 +1,96 @@
+# Packaging metadata for the installer.
+#
+# Its only job is to make the installer runnable without a clone, now that the code is a
+# package rather than one file:
+#
+#   uvx --from "git+https://github.com/mlrun/ce@<tag>#subdirectory=scripts" \
+#     mlrun-ce-installer install
+#
+# A clone does not go through this file at all — scripts/install.py carries its own PEP 723
+# metadata and `uv run --script` ignores the surrounding project.
+#
+# The version is never set here. charts/mlrun-ce/Chart.yaml is the only number, and
+# hatch_build.py reads it at build time — see that file for why an installed copy needs it
+# baked in rather than read from a checkout it does not have.
+
+[project]
+name = "mlrun-ce-installer"
+dynamic = ["version"]
+description = "Interactive installer for the MLRun Community Edition Helm chart"
+requires-python = ">=3.9"
+# Upper bounds, not exact pins. install.py.lock pins exactly, but it only governs
+# `uv run --script install.py`; `uvx --from "git+...#subdirectory=scripts"` resolves this
+# list instead, so without a ceiling a release-tagged install picks up whatever these
+# projects publish next. A bound at the next major keeps that within a compatible range
+# while still letting a fix land without a chart release.
+dependencies = [
+    "typer>=0.12,<1",
+    # A transitive dep of typer, declared because cli.py imports it directly: click's
+    # standalone_mode and exception types are part of how the argument parsing is built,
+    # not an implementation detail typer hides.
+    "click>=8,<9",
+    "rich>=13,<15",
+    "pyyaml>=6,<7",
+]
+
+[project.scripts]
+mlrun-ce-installer = "ce_installer.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Both hooks live in hatch_build.py, which hatchling picks up by name.
+[tool.hatch.metadata.hooks.custom]
+
+[tool.hatch.build.targets.wheel]
+packages = ["ce_installer"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "RUF", "PL"]
+ignore = [
+    # PEP 585 builtins (list[str]) and the typing-import deprecation. typer resolves the
+    # command signature through click's runtime get_type_hints, which is the one place
+    # where annotation style stops being cosmetic; keeping a single typing.* convention
+    # across the package means no one has to remember where the exception is.
+    "UP006",
+    "UP035",
+    # `from __future__ import annotations` stringifies annotations, which breaks that same
+    # runtime resolution on 3.9. Deliberately not used anywhere in this package.
+    "FA100",
+    # shell.run() is the one place subprocess is called, and its whole job is to return a
+    # non-zero exit to the caller rather than raise — the check= it is told to skip is
+    # re-implemented one line below as an explicit flag.
+    "PLW1510",
+    # The installer's job is to compare versions, counts and exit codes against the
+    # numbers the chart and Kubernetes define; naming each 0, 2 or 8 would not make any
+    # of them clearer.
+    "PLR2004",
+    # install() is one flag-to-Settings mapping and load_config() is one file-to-Settings
+    # mapping. Both are long because the surface is, and cutting them up would only spread
+    # a single precedence rule over several functions.
+    "PLR0911",
+    "PLR0912",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# _bootstrap() has to probe for its own dependencies before importing them, and run on a
+# stdlib-only interpreter while doing it.
+"install.py" = ["PLC0415"]
+
+[tool.ruff.lint.isort]
+# The tests import ce_installer from scripts/ via a sys.path insert, so ruff cannot infer
+# that it is ours and sorts it in with typer and rich. Saying so keeps the import block in
+# tests/installer grouped the same way it is inside the package itself.
+known-first-party = ["ce_installer"]
+
+[tool.ruff.lint.pylint]
+# install() is one long flag-to-Settings mapping; splitting it would only move the
+# arguments somewhere else.
+max-args = 30
