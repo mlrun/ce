@@ -1,15 +1,13 @@
 # KFP pipeline artifacts: in-cluster SeaweedFS (emptyDir) + background sync to AWS S3.
 #
-# storage.s3.* feeds seaweedfs.remote. storage.mode controls MLRun/Jupyter only
-# (defaults to local). Set storage.mode: s3 to store MLRun/Jupyter artifacts in S3 too.
+# storage.s3.* — credentials for seaweedfs.remote (and for MLRun/Jupyter if storage.mode: s3).
+# KFP always uses storage.local.* (in-cluster bucket; default mlrun). seaweedfs.remote.bucket is
+# the AWS sync target (can match storage.s3.bucket when MLRun also uses that bucket).
 #
-# emptyDir (lab/dev): no SeaweedFS PVC — local tier is ephemeral pod disk. Cloud is the durable
-# copy after sync. Not recommended for production (pod restart wipes local state; run helm upgrade
-# to re-run remote.configure/remote.mount if the gateway stalls after restart).
-
+# emptyDir (lab/dev): no SeaweedFS PVC — ephemeral local disk; cloud is durable after sync.
 storage:
   s3:
-    bucket: <BUCKET_NAME>
+    bucket: <REMOTE_S3_BUCKET_NAME>
     accessKey: <ACCESS_KEY>
     secretKey: <SECRET_KEY>
 
@@ -20,7 +18,15 @@ seaweedfs:
   remote:
     enabled: true
     provider: s3
-    bucket: <BUCKET_NAME>
+    bucket: <REMOTE_S3_BUCKET_NAME>
     s3:
       endpoint: s3.<REGION>.amazonaws.com
       region: <REGION> # e.g. us-east-2
+
+# Optional — same cloud bucket for MLRun and KFP remote sync:
+# storage:
+#   mode: s3
+#   s3:
+#     bucket: <REMOTE_S3_BUCKET_NAME>
+#     accessKey: <ACCESS_KEY>
+#     secretKey: <SECRET_KEY>
