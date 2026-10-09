@@ -28,6 +28,7 @@ spec:
             - /bin/sh
             - -c
             - "until nc -z $FILER_HOST $FILER_PORT; do echo waiting for SeaweedFS filer; sleep 5; done"
+        {{- if eq (include "mlrun-ce.seaweedfs.remote.mount.mountExisting" . | toString) "true" }}
         - name: wait-for-remote-mount
           image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
           imagePullPolicy: IfNotPresent
@@ -42,6 +43,7 @@ spec:
                 echo "waiting for remote mount at ${MOUNT_DIR}..."
                 sleep 5
               done
+        {{- end }}
       containers:
         - name: remote-gateway
           image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
