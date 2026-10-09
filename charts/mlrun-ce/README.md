@@ -200,7 +200,7 @@ To persist KFP artifacts to cloud storage, enable `seaweedfs.remote`. SeaweedFS 
 The chart deploys:
 
 - A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and mounts the remote bucket into the filer (`s3-bucket-init` is skipped when remote is enabled with `mount.mountExisting: true`). By default the mount uses `-nonempty` so upgrades succeed even when `/buckets/<local>` already contains pipeline artifacts
-- A **gateway Deployment** that keeps the local and remote buckets in sync — its init containers wait for the filer and for the remote mount from the config Job
+- A **gateway Deployment** that keeps the local and remote buckets in sync — init containers wait for the filer and, when `mount.mountExisting` is `true`, for the remote mount from the config Job
 
 Example overlays (copy and customize, or pass as `-f` values files). See `examples/README.md` for deploy commands and Azure auth options:
 
@@ -238,11 +238,11 @@ Key values under `seaweedfs.remote`:
 | `bucket`              | Remote AWS bucket or Azure container name (for Azure, must match `storage.azure.containerName`)                                              |
 | `s3.endpoint`         | Regional S3 endpoint (required when `provider: s3`)                                                                                          |
 | `s3.forcePathStyle`   | Path-style S3 URLs (default: `false` for AWS; set `true` for MinIO and other path-style endpoints)                                             |
-| `mount.mountExisting` | Mount an existing remote bucket/container (default: `true`)                                                                                  |
+| `mount.mountExisting` | When `true`, config Job runs `remote.mount` and the gateway waits for that mount (default: `true`). When `false`, only `remote.configure` runs and the local bucket is created by `s3-bucket-init` |
 | `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
 
 
-> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*`; for Azure from `storage.azure.accountName`+`accountKey`, or `storage.azure.connectionString` (parsed into account name and key by the remote-config Job). SAS token and client-secret auth are not supported for the remote gateway. When `provider` is `azure`, set `seaweedfs.remote.bucket` to the same value as `storage.azure.containerName`.
+> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*` (static keys; `global.infrastructure.aws.s3NonAnonymous`/IRSA is not supported for the remote gateway). For Azure use `storage.azure.accountName`+`accountKey`, or `storage.azure.connectionString` (parsed into account name and key by the remote-config Job). SAS token and client-secret auth are not supported for the remote gateway. When `provider` is `azure`, set `seaweedfs.remote.bucket` to the same value as `storage.azure.containerName`.
 
 See also: [Kubeflow Pipelines object store configuration](https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/).
 
@@ -461,6 +461,6 @@ This table shows the versions of the main components in the MLRun CE chart:
 
 | MLRun CE         | MLRun       | Nuclio  | Jupyter     | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack | OpenTelemetry Operator |
 | ---------------- | ----------- | ------- | ----------- | ------------ | --------- | -------------- | --------- | --------------------- | ---------------------- |
-| **0.11.0**       | 1.11.0      | 1.15.27 | 4.5.0       | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |
+| **0.11.0**       | 1.11.0      | 1.15.27 | 4.5.0       | 0.2.3        | 4.17.0    | 2.1.0          | 2.16.0    | 72.1.1                | 0.78.1                 |
 
 
