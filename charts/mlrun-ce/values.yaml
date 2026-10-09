@@ -22,8 +22,11 @@ global:
 
 # =============================================================================
 # S3-compatible storage configuration for MLRun and Jupyter.
-# Kubeflow Pipelines always uses the bundled SeaweedFS — storage.mode only
-# affects MLRun and Jupyter.
+# Kubeflow Pipelines artifacts always use in-cluster SeaweedFS.
+# To persist KFP artifacts to external AWS S3 or Azure Blob, enable seaweedfs.remote below.
+# SeaweedFS acts as an S3 gateway and syncs the local bucket to the remote backend.
+# See: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
+# MLRun/Jupyter continue to use storage.mode independently.
 # =============================================================================
 
 # storage.mode selects which backend credentials are injected into the 'storage-credentials' Secret.
@@ -32,19 +35,16 @@ global:
 #                     and AWS_ENDPOINT_URL_S3 pointing at the in-cluster SeaweedFS S3 service.
 #                     Credentials come from storage.local.accessKey/secretKey; artifact path from
 #                     storage.local.bucket.
-#                     SeaweedFS IAM, bucket-init job, and KFP Pipelines always use storage.local.*
-#                     regardless of storage.mode.
+#                     KFP always uses storage.local.* for in-cluster SeaweedFS (see mlrun-ce.pipelines.s3.*).
 #   s3              - external AWS S3; injects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY only
 #                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
 #                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
 #                     storage.s3.bucket (or global.infrastructure.aws.bucketName).
-#                     KFP Pipelines continue to use storage.local.* unchanged.
 #   azure-blob      - Azure Blob Storage; injects AZURE_STORAGE_* fields from storage.azure.*
 storage:
   mode: local
-  # Single source of truth for the in-cluster SeaweedFS.
-  # Always used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines.
-  # Also used by MLRun and Jupyter when mode is "local".
+  # In-cluster SeaweedFS bucket/credentials. Used by MLRun/Jupyter when storage.mode is "local",
+  # and always by KFP (regardless of storage.mode).
   local:
     accessKey: "seaweed"
     secretKey: "seaweed123"
@@ -56,6 +56,9 @@ storage:
     bucket: ""
   azure:
     containerName: ""
+    # Used by MLRun/Jupyter (storage.mode: azure-blob) and seaweedfs.remote (provider: azure).
+    # Remote gateway supports connectionString or accountName+accountKey (parsed by remote-config Job).
+    # sasToken, clientSecret, and tenantId apply to MLRun/Jupyter only.
     connectionString: ""
     accountName: ""
     accountKey: ""
@@ -361,6 +364,7 @@ seaweedfs:
   # Disable individual component pods - allInOne runs everything in a single deployment
   master:
     enabled: false
+    port: 9333
   volume:
     enabled: false
     dataDirs:
@@ -368,6 +372,7 @@ seaweedfs:
         maxVolumes: 12
   filer:
     enabled: false
+    port: 8888
 
   # S3 auth config - enableAuth gates the seaweedfs-s3-config Secret creation in
   # templates/seaweedfs/seaweedfs-s3-config.yaml even though the dedicated s3 pod
@@ -403,7 +408,7 @@ seaweedfs:
     enabled: true
     port: 23646
     # Point admin at the allInOne service since the standalone master StatefulSet
-    # is disabled. Without this the chart cannot auto-discover the master address.
+    # is disabled. Must match {seaweedfs.fullnameOverride}-all-in-one:{seaweedfs.master.port}.
     masters: "seaweedfs-all-in-one:9333"
     secret:
       adminUser: "seaweed"
@@ -441,6 +446,35 @@ seaweedfs:
     type: NodePort
     port: 8333
     nodePort: 30094
+
+  # Sync KFP pipeline artifacts to external AWS S3 or Azure Blob via SeaweedFS remote gateway.
+  # KFP always uses in-cluster SeaweedFS S3; this layer mirrors the local bucket to cloud storage.
+  # See examples/seaweedfs-remote-*-overlay.yaml.
+  remote:
+    enabled: false
+    # Logical name for remote.configure / filer.remote.gateway -createBucketAt.
+    # Letters and numbers only — SeaweedFS rejects hyphens and other characters.
+    name: cloudstorage
+    # Remote backend: s3 (AWS or S3-compatible) or azure (Azure Blob native API)
+    provider: ""
+    # Remote bucket (AWS) or container (Azure). Local filer path uses storage.local.bucket.
+    # For provider azure, must match storage.azure.containerName.
+    bucket: ""
+    s3:
+      # Regional endpoint, e.g. s3.us-east-2.amazonaws.com (https:// added by the configure job)
+      endpoint: ""
+      region: us-east-1
+      # false for AWS S3; set true for path-style endpoints (MinIO, etc.)
+      forcePathStyle: false
+      storageClass: STANDARD
+    gateway:
+      # When false, local bucket name is mirrored to remote without a random suffix
+      createBucketWithRandomSuffix: false
+    mount:
+      # Mount an existing remote bucket/container into the local filer path before first use
+      mountExisting: true
+      # Allow remote.mount when /buckets/<local> already has pipeline data (helm upgrades, overlay switches)
+      nonempty: true
 
 spark-operator:
   enabled: true
@@ -497,10 +531,10 @@ pipelines:
   images:
     driver:
       repository: ghcr.io/kubeflow/kfp-driver
-      tag: 2.15.0
+      tag: 2.16.0
     launcher:
       repository: ghcr.io/kubeflow/kfp-launcher
-      tag: 2.15.0
+      tag: 2.16.0
     argoexec:
       repository: gcr.io/iguazio/argoexec
       tag: v3.4.17-license-compliance
@@ -509,35 +543,35 @@ pipelines:
       tag: v3.4.17-license-compliance
     apiServer:
       repository: ghcr.io/kubeflow/kfp-api-server
-      tag: 2.15.0
+      tag: 2.16.0
       busybox:
         repository: busybox
         tag: 1.37
     persistenceagent:
       repository: ghcr.io/kubeflow/kfp-persistence-agent
-      tag: 2.15.0
+      tag: 2.16.0
     scheduledworkflow:
       repository: ghcr.io/kubeflow/kfp-scheduled-workflow-controller
-      tag: 2.15.0
+      tag: 2.16.0
     ui:
       repository: ghcr.io/kubeflow/kfp-frontend
-      tag: 2.15.0
+      tag: 2.16.0
     viewerCrdController:
       repository: ghcr.io/kubeflow/kfp-viewer-crd-controller
-      tag: 2.15.0
+      tag: 2.16.0
     visualizationServer:
       repository: ghcr.io/kubeflow/kfp-visualization-server
-      tag: 2.15.0
+      tag: 2.16.0
     metadata:
       container:
         repository: gcr.io/tfx-oss-public/ml_metadata_store_server
         tag: 1.16.0
     metadataEnvoy:
       repository: ghcr.io/kubeflow/kfp-metadata-envoy
-      tag: 2.15.0
+      tag: 2.16.0
     metadataWriter:
       repository: ghcr.io/kubeflow/kfp-metadata-writer
-      tag: 2.15.0
+      tag: 2.16.0
     mysql:
       repository: gcr.io/iguazio/mysql
       tag: "8.4"
