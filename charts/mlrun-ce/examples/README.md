@@ -4,6 +4,8 @@ These overlays enable `seaweedfs.remote` so KFP pipeline artifacts stay on in-cl
 
 Both examples set `seaweedfs.allInOne.data.type: emptyDir` (no SeaweedFS PVC) for lab/dev testing. Production installs should omit that block and keep the chart default `persistentVolumeClaim`.
 
+`storage.s3.*` / `storage.azure.*` in these overlays feed **seaweedfs.remote** (cloud credentials). KFP always uses **storage.local.*** for in-cluster SeaweedFS. MLRun/Jupyter use **storage.mode** (`local`, `s3`, or `azure-blob`).
+
 Copy the overlay, replace the `<PLACEHOLDER>` values (including credentials), then deploy. Do not commit real secrets to git.
 
 ## Verify remote sync (CEML-734)

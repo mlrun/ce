@@ -198,24 +198,34 @@ S3 Bucket - for MLRun and Jupyter.
 {{- end -}}
 
 {{/*
-Used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines.
+KFP in-cluster SeaweedFS object store — always storage.local.* (independent of storage.mode).
+MLRun/Jupyter use mlrun-ce.s3.* when storage.mode is s3 or azure-blob.
 */}}
-{{- define "mlrun-ce.seaweedfs.s3.accessKey" -}}
+{{- define "mlrun-ce.pipelines.s3.accessKey" -}}
 {{- .Values.storage.local.accessKey -}}
 {{- end -}}
 
-{{/*
-SeaweedFS S3 Secret Key - sourced from storage.local.secretKey.
-*/}}
-{{- define "mlrun-ce.seaweedfs.s3.secretKey" -}}
+{{- define "mlrun-ce.pipelines.s3.secretKey" -}}
 {{- .Values.storage.local.secretKey -}}
 {{- end -}}
 
-{{/*
-SeaweedFS S3 Bucket - sourced from storage.local.bucket.
-*/}}
-{{- define "mlrun-ce.seaweedfs.s3.bucket" -}}
+{{- define "mlrun-ce.pipelines.s3.bucket" -}}
 {{- .Values.storage.local.bucket -}}
+{{- end -}}
+
+{{/*
+SeaweedFS IAM and bucket-init — same credentials/bucket as KFP (storage.local).
+*/}}
+{{- define "mlrun-ce.seaweedfs.s3.accessKey" -}}
+{{- include "mlrun-ce.pipelines.s3.accessKey" . -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.s3.secretKey" -}}
+{{- include "mlrun-ce.pipelines.s3.secretKey" . -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.s3.bucket" -}}
+{{- include "mlrun-ce.pipelines.s3.bucket" . -}}
 {{- end -}}
 
 {{/*
@@ -283,7 +293,7 @@ true
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.remote.localBucket" -}}
-{{- .Values.storage.local.bucket -}}
+{{- include "mlrun-ce.pipelines.s3.bucket" . -}}
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.remote.remoteBucket" -}}
@@ -328,7 +338,7 @@ fi
 Default KFP pipeline root URI scheme/path.
 */}}
 {{- define "mlrun-ce.pipelines.defaultPipelineRoot" -}}
-{{- $bucket := include "mlrun-ce.seaweedfs.s3.bucket" . -}}
+{{- $bucket := include "mlrun-ce.pipelines.s3.bucket" . -}}
 minio://{{ $bucket }}/v2/artifacts
 {{- end -}}
 

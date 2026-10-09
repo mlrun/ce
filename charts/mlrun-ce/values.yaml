@@ -35,8 +35,7 @@ global:
 #                     and AWS_ENDPOINT_URL_S3 pointing at the in-cluster SeaweedFS S3 service.
 #                     Credentials come from storage.local.accessKey/secretKey; artifact path from
 #                     storage.local.bucket.
-#                     SeaweedFS IAM, bucket-init job, and KFP Pipelines always use storage.local.*
-#                     regardless of storage.mode.
+#                     KFP always uses storage.local.* for in-cluster SeaweedFS (see mlrun-ce.pipelines.s3.*).
 #   s3              - external AWS S3; injects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY only
 #                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
 #                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
@@ -44,9 +43,8 @@ global:
 #   azure-blob      - Azure Blob Storage; injects AZURE_STORAGE_* fields from storage.azure.*
 storage:
   mode: local
-  # Single source of truth for the in-cluster SeaweedFS.
-  # Always used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines.
-  # Also used by MLRun and Jupyter when mode is "local".
+  # In-cluster SeaweedFS bucket/credentials. Used by MLRun/Jupyter when storage.mode is "local",
+  # and always by KFP (regardless of storage.mode).
   local:
     accessKey: "seaweed"
     secretKey: "seaweed123"
@@ -459,7 +457,7 @@ seaweedfs:
     name: cloudstorage
     # Remote backend: s3 (AWS or S3-compatible) or azure (Azure Blob native API)
     provider: ""
-    # Remote bucket (AWS) or container (Azure). Local bucket name is storage.local.bucket.
+    # Remote bucket (AWS) or container (Azure). Local filer path uses storage.local.bucket.
     # For provider azure, must match storage.azure.containerName.
     bucket: ""
     s3:

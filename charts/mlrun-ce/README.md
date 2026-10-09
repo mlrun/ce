@@ -189,7 +189,7 @@ helm --namespace mlrun upgrade my-mlrun \
 
 ### KFP Pipeline Artifact Storage
 
-Kubeflow Pipelines (KFP) stores run artifacts (datasets, models, metrics files) in an object store. In MLRun CE, **KFP always uses the in-cluster SeaweedFS S3 gateway**. Pipeline components read and write artifacts to the local SeaweedFS bucket (`storage.local.bucket`, default: `mlrun`). To persist pipeline artifacts to external AWS S3 or Azure Blob, enable `seaweedfs.remote`.
+Kubeflow Pipelines (KFP) stores run artifacts (datasets, models, metrics files) in an object store. In MLRun CE, **KFP always uses the in-cluster SeaweedFS S3 gateway**. Pipeline components read and write artifacts to the in-cluster SeaweedFS bucket (`storage.local.bucket`, default: `mlrun`). To persist pipeline artifacts to external AWS S3 or Azure Blob, enable `seaweedfs.remote`. MLRun/Jupyter use `storage.mode` independently (e.g. `storage.mode: s3` for external MLRun artifacts while KFP stays on in-cluster SeaweedFS).
 
 MLRun and Jupyter use `storage.mode` independently (`local`, `s3`, or `azure-blob`) for their own artifact paths. Changing `storage.mode` does not change where KFP stores pipeline artifacts.
 
