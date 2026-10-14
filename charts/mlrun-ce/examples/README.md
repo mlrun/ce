@@ -22,7 +22,7 @@ If the SeaweedFS all-in-one pod restarts with `emptyDir`, remote mount state is 
 
 ## AWS S3
 
-1. Copy and customize `seaweedfs-remote-s3-overlay.yaml` (`bucket`, `accessKey`, `secretKey`, `endpoint`, `region`).
+1. Copy and customize `seaweedfs-remote-s3-overlay.yaml` (`bucket`, `accessKey`, `secretKey`, `endpoint`, `region`). `seaweedfs.remote.bucket` must match `storage.s3.bucket` (the overlay uses a YAML anchor).
 2. Deploy:
 
 ```bash
