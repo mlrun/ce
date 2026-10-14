@@ -462,7 +462,7 @@ seaweedfs:
     # Remote backend: s3 (AWS or S3-compatible) or azure (Azure Blob native API)
     provider: ""
     # Remote bucket (AWS) or container (Azure). Local filer path uses storage.local.bucket.
-    # For provider azure, must match storage.azure.containerName.
+    # For provider s3, must match storage.s3.bucket. For azure, must match storage.azure.containerName.
     bucket: ""
     s3:
       # Regional endpoint, e.g. s3.us-east-2.amazonaws.com (https:// added by the configure job)

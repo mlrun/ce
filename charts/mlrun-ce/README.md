@@ -235,14 +235,14 @@ Key values under `seaweedfs.remote`:
 | `enabled`             | Enable remote gateway sync (default: `false`)                                                                                                |
 | `provider`            | `s3` or `azure`                                                                                                                              |
 | `name`                | Remote name for SeaweedFS — letters and numbers only (default: `cloudstorage`)                                                               |
-| `bucket`              | Remote AWS bucket or Azure container name (for Azure, must match `storage.azure.containerName`)                                              |
+| `bucket`              | Remote AWS bucket or Azure container name — must match `storage.s3.bucket` (S3) or `storage.azure.containerName` (Azure); not a separate KFP-only cloud bucket |
 | `s3.endpoint`         | Regional S3 endpoint (required when `provider: s3`)                                                                                          |
 | `s3.forcePathStyle`   | Path-style S3 URLs (default: `false` for AWS; set `true` for MinIO and other path-style endpoints)                                             |
 | `mount.mountExisting` | When `true`, config Job runs `remote.mount` and the gateway waits for that mount (default: `true`). When `false`, only `remote.configure` runs and the local bucket is created by `s3-bucket-init` |
 | `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
 
 
-> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote credentials for S3 come from `storage.s3.*` (static keys; `global.infrastructure.aws.s3NonAnonymous`/IRSA is not supported for the remote gateway). For Azure use `storage.azure.accountName`+`accountKey`, or `storage.azure.connectionString` (parsed into account name and key by the remote-config Job). SAS token and client-secret auth are not supported for the remote gateway. When `provider` is `azure`, set `seaweedfs.remote.bucket` to the same value as `storage.azure.containerName`.
+> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote sync intentionally shares **one** cloud bucket and credential set with MLRun: `storage.s3.*` / `storage.azure.*` (static keys for S3; `global.infrastructure.aws.s3NonAnonymous`/IRSA is not supported for the remote gateway). Helm fails if `seaweedfs.remote.bucket` differs from `storage.s3.bucket` or `storage.azure.containerName`. KFP still reads/writes the in-cluster bucket (`storage.local.bucket`); the remote gateway mirrors it to that shared cloud bucket. Separate remote-only credentials or a different cloud bucket for KFP sync are not supported.
 
 See also: [Kubeflow Pipelines object store configuration](https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/).
 
