@@ -161,14 +161,14 @@ mlrun:
     enabled: false
   api:
     image:
-      tag: 1.12.0-rc25
+      tag: 1.12.0
     ingress:
       enabled: false
       annotations: {}
     sidecars:
       logCollector:
         image:
-          tag: 1.12.0-rc25
+          tag: 1.12.0
         enabled: true
     fullnameOverride: mlrun-api
     functionSpecServiceAccountDefault: ~
@@ -219,7 +219,7 @@ mlrun:
 
   ui:
     image:
-      tag: 1.12.0-rc25
+      tag: 1.12.0
     fullnameOverride: mlrun-ui
     ingress:
       enabled: false
@@ -287,7 +287,7 @@ jupyterNotebook:
     #      - chart-example.local
   image:
     repository: quay.io/mlrun/jupyter
-    tag: 1.12.0-rc25
+    tag: 1.12.0
     pullPolicy: IfNotPresent
     pullSecrets: []
   ce:
