@@ -1,0 +1,31 @@
+# KFP pipeline artifacts: in-cluster SeaweedFS (emptyDir) + background sync to AWS S3.
+#
+# storage.s3.* — cloud bucket + credentials for seaweedfs.remote (and MLRun/Jupyter when storage.mode: s3).
+# KFP always uses storage.local.* in-cluster. seaweedfs.remote.bucket must equal storage.s3.bucket (enforced by Helm).
+#
+# emptyDir (lab/dev): no SeaweedFS PVC — ephemeral local disk; cloud is durable after sync.
+storage:
+  s3:
+    bucket: &cloud_s3_bucket <REMOTE_S3_BUCKET_NAME>
+    accessKey: <ACCESS_KEY>
+    secretKey: <SECRET_KEY>
+
+seaweedfs:
+  allInOne:
+    data:
+      type: emptyDir
+  remote:
+    enabled: true
+    provider: s3
+    bucket: *cloud_s3_bucket
+    s3:
+      endpoint: s3.<REGION>.amazonaws.com
+      region: <REGION> # e.g. us-east-2
+
+# Optional — same cloud bucket for MLRun and KFP remote sync:
+# storage:
+#   mode: s3
+#   s3:
+#     bucket: <REMOTE_S3_BUCKET_NAME>
+#     accessKey: <ACCESS_KEY>
+#     secretKey: <SECRET_KEY>

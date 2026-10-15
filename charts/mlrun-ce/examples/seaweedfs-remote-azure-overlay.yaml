@@ -1,0 +1,29 @@
+# KFP pipeline artifacts: in-cluster SeaweedFS (emptyDir) + background sync to Azure Blob.
+#
+# storage.azure.* — credentials for seaweedfs.remote (and for MLRun/Jupyter if storage.mode: azure-blob).
+# KFP always uses storage.local.* (in-cluster bucket; default mlrun). seaweedfs.remote.bucket must
+# match storage.azure.containerName when provider is azure.
+#
+# emptyDir (lab/dev): no SeaweedFS PVC — ephemeral local disk; cloud is durable after sync.
+storage:
+  azure:
+    accountName: <ACCOUNT_NAME>
+    accountKey: <ACCOUNT_KEY>
+    containerName: <CONTAINER_NAME>
+
+seaweedfs:
+  allInOne:
+    data:
+      type: emptyDir
+  remote:
+    enabled: true
+    provider: azure
+    bucket: <CONTAINER_NAME>
+
+# Optional — same container for MLRun and KFP remote sync:
+# storage:
+#   mode: azure-blob
+#   azure:
+#     accountName: <ACCOUNT_NAME>
+#     accountKey: <ACCOUNT_KEY>
+#     containerName: <CONTAINER_NAME>
