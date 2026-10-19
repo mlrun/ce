@@ -1,0 +1,110 @@
+{{- if and .Values.pipelines.enabled .Values.pipelines.db.indexInit.enabled }}
+# Adds the idx_run_details_created_uuid index to the KFP mlpipeline.run_details table.
+#
+# The run_details table is created by the ml-pipeline API server on first startup, so this Job:
+#   1. Waits for the mysql service to accept connections.
+#   2. Waits for the API server to create the run_details table.
+#   3. Creates the index only if it does not already exist (idempotent across upgrades).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-kfp-mysql-index-init
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kfp-mysql-index-init
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    # No ttlSecondsAfterFinished: a failed Job and its pods are kept for debugging and
+    # only removed on success or when the next install/upgrade recreates the hook.
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.pipelines.db.indexInit.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.pipelines.db.indexInit.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.common.labels" . | nindent 8 }}
+        app.kubernetes.io/component: kfp-mysql-index-init
+    spec:
+      # Never (not OnFailure) so each failed attempt leaves its own pod behind; with
+      # OnFailure the Job controller deletes the pod once backoffLimit is reached.
+      restartPolicy: Never
+      {{- if .Values.pipelines.db.securityContext }}
+      securityContext:
+        {{- toYaml .Values.pipelines.db.securityContext | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: create-index
+          image: {{ .Values.pipelines.images.mysql.repository }}:{{ .Values.pipelines.images.mysql.tag }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_HOST
+              value: mysql.{{ .Release.Namespace }}.svc.cluster.local
+            - name: MYSQL_TCP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: mysqlPort
+            - name: MYSQL_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: pipelineDb
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: username
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: password
+          resources:
+            {{- toYaml .Values.pipelines.db.indexInit.resources | nindent 12 }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+
+              MYSQL="mysql -h ${MYSQL_HOST} -P ${MYSQL_TCP_PORT} -u ${MYSQL_USER}"
+
+              until ${MYSQL} -e "SELECT 1" >/dev/null 2>&1; do
+                echo "waiting for mysql at ${MYSQL_HOST}:${MYSQL_TCP_PORT}..."
+                sleep 5
+              done
+
+              until [ "$(${MYSQL} -N -s -e "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '${MYSQL_DB}' AND TABLE_NAME = 'run_details'")" = "1" ]; do
+                echo "waiting for ${MYSQL_DB}.run_details to be created by ml-pipeline..."
+                sleep 5
+              done
+
+              ${MYSQL} "${MYSQL_DB}" <<'EOF'
+              SET @idx_exists = (
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'run_details'
+                AND INDEX_NAME = 'idx_run_details_created_uuid'
+              );
+              SET @sql = IF(@idx_exists = 0,
+                'CREATE INDEX idx_run_details_created_uuid ON run_details (CreatedAtInSec, UUID);',
+                'SELECT "Index idx_run_details_created_uuid already exists";'
+              );
+              PREPARE stmt FROM @sql;
+              EXECUTE stmt;
+              DEALLOCATE PREPARE stmt;
+              EOF
+
+              echo "run_details index check complete."
+      {{- with .Values.pipelines.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pipelines.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
