@@ -325,6 +325,10 @@ jupyterNotebook:
 
 mpi-operator:
   fullnameOverride: mpi-operator
+  image:
+    deployment:
+      repository: quay.io/iguazio/mpi-operator
+      tag: v0.2.3-igz
   crd:
     create: true
   rbac:
@@ -533,7 +537,7 @@ pipelines:
       repository: ghcr.io/kubeflow/kfp-metadata-writer
       tag: 2.15.0
     mysql:
-      repository: gcr.io/iguazio/mysql
+      repository: mysql
       tag: "8.4"
     cacheImage:
       repository: gcr.io/google-containers/busybox
