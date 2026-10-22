@@ -500,10 +500,10 @@ pipelines:
       repository: ghcr.io/kubeflow/kfp-launcher
       tag: 2.15.0
     argoexec:
-      repository: gcr.io/iguazio/argoexec
+      repository: quay.io/mlrun/argoexec
       tag: v3.4.17-license-compliance
     workflowController:
-      repository: gcr.io/iguazio/workflow-controller
+      repository: quay.io/mlrun/workflow-controller
       tag: v3.4.17-license-compliance
     apiServer:
       repository: ghcr.io/kubeflow/kfp-api-server
@@ -540,8 +540,8 @@ pipelines:
       repository: mysql
       tag: "8.4"
     cacheImage:
-      repository: gcr.io/google-containers/busybox
-      tag: latest
+      repository: busybox
+      tag: stable
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
