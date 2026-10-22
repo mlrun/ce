@@ -541,7 +541,7 @@ pipelines:
       tag: "8.4"
     cacheImage:
       repository: busybox
-      tag: "1.37"
+      tag: stable
 
 kube-prometheus-stack:
   fullnameOverride: monitoring
