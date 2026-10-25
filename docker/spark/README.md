@@ -2,9 +2,9 @@
 
 This directory builds:
 
-- `gcr.io/iguazio/spark-app:3.5.6-scala2.12-java17-ubuntu-1` (`Dockerfile`) --
+- `quay.io/mlrun/spark-app:3.5.6-scala2.12-java17-ubuntu-1` (`Dockerfile`) --
   the regular CE Spark image.
-- `gcr.io/iguazio/spark-app-cuda:3.5.6-scala2.12-java17-ubuntu-1` (`Dockerfile.cuda`) --
+- `quay.io/mlrun/spark-app-cuda:3.5.6-scala2.12-java17-ubuntu-1` (`Dockerfile.cuda`) --
   the same Spark distribution and CE customization on CUDA 12.8.1/cuDNN 9.8.
 
 MLRun selects the CUDA image by appending `-cuda` to the configured repository.
@@ -34,17 +34,17 @@ make validate-all
 
 ## Publish
 
-Build and validate the CUDA image, then push it manually:
+Build and validate the CUDA image, then push it manually (requires write access to the `mlrun` organization on Quay):
 
 ```bash
 make build-cuda
 make validate-cuda
 
-gcloud auth configure-docker gcr.io
-docker push gcr.io/iguazio/spark-app-cuda:3.5.6-scala2.12-java17-ubuntu-1
+docker login quay.io
+docker push quay.io/mlrun/spark-app-cuda:3.5.6-scala2.12-java17-ubuntu-1
 
 docker inspect --format '{{index .RepoDigests 0}}' \
-  gcr.io/iguazio/spark-app-cuda:3.5.6-scala2.12-java17-ubuntu-1
+  quay.io/mlrun/spark-app-cuda:3.5.6-scala2.12-java17-ubuntu-1
 ```
 
 Do not republish the existing regular image. Record the CUDA image digest and
@@ -98,7 +98,7 @@ make build-spark4-cuda
 make build-spark4-all
 ```
 
-`REGISTRY` defaults to `gcr.io/iguazio`. The Makefile is the source of truth
+`REGISTRY` defaults to `quay.io/mlrun`. The Makefile is the source of truth
 for both pinned base-image digests.
 
 ### Validate
