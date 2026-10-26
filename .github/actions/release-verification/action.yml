@@ -1,0 +1,54 @@
+name: Release verification
+description: Request release verification and wait for its result
+inputs:
+  app-id:
+    description: GitHub App ID
+    required: true
+  private-key:
+    description: GitHub App private key
+    required: true
+  target-repo:
+    description: Target repository in owner/name form
+    required: true
+  target-workflow-file:
+    description: Workflow file name in the target repository
+    required: true
+  target-event-type:
+    description: repository_dispatch event type for the target repository
+    required: true
+  version:
+    description: MLRun CE chart version
+    required: true
+  source-repo:
+    description: Repository that requested the verification
+    required: true
+  source-sha:
+    description: Commit that requested the verification
+    required: true
+  source-run-id:
+    description: GitHub Actions run ID that requested the verification
+    required: true
+  source-run-attempt:
+    description: GitHub Actions run attempt that requested the verification
+    required: true
+  triggered-by:
+    description: GitHub actor that requested the verification
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Verify release
+      shell: bash
+      env:
+        APP_ID: ${{ inputs.app-id }}
+        APP_PRIVATE_KEY: ${{ inputs.private-key }}
+        TARGET_REPO: ${{ inputs.target-repo }}
+        TARGET_WORKFLOW_FILE: ${{ inputs.target-workflow-file }}
+        TARGET_EVENT_TYPE: ${{ inputs.target-event-type }}
+        VERSION: ${{ inputs.version }}
+        SOURCE_REPO: ${{ inputs.source-repo }}
+        SOURCE_SHA: ${{ inputs.source-sha }}
+        SOURCE_RUN_ID: ${{ inputs.source-run-id }}
+        SOURCE_RUN_ATTEMPT: ${{ inputs.source-run-attempt }}
+        TRIGGERED_BY: ${{ inputs.triggered-by }}
+      run: node "${{ github.action_path }}/verify.mjs"
