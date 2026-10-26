@@ -1,4 +1,4 @@
-name: Trigger Private Deployment
+name: Release Verification
 
 on:
   workflow_call:
@@ -14,61 +14,75 @@ on:
         required: true
       DEPLOYMENT_REPO:
         required: true
-      SYSTEM_ID:
+      DEPLOYMENT_WORKFLOW_FILE:
+        required: true
+      DEPLOYMENT_EVENT_TYPE:
         required: true
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
-  trigger-deployment:
-    name: Trigger Deployment in Private Repo
+  verify-release:
+    name: Verify Release
     runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
     steps:
-      - name: Resolve target repository
-        id: repo-info
+      - name: Resolve target
+        id: target
+        env:
+          TARGET_REPO: ${{ secrets.DEPLOYMENT_REPO }}
+          TARGET_WORKFLOW_FILE: ${{ secrets.DEPLOYMENT_WORKFLOW_FILE }}
+          TARGET_EVENT_TYPE: ${{ secrets.DEPLOYMENT_EVENT_TYPE }}
         run: |
-          DEPLOYMENT_REPO="${{ secrets.DEPLOYMENT_REPO }}"
+          set -euo pipefail
 
-          if [[ "$DEPLOYMENT_REPO" != */* ]]; then
+          if [[ "$TARGET_REPO" != */* ]]; then
             echo "::error::DEPLOYMENT_REPO must be in the form owner/repo."
             exit 1
           fi
 
-          OWNER="${DEPLOYMENT_REPO%%/*}"
-          REPO="${DEPLOYMENT_REPO#*/}"
+          if [[ ! "$TARGET_WORKFLOW_FILE" =~ ^[A-Za-z0-9_.-]+\.ya?ml$ ]]; then
+            echo "::error::DEPLOYMENT_WORKFLOW_FILE must be a workflow file name."
+            exit 1
+          fi
 
-          echo "owner=$OWNER" >> $GITHUB_OUTPUT
-          echo "repo=$REPO" >> $GITHUB_OUTPUT
-          echo "full_name=$DEPLOYMENT_REPO" >> $GITHUB_OUTPUT
+          if [[ ! "$TARGET_EVENT_TYPE" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "::error::DEPLOYMENT_EVENT_TYPE must be a repository_dispatch event type."
+            exit 1
+          fi
 
-      - name: Generate GitHub App Token
-        id: app-token
-        uses: actions/create-github-app-token@v2
+          printf '%s\n' "::add-mask::$TARGET_REPO"
+          printf '%s\n' "::add-mask::${TARGET_REPO%%/*}"
+          printf '%s\n' "::add-mask::${TARGET_REPO#*/}"
+          printf '%s\n' "::add-mask::$TARGET_WORKFLOW_FILE"
+          printf '%s\n' "::add-mask::$TARGET_EVENT_TYPE"
+          {
+            printf 'repo=%s\n' "$TARGET_REPO"
+            printf 'workflow_file=%s\n' "$TARGET_WORKFLOW_FILE"
+            printf 'event_type=%s\n' "$TARGET_EVENT_TYPE"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout verification action
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          sparse-checkout: .github/actions/release-verification
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify release
+        uses: ./.github/actions/release-verification
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: ${{ steps.repo-info.outputs.owner }}
-          repositories: ${{ steps.repo-info.outputs.repo }}
-
-      - name: Send Repository Dispatch to Private Deployment Repo
-        run: |
-          DEPLOYMENT_REPO="${{ steps.repo-info.outputs.full_name }}"
-          curl -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: token ${{ steps.app-token.outputs.token }}" \
-            https://api.github.com/repos/${DEPLOYMENT_REPO}/dispatches \
-            -d "$(jq -n \
-              --arg version "${{ inputs.version }}" \
-              --arg system_id "${{ secrets.SYSTEM_ID }}" \
-              '{
-                event_type: "deploy-ce-onprem",
-                client_payload: {
-                  version: $version,
-                  system_id: $system_id,
-                  run_naipi: true,
-                  source_repo: "ce",
-                  triggered_by: "${{ github.actor }}"
-                }
-              }')"
-          
-          echo "Deployment triggered in private repository"
+          target-repo: ${{ steps.target.outputs.repo }}
+          target-workflow-file: ${{ steps.target.outputs.workflow_file }}
+          target-event-type: ${{ steps.target.outputs.event_type }}
+          version: ${{ inputs.version }}
+          source-repo: ${{ github.repository }}
+          source-sha: ${{ github.sha }}
+          source-run-id: ${{ github.run_id }}
+          source-run-attempt: ${{ github.run_attempt }}
+          triggered-by: ${{ github.actor }}
