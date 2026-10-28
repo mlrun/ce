@@ -61,6 +61,8 @@ def _bootstrap() -> None:
     on purpose: it has to run before the imports it is protecting.
     """
     try:
+        # click too: the CLI imports it directly, and some typer releases vendor their own.
+        import click  # noqa: F401
         import rich  # noqa: F401
         import typer  # noqa: F401
         import yaml  # noqa: F401
@@ -71,7 +73,7 @@ def _bootstrap() -> None:
 
     if shutil.which("uv") is None:
         sys.exit(
-            "mlrun-ce-installer needs uv (or typer, rich and pyyaml on the current "
+            "mlrun-ce-installer needs uv (or typer, click, rich and pyyaml on the current "
             "interpreter).\nInstall uv: curl -LsSf https://astral.sh/uv/install.sh | sh"
         )
     os.execvp("uv", ["uv", "run", "--script", os.path.abspath(__file__), *sys.argv[1:]])

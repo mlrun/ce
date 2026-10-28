@@ -24,6 +24,8 @@ obeying `--skip-dependency-update` are deliberate divergences from install.sh (w
 ran `helm dependency update`), recorded in scripts/AGENTS.md.
 """
 
+import os
+
 import pytest
 
 from ce_installer import cluster, helm_ops
@@ -113,10 +115,71 @@ def test_local_chart_path_does_not_add_the_published_repo(
 
     cluster.resolve_chart_source(settings)
 
-    # `helm repo add`/`update` reach the network. A local-path install is the air-gapped and
-    # "test my working copy" case; contacting mlrun.github.io anyway defeats both.
-    assert not rec.ran("repo add")
+    # A local-path install is the air-gapped and "test my working copy" case; contacting
+    # mlrun.github.io for the published chart anyway defeats both.
+    assert not rec.ran(settings.helm_repo_url)
+    assert not rec.ran("repo add --force-update mlrun-ce ")
     assert not rec.ran("repo update")
+
+
+REQUIREMENTS = """dependencies:
+- name: nuclio
+  repository: "https://nuclio.github.io/nuclio/charts"
+- name: mlrun
+  repository: "https://v3io.github.io/helm-charts/stable"
+- name: mpi-operator
+  repository: "https://v3io.github.io/helm-charts/stable/"
+- name: local
+  repository: "file://../local"
+"""
+
+
+def test_dependency_repos_are_registered_before_the_build(
+    monkeypatch, settings, tmp_path, recorder
+):
+    chart_dir = make_chart(tmp_path, deps=LOCK_DEPS)
+    (chart_dir / "requirements.yaml").write_text(REQUIREMENTS)
+    rec = recorder()
+    monkeypatch.setattr(cluster, "helm", rec)
+    settings.chart_path = str(chart_dir)
+
+    cluster.resolve_chart_source(settings)
+
+    # On a fresh helm, `dependency build` refuses with "no repository definition" for every
+    # URL not already registered, so a clean checkout could not install its own chart.
+    verbs = [" ".join(call[:2]) for call in rec.calls]
+    assert verbs == ["repo add", "repo add", "dependency build"]
+    assert [call[-1] for call in rec.argv_containing("repo add")] == [
+        "https://nuclio.github.io/nuclio/charts",
+        "https://v3io.github.io/helm-charts/stable",
+    ]
+
+
+def test_dependency_repos_go_into_the_isolated_helm_config(
+    monkeypatch, settings, tmp_path, recorder
+):
+    chart_dir = make_chart(tmp_path, deps=LOCK_DEPS)
+    (chart_dir / "requirements.yaml").write_text(REQUIREMENTS)
+    monkeypatch.setattr(cluster, "helm", recorder())
+    settings.chart_path = str(chart_dir)
+
+    cluster.resolve_chart_source(settings)
+
+    # The adds must not land in the user's ~/.config/helm/repositories.yaml.
+    assert "mlrun-ce-helm-repos-" in os.environ["HELM_REPOSITORY_CONFIG"]
+
+
+def test_vendored_dependencies_register_no_repos(monkeypatch, settings, tmp_path, recorder):
+    chart_dir = make_chart(tmp_path, deps=LOCK_DEPS, vendored=VENDORED_TARBALLS)
+    (chart_dir / "requirements.yaml").write_text(REQUIREMENTS)
+    rec = recorder()
+    monkeypatch.setattr(cluster, "helm", rec)
+    settings.chart_path = str(chart_dir)
+
+    cluster.resolve_chart_source(settings)
+
+    # Nothing left to fetch, so an air-gapped run must not reach any repository.
+    assert not rec.calls
 
 
 def test_published_repo_mode_uses_the_published_chart_ref(monkeypatch, settings, recorder):

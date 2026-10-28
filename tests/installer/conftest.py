@@ -75,6 +75,10 @@ INSTALLER_ENV_VARS = (
     "NON_INTERACTIVE",
     "CONFIG_FILE",
     "CI",
+    # Set by isolate_helm_repo_config straight into os.environ; listing them here has
+    # monkeypatch remove them again after every test.
+    "HELM_REPOSITORY_CONFIG",
+    "HELM_REPOSITORY_CACHE",
 )
 
 

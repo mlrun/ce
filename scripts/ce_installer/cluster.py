@@ -18,6 +18,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from typing import List
 
 import yaml
 
@@ -208,6 +209,40 @@ def isolate_helm_repo_config() -> None:
         os.environ["HELM_REPOSITORY_CACHE"] = str(directory / "cache")
 
 
+def dependency_repo_urls(chart_dir: Path) -> List[str]:
+    """The http(s) repositories the chart's dependencies come from, in declaration order.
+
+    apiVersion v1 lists them in requirements.yaml, v2 in Chart.yaml. `file://` and `oci://`
+    dependencies need no repository entry, so they are left out.
+    """
+    urls: List[str] = []
+    for name in ("requirements.yaml", "Chart.yaml"):
+        path = chart_dir / name
+        if not path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text()) or {}
+        except yaml.YAMLError:
+            continue
+        for dep in data.get("dependencies") or []:
+            url = str(dep.get("repository") or "").rstrip("/")
+            if url.startswith(("http://", "https://")) and url not in urls:
+                urls.append(url)
+    return urls
+
+
+def register_dependency_repos(settings: Settings, chart_dir: Path) -> None:
+    """Add every dependency repository before `helm dependency build|update`.
+
+    Both refuse with "no repository definition" for any URL not already in the repository
+    config, so on a fresh helm a clean checkout could not install its own chart. The adds go
+    into the isolated config, never the user's; the versions still come from the lock.
+    """
+    isolate_helm_repo_config()
+    for index, url in enumerate(dependency_repo_urls(chart_dir)):
+        helm(settings, "repo", "add", "--force-update", f"mlrun-ce-dep-{index}", url, check=True)
+
+
 def resolve_chart_source(settings: Settings) -> None:
     if not settings.chart_path:
         isolate_helm_repo_config()
@@ -245,9 +280,11 @@ def resolve_chart_source(settings: Settings) -> None:
     elif (chart_dir / "requirements.lock").is_file():
         # `build` honours requirements.lock; `update` re-resolves requirements.yaml and
         # rewrites the lock, which is the maintainer operation rather than the consumer one.
+        register_dependency_repos(settings, chart_dir)
         log_info("Running helm dependency build...")
         helm(settings, "dependency", "build", settings.chart_path, check=True)
     else:
+        register_dependency_repos(settings, chart_dir)
         log_info("Running helm dependency update...")
         helm(settings, "dependency", "update", settings.chart_path, check=True)
 

@@ -770,6 +770,92 @@ def test_a_dry_run_uninstall_lists_the_installer_resources_without_deleting(
     assert not kube_rec.ran("delete")
 
 
+LIVE_OTHER_RELEASE = json.dumps([{"name": "mlrun-ce", "chart": "mlrun-ce-0.12.1"}])
+
+
+def test_a_mistyped_release_name_does_not_clean_up_a_live_install(monkeypatch, settings, recorder):
+    kube_rec = recorder(
+        answers={"get deployment,service,ingress,secret": Result(0, "secret/registry\n")}
+    )
+    helm_rec = recorder(
+        answers={"status": Result(1, "", "not found"), "list": Result(0, LIVE_OTHER_RELEASE)}
+    )
+    monkeypatch.setattr(helm_ops, "helm", helm_rec)
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+    settings.release_name = "typo"
+
+    with pytest.raises(InstallerError):
+        helm_ops.do_uninstall(settings)
+
+    # The cleanup label names the installer, not a release: going on would delete the live
+    # install's pull secret and registry.
+    assert not kube_rec.ran("delete")
+
+
+def test_leftovers_are_still_cleaned_when_no_release_remains(monkeypatch, settings, recorder):
+    kube_rec = recorder(
+        answers={"get deployment,service,ingress,secret": Result(0, "secret/registry\n")}
+    )
+    helm_rec = recorder(answers={"status": Result(1, "", "not found"), "list": Result(0, "[]")})
+    monkeypatch.setattr(helm_ops, "helm", helm_rec)
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+
+    helm_ops.do_uninstall(settings)
+
+    # A rerun after a half-finished uninstall is how leftovers get removed at all.
+    assert kube_rec.ran("delete deployment,service,ingress,secret")
+
+
+# ------------------------------------------------------------------------------------------
+# --enable-otel off / collector did not override a -f file that enabled OTel
+# ------------------------------------------------------------------------------------------
+
+OTEL_KEYS = (
+    "opentelemetry-operator.enabled",
+    "opentelemetry.collector.enabled",
+    "opentelemetry.namespaceLabel.enabled",
+    "opentelemetry.instrumentation.enabled",
+)
+
+
+def test_otel_set_on_the_cli_writes_every_key_off_included(settings):
+    settings.otel_set_by_cli = True
+    settings.enable_otel_collector = True
+
+    flags = helm_ops.build_set_flags(settings)
+
+    # `--enable-otel collector` names the whole state; a -f file enabling instrumentation
+    # must not survive it, so the falses have to reach helm as well.
+    pairs = [flags[i + 1] for i in range(0, len(flags), 2) if flags[i] == "--set"]
+    for key in OTEL_KEYS:
+        expected = "true" if key == "opentelemetry.collector.enabled" else "false"
+        assert f"{key}={expected}" in pairs
+
+
+def test_otel_not_on_the_cli_leaves_the_values_file_alone(settings):
+    settings.otel_set_by_cli = False
+
+    flags = helm_ops.build_set_flags(settings)
+
+    assert not any(key in " ".join(flags) for key in OTEL_KEYS)
+
+
+# ------------------------------------------------------------------------------------------
+# install.py's bootstrap skipped uv when click was missing
+# ------------------------------------------------------------------------------------------
+
+
+def test_the_bootstrap_probes_click_too():
+    source = (Path(__file__).resolve().parents[2] / "scripts" / "install.py").read_text()
+    probe = source[source.index("def _bootstrap") : source.index("except ImportError")]
+
+    # cli.py imports click directly; a typer that vendors its own would pass a probe without
+    # it and then crash on the import instead of re-running under uv.
+    assert "import click" in probe
+
+
 @pytest.mark.parametrize(
     "manifest",
     [registry.LOCAL_REGISTRY_MANIFEST, registry.LOCAL_REGISTRY_INGRESS,

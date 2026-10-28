@@ -82,14 +82,16 @@ def build_set_flags(settings: Settings) -> List[str]:
     if settings.enable_ingress:
         flags += ingress_set_flags(settings)
 
-    if settings.enable_otel_operator:
-        flags += ["--set", "opentelemetry-operator.enabled=true"]
-    if settings.enable_otel_collector:
-        flags += ["--set", "opentelemetry.collector.enabled=true"]
-    if settings.enable_otel_namespace_label:
-        flags += ["--set", "opentelemetry.namespaceLabel.enabled=true"]
-    if settings.enable_otel_instrumentation:
-        flags += ["--set", "opentelemetry.instrumentation.enabled=true"]
+    # Given on the command line, the OTel selection is the whole state, `off` included, so
+    # every key is written: emitting only the trues let a -f file keep what the CLI turned off.
+    for key, enabled in (
+        ("opentelemetry-operator.enabled", settings.enable_otel_operator),
+        ("opentelemetry.collector.enabled", settings.enable_otel_collector),
+        ("opentelemetry.namespaceLabel.enabled", settings.enable_otel_namespace_label),
+        ("opentelemetry.instrumentation.enabled", settings.enable_otel_instrumentation),
+    ):
+        if enabled or settings.otel_set_by_cli:
+            flags += ["--set", f"{key}={str(enabled).lower()}"]
 
     if settings.local_registry:
         # registry:2 serves plain HTTP, through the ingress and on its ClusterIP alike, so
@@ -519,6 +521,21 @@ def remove_installer_resources(settings: Settings) -> None:
     )
 
 
+def other_mlrun_ce_releases(settings: Settings) -> List[str]:
+    """`name (chart)` for every mlrun-ce release in the namespace not named RELEASE_NAME."""
+    listed = helm(settings, "list", "--namespace", settings.namespace, "--all", "-o", "json")
+    try:
+        releases = json.loads(listed.out) if listed.ok and listed.out.strip() else []
+    except ValueError:
+        return []
+    return [
+        f"{release.get('name')} ({release.get('chart')})"
+        for release in releases
+        if re.match(r"mlrun-ce-\d", str(release.get("chart", "")))
+        and release.get("name") != settings.release_name
+    ]
+
+
 def refuse_a_second_release(settings: Settings) -> None:
     """Stop when the namespace already holds mlrun-ce under another release name.
 
@@ -526,17 +543,7 @@ def refuse_a_second_release(settings: Settings) -> None:
     `mlrun-ce`. A second release collides with the first on the fixed NodePorts and the
     cluster-scoped resources, and helm only finds out halfway through.
     """
-    listed = helm(settings, "list", "--namespace", settings.namespace, "--all", "-o", "json")
-    try:
-        releases = json.loads(listed.out) if listed.ok and listed.out.strip() else []
-    except ValueError:
-        return
-    others = [
-        f"{release.get('name')} ({release.get('chart')})"
-        for release in releases
-        if re.match(r"mlrun-ce-\d", str(release.get("chart", "")))
-        and release.get("name") != settings.release_name
-    ]
+    others = other_mlrun_ce_releases(settings)
     if others:
         raise die(
             f"Namespace '{settings.namespace}' already has MLRun CE installed as "
@@ -576,6 +583,15 @@ def do_uninstall(settings: Settings) -> None:
             f"Release '{settings.release_name}' not found in namespace "
             f"'{settings.namespace}' (already uninstalled?)."
         )
+        # The cleanup label names the installer, not a release, so a mistyped RELEASE_NAME
+        # next to a live install would delete that install's registry and pull secret.
+        others = other_mlrun_ce_releases(settings)
+        if others:
+            raise die(
+                f"Namespace '{settings.namespace}' has MLRun CE installed as "
+                f"{', '.join(others)}, which this uninstall would damage. Set RELEASE_NAME "
+                "to that name to uninstall it."
+            )
         if settings.hard_clean and not settings.dry_run:
             confirm_hard_clean_without_release(settings)
     elif settings.dry_run:

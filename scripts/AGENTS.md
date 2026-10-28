@@ -517,6 +517,22 @@ node image is the safest choice.
   rather than reusing them, as it does with the secret: nothing says those objects make up
   a working registry. The check reads the label through `jsonpath=exists:{...}` so an
   unlabelled object still prints something.
+- **`--chart-path` from a clean checkout failed on a fresh helm.** The vendored
+  dependencies are gitignored, so it reaches `helm dependency build`, which refuses with
+  "no repository definition" for any URL not already registered.
+  `register_dependency_repos` now adds each http(s) repository from `requirements.yaml`
+  (or a v2 `Chart.yaml`) into the isolated helm config first; versions still come from the
+  lock, and a fully vendored chart registers nothing.
+- **`--enable-otel off` lost to a `-f` file that enabled OTel.** Only the `true` keys were
+  written. When OTel is given on the command line all four keys are now written, `false`
+  included.
+- **`uninstall` with a mistyped `RELEASE_NAME` cleaned up a live install.** The cleanup
+  label names the installer, not a release, so with the named release absent it still
+  deleted the real release's registry and pull secret. It now refuses when another mlrun-ce
+  release is in the namespace (`other_mlrun_ce_releases`, shared with
+  `refuse_a_second_release`).
+- **`install.py`'s bootstrap did not probe `click`.** `cli.py` imports it directly, and a
+  typer that vendors its own passed the probe and then crashed on the import.
 - **With no `--ce-version`, helm installed the newest stable chart.** Not the installer's
   own, and never an rc, so its flags could meet a chart that renamed their keys.
   `pin_chart_version` now passes the installer's version unless `--ce-version` or

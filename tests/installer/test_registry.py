@@ -34,6 +34,16 @@ from ce_installer.console import InstallerError
 from ce_installer.shell import Result
 
 
+@pytest.fixture(autouse=True)
+def no_cluster(monkeypatch, recorder):
+    """Answer every kubectl call as "not found" unless a test installs its own recorder.
+
+    create_registry_secret reads the existing secret even under --dry-run, and left real
+    that read goes to whatever cluster the developer's kubeconfig points at.
+    """
+    monkeypatch.setattr(registry, "kubectl", recorder(default=Result(1, "", "NotFound")))
+
+
 def prepare(monkeypatch, settings):
     """Supply everything create_registry_secret needs apart from the password."""
     monkeypatch.setenv("REGISTRY_USERNAME", "myuser")

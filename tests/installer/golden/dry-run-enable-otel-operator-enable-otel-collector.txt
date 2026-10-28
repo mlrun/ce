@@ -30,3 +30,7 @@ opentelemetry-operator:
 opentelemetry:
   collector:
     enabled: true
+  namespaceLabel:
+    enabled: false
+  instrumentation:
+    enabled: false

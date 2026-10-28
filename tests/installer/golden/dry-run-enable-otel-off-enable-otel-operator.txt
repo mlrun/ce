@@ -27,3 +27,10 @@ global:
   externalHostAddress: localhost
 opentelemetry-operator:
   enabled: true
+opentelemetry:
+  collector:
+    enabled: false
+  namespaceLabel:
+    enabled: false
+  instrumentation:
+    enabled: false

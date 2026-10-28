@@ -25,3 +25,12 @@ global:
     url: index.docker.io/someone
     secretName: registry-credentials
   externalHostAddress: localhost
+opentelemetry-operator:
+  enabled: false
+opentelemetry:
+  collector:
+    enabled: false
+  namespaceLabel:
+    enabled: false
+  instrumentation:
+    enabled: false
