@@ -300,6 +300,16 @@ import mlrun
 mlrun.get_run_db().trigger_migrations()
 ```
 
+Alternatively, let the chart trigger them for you by enabling the `mlrunMigrations` post-upgrade hook.
+It runs only on `helm upgrade`, after all other hooks. It waits until the MLRun API chief
+has rolled out and runs the new `mlrun.api.image`, then sends the migrations request and waits for it to finish:
+```bash
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce --reuse-values \
+  --set mlrunMigrations.enabled=true \
+  --timeout 30m
+```
+Set `--timeout` high enough for the chief rollout and the migrations: Helm fails the upgrade if the hook doesn't finish in time.
+
 > **Note:** Once the database schema is upgraded there is no way to downgrade it
 
 ## Uninstalling the Chart

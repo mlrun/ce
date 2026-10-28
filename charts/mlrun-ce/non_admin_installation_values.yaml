@@ -20,6 +20,11 @@ mlrun:
     service:
       type: NodePort
       nodePort: 30060
+
+# Set to true to trigger MLRun DB migrations automatically on helm upgrade
+mlrunMigrations:
+  enabled: false
+
 jupyterNotebook:
   service:
     type: NodePort

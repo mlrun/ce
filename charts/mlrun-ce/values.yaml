@@ -253,6 +253,31 @@ mlrun:
   ce:
     mode: full
 
+# Post-upgrade hook Job that triggers MLRun DB migrations (POST /api/v1/operations/migrations).
+# Runs on `helm upgrade` only, as the last post-upgrade hook. Before triggering, it waits until the
+# mlrun-api-chief rollout completed, every chief pod runs the expected mlrun-api image, and the chief
+# reports the expected version via /api/v1/client-spec.
+# Pass a `helm upgrade --timeout` long enough to cover the chief rollout and the migrations.
+mlrunMigrations:
+  enabled: false
+  # Version the chief must report before migrations are triggered. Defaults to mlrun.api.image.tag.
+  expectedVersion: ""
+  pollIntervalSeconds: 5
+  # Max time to wait for the new chief and for the migrations to finish
+  timeoutSeconds: 3600
+  backoffLimit: 2
+  # Needs kubectl, curl and sh
+  kubectlImage:
+    repository: alpine/kubectl
+    tag: "1.33.4"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
 jupyterNotebook:
   serviceAccount:
     create: true

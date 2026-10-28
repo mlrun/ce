@@ -1,0 +1,52 @@
+{{- if and .Values.mlrun.enabled .Values.mlrunMigrations.enabled }}
+# Regular (non-hook) resources so they already exist when the post-upgrade hook Job runs
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-mlrun-migrations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
+---
+# Read-only access needed by `kubectl rollout status` and the chief pods image check
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-mlrun-migrations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-mlrun-migrations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-mlrun-migrations
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-mlrun-migrations
+    namespace: {{ .Release.Namespace }}
+{{- end }}

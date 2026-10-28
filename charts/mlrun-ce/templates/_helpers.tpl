@@ -379,6 +379,40 @@ Mlrun API selector labels
 app.kubernetes.io/component: {{ .Values.mlrun.api.name | quote }}
 {{- end -}}
 
+{{/*
+Mlrun API chief name, mirrors mlrun.api.chief.fullname from the mlrun chart
+*/}}
+{{- define "mlrun-ce.mlrun.api.chief.fullname" -}}
+{{- if .Values.mlrun.api.chief.fullnameOverride -}}
+{{- .Values.mlrun.api.chief.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-chief" (.Values.mlrun.api.fullnameOverride | default "mlrun-api") | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Mlrun API image, as deployed by the mlrun chart
+*/}}
+{{- define "mlrun-ce.mlrun.api.image" -}}
+{{- printf "%s:%s" .Values.mlrun.api.image.repository (.Values.mlrun.api.image.tag | toString) -}}
+{{- end -}}
+
+{{/*
+Mlrun migrations labels
+*/}}
+{{- define "mlrun-ce.mlrunMigrations.labels" -}}
+{{ include "mlrun-ce.common.labels" . }}
+{{ include "mlrun-ce.mlrunMigrations.selectorLabels" . }}
+{{- end -}}
+
+{{/*
+Mlrun migrations selector labels
+*/}}
+{{- define "mlrun-ce.mlrunMigrations.selectorLabels" -}}
+{{ include "mlrun-ce.common.selectorLabels" . }}
+app.kubernetes.io/component: mlrun-migrations
+{{- end -}}
+
 
 {{/*
 Common labels
