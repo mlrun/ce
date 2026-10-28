@@ -169,7 +169,7 @@ These pods receive OTel auto-instrumentation (runtime metrics, traces, HTTP metr
 {{- if and .Values.mlrun.enabled .Values.mlrunMigrations.enabled .Release.IsUpgrade }}
 {{- "\n" }}
 MLRun DB migrations are running in the background (helm doesn't wait for them). Check the result with:
-kubectl -n {{ .Release.Namespace }} logs -f job/{{ .Release.Name }}-mlrun-migrations-{{ .Release.Revision }}
+kubectl -n {{ .Release.Namespace }} logs -f job/{{ include "mlrun-ce.mlrunMigrations.jobName" . }}
 {{- end }}
 
 Happy MLOPSing!!! :]

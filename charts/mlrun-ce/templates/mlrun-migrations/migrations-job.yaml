@@ -14,7 +14,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ .Release.Name }}-mlrun-migrations-{{ .Release.Revision }}
+  name: {{ include "mlrun-ce.mlrunMigrations.jobName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
@@ -40,7 +40,9 @@ spec:
             - name: CHIEF_DEPLOYMENT
               value: {{ $chief }}
             - name: CHIEF_SELECTOR
-              value: app.kubernetes.io/name=mlrun,app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component={{ .Values.mlrun.api.name }},app.kubernetes.io/sub-component=chief
+              value: {{ include "mlrun-ce.mlrun.api.chief.selector" . }}
+            - name: CHIEF_CONTAINER
+              value: {{ include "mlrun-ce.mlrun.api.containerName" . }}
             - name: EXPECTED_IMAGE
               value: {{ include "mlrun-ce.mlrun.api.image" . | quote }}
             - name: MLRUN_CHIEF_URL
@@ -91,7 +93,7 @@ spec:
               echo "Waiting for all chief pods to run ${EXPECTED_IMAGE}..."
               while true; do
                 images=$(kubectl -n "${NAMESPACE}" get pods -l "${CHIEF_SELECTOR}" \
-                  -o jsonpath='{range .items[*]}{.spec.containers[?(@.name=="mlrun-api")].image}{"\n"}{end}' | sort -u)
+                  -o jsonpath='{range .items[*]}{.spec.containers[?(@.name=="'"${CHIEF_CONTAINER}"'")].image}{"\n"}{end}' | sort -u)
                 [ "${images}" = "${EXPECTED_IMAGE}" ] && break
                 echo "Chief pods images: $(echo ${images}), waiting..."
                 sleep_or_timeout "chief pods to run ${EXPECTED_IMAGE}"
