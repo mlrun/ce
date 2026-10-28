@@ -3,8 +3,19 @@ exit: 0
 ["helm", "version", "--short"]
 ["kubectl", "cluster-info"]
 ["docker", "info"]
+["helm", "list", "--namespace", "mlrun", "--all", "-o", "json"]
 ["kubectl", "get", "namespace", "mlrun"]
+["kubectl", "get", "secret", "registry-credentials", "--namespace", "mlrun", "-o", "jsonpath={.metadata.labels.app\\.kubernetes\\.io/managed-by}"]
 ["helm", "repo", "add", "--force-update", "mlrun-ce", "https://mlrun.github.io/ce"]
 ["helm", "repo", "update"]
 ["helm", "version", "--short"]
-["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--dry-run=server", "--set", "global.registry.url=index.docker.io/someone", "--set", "global.registry.secretName=registry-credentials", "--set", "global.externalHostAddress=localhost"]
+["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--values", "<installer values>", "--version", "<installer chart version>", "--dry-run=server"]
+--- installer values ---
+# Written by the MLRun CE installer: every value it resolved for this release, and no
+# secrets (the registry password lives only in the pull Secret). Rewritten on every run,
+# --dry-run included. A plain `helm upgrade` that omits this file drops these values.
+global:
+  registry:
+    url: index.docker.io/someone
+    secretName: registry-credentials
+  externalHostAddress: localhost

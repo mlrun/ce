@@ -29,8 +29,8 @@ from .cluster import (
     validate_chart_path,
 )
 from .config import check_required_non_interactive, load_config
-from .console import InstallerError, die, log_info, out
-from .helm_ops import do_uninstall, helm_install
+from .console import InstallerError, die, log_info, log_warn, out
+from .helm_ops import do_uninstall, helm_install, refuse_a_second_release
 from .registry import (
     create_registry_secret,
     deploy_local_registry,
@@ -92,6 +92,29 @@ def installer_version() -> str:
                 return match.group(1)
 
     return BUILT_IN_CHART_VERSION or UNKNOWN_VERSION
+
+
+def pin_chart_version(settings: Settings) -> None:
+    """Install the chart this installer ships with unless told otherwise.
+
+    With no --version, helm picks the newest stable chart in the repo — not this
+    installer's, and never an rc — so the flags composed here could meet a chart that has
+    since renamed or dropped the keys they set.
+    """
+    if settings.chart_path:
+        return
+    if settings.ce_version:
+        log_info(f"Installing chart version {settings.ce_version} (--ce-version).")
+        return
+    version = installer_version()
+    if version == UNKNOWN_VERSION:
+        log_warn(
+            "This installer's own chart version is unknown; installing the newest stable "
+            "chart. Pass --ce-version to pin one."
+        )
+        return
+    settings.ce_version = version
+    log_info(f"Installing chart version {version} (this installer's own).")
 
 
 def print_version() -> None:
@@ -269,6 +292,7 @@ def execute(settings: Settings) -> None:
     # credentials, and outside load_config, so an env-var-only --non-interactive run is
     # checked too.
     check_required_non_interactive(settings)
+    pin_chart_version(settings)
 
     # Before anything touches the cluster. Further down this sat after ensure_namespace and
     # deploy_local_registry, so a mistyped -f left a namespace and a running registry behind
@@ -280,6 +304,8 @@ def execute(settings: Settings) -> None:
     validate_chart_path(settings)
 
     check_requirements(settings)
+    # Not a validator: --skip-validators must not wave through a release that collides.
+    refuse_a_second_release(settings)
     if not settings.skip_validators:
         run_blocking_validators(settings)
     ensure_namespace(settings)

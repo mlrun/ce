@@ -24,6 +24,7 @@ what regressed rather than which assertion tripped.
 """
 
 import glob
+import json
 import os
 import re
 import tarfile
@@ -407,17 +408,34 @@ def test_a_failed_command_message_is_redacted_end_to_end(monkeypatch):
 # ------------------------------------------------------------------------------------------
 
 
+def _declared_dependencies():
+    scripts = Path(__file__).resolve().parents[2] / "scripts"
+    pyproject = (scripts / "pyproject.toml").read_text()
+    block = re.search(r"^dependencies = \[(.*?)^\]", pyproject, re.MULTILINE | re.DOTALL)
+    header = re.search(r"^# dependencies = \[(.*?)^# \]", (scripts / "install.py").read_text(),
+                       re.MULTILINE | re.DOTALL)  # fmt: skip
+    return re.findall(r'"([^"]+)"', block.group(1)), re.findall(r'"([^"]+)"', header.group(1))
+
+
 def test_every_declared_dependency_has_an_upper_bound():
     # `uvx --from "git+...#subdirectory=scripts"` resolves this list, not install.py.lock,
     # so an unbounded floor lets a release-tagged install pick up a future major of typer
     # or click and behave differently from the one that was tested.
-    pyproject = (Path(__file__).resolve().parents[2] / "scripts" / "pyproject.toml").read_text()
-    block = re.search(r"^dependencies = \[(.*?)^\]", pyproject, re.MULTILINE | re.DOTALL)
-    declared = re.findall(r'"([^"]+)"', block.group(1))
+    pyproject, _ = _declared_dependencies()
 
-    assert declared, "no dependencies found — did the pyproject layout change?"
-    for requirement in declared:
+    assert pyproject, "no dependencies found — did the pyproject layout change?"
+    for requirement in pyproject:
         assert "<" in requirement, f"{requirement} has no upper bound"
+
+
+def test_both_dependency_declarations_agree():
+    # The clone path (install.py's PEP 723 header, then its lock) and the uvx/editable path
+    # (pyproject.toml) declare the same four packages separately. The header carried no
+    # upper bounds while pyproject capped each at the next major, so a regenerated lock
+    # could pick a major the uvx path refused.
+    pyproject, header = _declared_dependencies()
+
+    assert sorted(header) == sorted(pyproject)
 
 
 # ------------------------------------------------------------------------------------------
@@ -741,6 +759,8 @@ def test_a_blocking_validator_failure_leaves_the_cluster_untouched(monkeypatch, 
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "resolve_external_host", lambda s: None)
     monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
+    monkeypatch.setattr(cli, "refuse_a_second_release", lambda s: None)
+    monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
 
     def fail(s):
         mutated.append("validated")
@@ -1115,7 +1135,7 @@ def test_an_existing_pull_secret_is_updated_without_being_deleted_first(
     # Left over from the `kubectl create secret` era, which refused to overwrite. `apply`
     # updates in place, so the delete only opened a window with no credentials — and lost
     # them entirely if anything failed before the re-create.
-    rec = recorder()
+    rec = recorder(answers=OURS)
     monkeypatch.setattr(registry, "kubectl", rec)
     settings.local_registry = True
     settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
@@ -1124,6 +1144,10 @@ def test_an_existing_pull_secret_is_updated_without_being_deleted_first(
 
     assert not rec.ran("delete secret")
     assert rec.ran("apply")
+
+
+# The pull secret already exists and carries the installer's label.
+OURS = {"get secret": Result(0, registry.MANAGED_BY_VALUE)}
 
 
 class _ImmutableOnFirstApply(Recorder):
@@ -1151,7 +1175,9 @@ def _secret_settings(settings):
 def test_a_failed_secret_update_does_not_delete_the_existing_secret(monkeypatch, settings):
     # Any apply failure used to be read as "type is immutable", so a Forbidden, a conflict
     # or an API timeout deleted working credentials — and the retry then failed the same way.
-    rec = Recorder(answers={"apply": Result(1, "", 'secrets "registry-credentials" is forbidden')})
+    rec = Recorder(
+        answers={**OURS, "apply": Result(1, "", 'secrets "registry-credentials" is forbidden')}
+    )
     monkeypatch.setattr(registry, "kubectl", rec)
 
     with pytest.raises(InstallerError):
@@ -1161,7 +1187,7 @@ def test_a_failed_secret_update_does_not_delete_the_existing_secret(monkeypatch,
 
 
 def test_a_secret_that_cannot_be_deleted_is_not_reapplied(monkeypatch, settings):
-    rec = _ImmutableOnFirstApply(answers={"delete": Result(1, "", "forbidden")})
+    rec = _ImmutableOnFirstApply(answers={**OURS, "delete": Result(1, "", "forbidden")})
     monkeypatch.setattr(registry, "kubectl", rec)
 
     with pytest.raises(InstallerError):
@@ -1173,7 +1199,7 @@ def test_a_secret_that_cannot_be_deleted_is_not_reapplied(monkeypatch, settings)
 def test_a_secret_that_cannot_be_updated_in_place_is_replaced(monkeypatch, settings):
     # A name already taken by a Secret of another type cannot be applied over, because
     # `type` is immutable — that case, and only that case, still warrants the delete.
-    rec = _ImmutableOnFirstApply()
+    rec = _ImmutableOnFirstApply(answers=OURS)
     monkeypatch.setattr(registry, "kubectl", rec)
     settings.local_registry = True
     settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
@@ -1182,3 +1208,220 @@ def test_a_secret_that_cannot_be_updated_in_place_is_replaced(monkeypatch, setti
 
     assert rec.ran("delete secret")
     assert len(rec.argv_containing("apply")) == 2
+
+
+# ------------------------------------------------------------------------------------------
+# The managed-by label adopted a pull secret the user created by hand
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("local", [True, False])
+def test_a_users_own_pull_secret_is_neither_labelled_nor_changed(
+    monkeypatch, settings, recorder, capture_logs, local
+):
+    # apply added the label to an existing secret, and --uninstall deletes by that label:
+    # a secret created by hand per the README was taken over on install and deleted on
+    # uninstall.
+    for name, value in (("REGISTRY_USERNAME", "u"), ("REGISTRY_PASSWORD", "p")):
+        monkeypatch.setenv(name, value)
+    logs = capture_logs(registry)
+    rec = recorder(answers={"get secret": Result(0, "")})
+    monkeypatch.setattr(registry, "kubectl", rec)
+    settings.non_interactive = True
+    settings.local_registry = local
+    settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
+
+    registry.create_registry_secret(settings)
+
+    assert not rec.ran("apply") and not rec.ran("delete"), rec.joined
+    assert "was not created by this installer" in "\n".join(logs)
+
+
+def test_a_missing_pull_secret_is_created_with_the_label(monkeypatch, settings, recorder):
+    rec = recorder(answers={"get secret": Result(1, "", "NotFound")})
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    registry.create_registry_secret(_secret_settings(settings))
+
+    [manifest] = [rec.inputs[i] for i, c in enumerate(rec.calls) if c[:1] == ["apply"]]
+    assert yaml.safe_load(manifest)["metadata"]["labels"] == {
+        registry.MANAGED_BY_KEY: registry.MANAGED_BY_VALUE
+    }
+
+
+# ------------------------------------------------------------------------------------------
+# With no --ce-version, helm installed the newest stable chart rather than the installer's
+# ------------------------------------------------------------------------------------------
+
+
+def test_the_installer_pins_its_own_chart_version_by_default(monkeypatch, settings):
+    monkeypatch.setattr(cli, "installer_version", lambda: "0.99.0-rc.1")
+
+    cli.pin_chart_version(settings)
+
+    assert settings.ce_version == "0.99.0-rc.1"
+    cmd = helm_ops.build_helm_install_command(settings)
+    assert cmd[cmd.index("--version") + 1] == "0.99.0-rc.1"
+
+
+@pytest.mark.parametrize("field, value", [("ce_version", "0.11.0"), ("chart_path", "/c")])
+def test_an_explicit_chart_choice_is_not_overridden(monkeypatch, settings, field, value):
+    monkeypatch.setattr(cli, "installer_version", lambda: "0.99.0")
+    setattr(settings, field, value)
+
+    cli.pin_chart_version(settings)
+
+    assert settings.ce_version == ("0.11.0" if field == "ce_version" else "")
+
+
+def test_an_unknown_installer_version_falls_back_to_the_newest_stable(monkeypatch, settings):
+    monkeypatch.setattr(cli, "installer_version", lambda: cli.UNKNOWN_VERSION)
+
+    cli.pin_chart_version(settings)
+
+    assert settings.ce_version == ""
+
+
+# ------------------------------------------------------------------------------------------
+# Values passed only as --set were lost by the next plain `helm upgrade`
+# ------------------------------------------------------------------------------------------
+
+
+def test_set_flags_fold_into_the_values_helm_would_have_parsed():
+    flags = [
+        "--set", "a.enabled=true",
+        "--set", "a.off=false",
+        "--set", "a.port=30010",
+        "--set", "a.url=registry:5000",
+        "--set", "a.hosts[0]=nuclio.example",
+        "--set", "b.hosts[0].host=mlrun.example",
+        "--set", "b.hosts[0].paths[0].path=/",
+    ]  # fmt: skip
+
+    assert helm_ops.set_flags_to_values(flags) == {
+        "a": {"enabled": True, "off": False, "port": 30010, "url": "registry:5000",
+              "hosts": ["nuclio.example"]},
+        "b": {"hosts": [{"host": "mlrun.example", "paths": [{"path": "/"}]}]},
+    }  # fmt: skip
+
+
+def test_installer_values_go_to_helm_as_a_file_after_the_users_own(settings, tmp_path):
+    settings.values_file = "mine.yaml"
+    settings.config_file = "ce-config.yaml"  # -f alone emits no registry values at all
+    settings.generated_values_file = str(tmp_path / "out.yaml")
+    settings.enable_ingress = True
+
+    path = helm_ops.write_installer_values(settings)
+    cmd = helm_ops.build_helm_install_command(settings, path)
+
+    assert "--set" not in cmd
+    values = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "--values"]
+    assert values == ["mine.yaml", path], "the installer's file must win, as --set did"
+    written = yaml.safe_load(Path(path).read_text())
+    assert written["global"]["registry"]["url"] == settings.registry_url
+    assert written["mlrun"]["api"]["ingress"]["enabled"] is True
+
+
+def test_the_installer_values_file_carries_no_secret(settings, tmp_path):
+    settings.generated_values_file = str(tmp_path / "out.yaml")
+    settings.registry_password_value = "hunter2-do-not-write"
+
+    path = helm_ops.write_installer_values(settings)
+
+    assert "hunter2-do-not-write" not in Path(path).read_text()
+
+
+def test_the_plain_helm_equivalent_is_runnable_as_printed(settings):
+    settings.chart_ref = "mlrun-ce/mlrun-ce"
+    settings.dry_run = True
+    settings.ce_version = "0.12.1"
+    cmd = ["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--values",
+           "/tmp/my values.yaml", "--version", "0.12.1", "--dry-run=server"]  # fmt: skip
+
+    repo, install = helm_ops.plain_helm_equivalent(settings, cmd)
+
+    assert repo == f"helm repo add mlrun-ce {settings.helm_repo_url}"
+    assert "--dry-run" not in install
+    assert "'/tmp/my values.yaml'" in install, "paths must survive a copy-paste into a shell"
+
+
+# ------------------------------------------------------------------------------------------
+# A second mlrun-ce release under another name collided with the first
+# ------------------------------------------------------------------------------------------
+
+
+def _helm_list(monkeypatch, recorder, releases):
+    monkeypatch.setattr(
+        helm_ops, "helm", recorder(answers={"list": Result(0, json.dumps(releases))})
+    )
+
+
+def test_an_mlrun_ce_release_under_another_name_is_refused(monkeypatch, settings, recorder):
+    _helm_list(monkeypatch, recorder, [{"name": "my-mlrun", "chart": "mlrun-ce-0.12.0"}])
+
+    with pytest.raises(InstallerError) as excinfo:
+        helm_ops.refuse_a_second_release(settings)
+    assert "my-mlrun" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "releases",
+    [
+        [{"name": "mlrun-ce", "chart": "mlrun-ce-0.12.0"}],
+        [{"name": "other", "chart": "mlrun-ce-extras-1.0.0"}],
+        [{"name": "redis", "chart": "redis-18.0.0"}],
+        [],
+    ],
+)
+def test_upgrades_and_unrelated_releases_pass(monkeypatch, settings, recorder, releases):
+    _helm_list(monkeypatch, recorder, releases)
+
+    helm_ops.refuse_a_second_release(settings)
+
+
+def test_the_release_check_survives_skip_validators(monkeypatch, settings):
+    checked = []
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
+    monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
+    monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
+
+    def refuse(s):
+        checked.append(True)
+        raise InstallerError(code=1)
+
+    monkeypatch.setattr(cli, "refuse_a_second_release", refuse)
+    settings.skip_validators = True
+
+    with pytest.raises(InstallerError):
+        cli.execute(settings)
+    assert checked
+
+
+# ------------------------------------------------------------------------------------------
+# Ingress hosts under a bare IP resolved nowhere, and nothing said so
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "host, ip",
+    [
+        ("192.168.49.2", "192.168.49.2"),
+        ("host.docker.internal", "127.0.0.1"),
+        ("192.168.49.2.nip.io", ""),
+        ("mlrun.corp.example", "<ingress controller IP>"),
+    ],
+)
+def test_hosts_file_lines_carry_an_ip_never_a_name(host, ip):
+    assert registry.hosts_file_ip(host) == ip
+
+
+def test_the_ingress_hosts_are_printed_for_etc_hosts(settings, capture_logs):
+    logs = capture_logs(helm_ops)
+    settings.enable_ingress = True
+    settings.external_host_address = "192.168.49.2"
+
+    helm_ops.report_ingress_hosts(settings)
+
+    line = next(entry for entry in logs if entry.strip().startswith("192.168.49.2"))
+    for sub in ("mlrun", "mlrun-api", "jupyter", "nuclio"):
+        assert f"{sub}.192.168.49.2" in line.split()

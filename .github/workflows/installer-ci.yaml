@@ -1,8 +1,9 @@
 name: Installer CI
 
-# Runs on every PR, not just those touching scripts/**. The unit tests are
-# hermetic and take about a minute, and always running them means the suite
-# can't sit broken unnoticed until the next installer change.
+# Runs when the installer or something it reads changes. The chart is on the list because
+# the suite resolves every --set the installer emits against the chart's values, and the
+# e2e job installs this chart: a chart PR renaming a key the installer sets must run it.
+# README.md and the Makefile carry the release-tag pin and the targets CI invokes.
 #
 # Kept as its own workflow rather than a job in ci.yaml so it reports as an
 # independent status check, matching this repo's one-workflow-per-concern layout.
@@ -11,6 +12,13 @@ on:
     branches:
       - development
       - "[0-9]+.[0-9]+.x"
+    paths:
+      - "scripts/**"
+      - "tests/installer/**"
+      - "charts/mlrun-ce/**"
+      - "README.md"
+      - "Makefile"
+      - ".github/workflows/installer-ci.yaml"
   workflow_dispatch:
 
 permissions:

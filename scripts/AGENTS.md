@@ -87,7 +87,11 @@ failure raised inside the command silently exits 0.
    invocation predating commands relied on; an unrecognised bare word is an error rather
    than an install, so a typo can't deploy.
 1. `parse_args` — flags/env, precedence flag > env > default
+   Before any of the steps below: `pin_chart_version` defaults `--ce-version` to the
+   installer's own chart version (see "Known couplings").
 2. `check_requirements` — helm, kubectl, docker present and reachable; then
+   `refuse_a_second_release` (an mlrun-ce chart under another release name in the
+   namespace; not a validator, so `--skip-validators` cannot bypass it); then
    `run_blocking_validators` (Helm version, default StorageClass) unless `--skip-validators`.
    They run here, before anything below mutates the cluster, so a failure leaves nothing
    behind
@@ -97,7 +101,15 @@ failure raised inside the command silently exits 0.
 6. `create_registry_secret` — skipped via `--skip-secret`, or when `-f VALUES_FILE` is given **and** `--config` is absent (pure `-f`-only mode keeps its old self-contained behavior; `-f` + `--config` together still creates the secret). In `--dry-run` only logs, doesn't touch the cluster
 7. `gather_install_params` — resolves `REGISTRY_URL` (same `-f`-only skip condition as above)
 8. `run_validators` — the warning-only checks, skippable via `--skip-validators`; includes `validate_ingress_controller`, which warns (never blocks) if `--enable-ingress`'s IngressClass isn't found, and the registry login, which runs here because it needs the credentials step 6 resolved
-9. `helm_install` → `resolve_chart_source` (published repo vs `--chart-path`) → `helm install/upgrade`, with `--values`/`--set` composed per the precedence rule below
+9. `helm_install` → `resolve_chart_source` (published repo vs `--chart-path`) → `write_installer_values` → `helm upgrade --install` with the user's `-f` then the installer's values file, and the equivalent plain helm commands printed
+
+`build_set_flags` is still the one place values are composed: `set_flags_to_values` folds
+its output into the dict written to `mlrun-ce-values.yaml`, and the chart-key test resolves
+the same flags against the chart. No `--set` reaches helm. Values passed as `--set` live
+only in the release, so a later plain `helm upgrade -f` without `--reuse-values` reset them
+all; a file the user keeps does not have that problem. All 23 dry-run cases were rendered
+both ways when this changed and produced identical manifests, apart from material the chart
+generates afresh on every render (SeaweedFS keys, SFTP passwords, webhook certificates).
 
 Value precedence, highest first: flag > env > `ce-config.yaml` (applied as `--set`) >
 `-f`/`--values` (passed raw) > chart defaults. `--config` and `-f` compose rather than
@@ -176,7 +188,9 @@ else — `test_the_hook_reads_the_real_chart_in_this_repo` is there to catch tha
 ### Dependencies and `install.py.lock`
 
 The four third-party dependencies — typer, click, rich, pyyaml — are declared **twice**, for
-the two entry paths, and both declarations have to be kept in step:
+the two entry paths, with identical ranges. `test_both_dependency_declarations_agree`
+fails on any drift: the header once carried bare floors while pyproject capped each major,
+and the lock had already picked up `rich 15`, which the uvx path refuses.
 
 | Declared in | Consumed by | Form |
 |---|---|---|
@@ -209,6 +223,56 @@ resolved whatever those projects had published that morning, which is not what a
 for; a ceiling at the next major keeps it inside a range this chart was tested against
 while still letting a patch land without a chart release.
 `test_every_declared_dependency_has_an_upper_bound` enforces it.
+
+The two resolution paths differ in what they need at install time:
+
+- `./scripts/install.py` from a clone is lock-pinned: the same four versions everywhere.
+  It still downloads them on first run, so an air-gapped host needs a uv cache or a wheel
+  mirror prepared in advance.
+- `uvx --from "git+…@<tag>#subdirectory=scripts"` resolves fresh within the ranges on
+  every new environment, and needs both git access to GitHub and PyPI. It is not
+  air-gap capable.
+
+`hatch_build.py` reads `../charts/mlrun-ce/Chart.yaml`, outside the package directory.
+That works only when building from the repo (a git source or a clone). An sdist or a PyPI
+release would carry no chart beside it; publishing there would first need the version
+written into the package some other way.
+
+## Known couplings and gaps
+
+- **The installer's version is the chart's version.** One number, in Chart.yaml, and by
+  default the installer installs that chart. The cost: every installer fix needs a chart
+  release, even with no chart change. Kept deliberately for now, since an installer and a
+  chart from different tags are the pairing nobody tested.
+- **The local registry lives outside the chart.** The installer applies it from
+  `registry.py`, labels it and removes it on `--uninstall`, but a plain-helm user cannot
+  get it at all. The long-term fix is a chart template behind a
+  `localRegistry.enabled` flag, which gives both the same lifecycle; the installer would
+  then only set the flag.
+
+## Future work (lessons from mlefi ecosctl)
+
+Worth adopting:
+
+- A typed schema for `ce-config.yaml`, with an example-config generator, so the example
+  cannot drift from what the loader accepts.
+- Validators that run as in-cluster Jobs, checking what the cluster can reach (registry,
+  S3, DNS) rather than what the laptop can.
+- A downgrade guard on upgrade: refuse a chart older than the deployed release unless
+  asked.
+- An explicit cluster-scoped versus namespaced split. The chart already ships
+  `admin_installation_values.yaml` and the two non-admin files; the installer does not
+  expose them.
+
+Worth avoiding:
+
+- Plaintext secrets in a saved config (ecosctl's `last_config.yaml` keeps the password).
+  `mlrun-ce-values.yaml` holds no secret, and `test_the_installer_values_file_carries_no_secret`
+  keeps it that way.
+- Delete-then-reinstall in place of an idempotent `helm upgrade --install`.
+- Accepting a config file *or* flags but not both. Keep flag > env > file > default.
+- Bundled binaries, helmfile or a kustomize post-renderer. The user brings helm and
+  kubectl, uv brings Python, and the release stays identical to what plain helm produces.
 
 `scripts/uv.lock` is a local development artifact and is gitignored; nothing consumes it.
 Do not confuse either with `charts/mlrun-ce/requirements.lock`, which pins the chart's
@@ -441,6 +505,21 @@ node image is the safest choice.
 - **`helm repo update` wrote this run's index into the user's repository cache.**
   `isolate_helm_repo_config` already moved `HELM_REPOSITORY_CONFIG` to a temp dir; it now
   moves `HELM_REPOSITORY_CACHE` with it, unless the user set either explicitly.
+- **The managed-by label adopted a pull secret the user created.** `apply` added the
+  label to an existing `registry-credentials`, and `--uninstall` deletes by that label,
+  so a secret created by hand per the README was taken over on install and deleted on
+  uninstall. An existing secret without the label is now used unchanged, with a warning;
+  only a secret the installer creates gets the label.
+- **With no `--ce-version`, helm installed the newest stable chart.** Not the installer's
+  own, and never an rc, so its flags could meet a chart that renamed their keys.
+  `pin_chart_version` now passes the installer's version unless `--ce-version` or
+  `--chart-path` says otherwise. The golden harness writes it as
+  `<installer chart version>`, so a Chart.yaml bump does not rewrite every recording.
+- **A second mlrun-ce release under another name collided with the first.**
+  `refuse_a_second_release` stops before anything is created.
+- **Ingress hosts under a bare IP resolved nowhere, and nothing said so.** The run now
+  prints the `/etc/hosts` line. `hosts_file_ip` also fixes the local-registry hint, which
+  printed a hostname where `/etc/hosts` needs an IP.
 
 ## Testing
 
@@ -472,6 +551,10 @@ flags, and what the installer exits with. `dry-rnu.txt` is the clearest example:
 - Add a case to `CASES` whenever a flag gains behaviour that reaches helm or kubectl.
   Refusals belong there too — *how* the installer rejects a bad value is as much a contract
   as how it succeeds, and six of the 36 cases exist only to pin that.
+- **The installer's values file is part of the recording.** It is appended after the argv
+  under `--- installer values ---`, its path recorded as `<installer values>`, and the
+  default chart version as `<installer chart version>`. Since no `--set` reaches helm any
+  more, the file is where a value change shows up in a diff.
 - **The config-file cases carry an env rule.** `--config` supplies the registry identity,
   and flag/env beats file, so `run_case` drops `REGISTRY_URL`/`USERNAME`/`EMAIL` and
   `EXTERNAL_HOST_ADDRESS` for those invocations — otherwise the recording would look the
@@ -489,7 +572,7 @@ flags, and what the installer exits with. `dry-rnu.txt` is the clearest example:
 
 ### Unit suites (`make installer-test-unit`)
 
-276 tests across `test_cli.py`, `test_config.py`, `test_validators.py`, `test_cluster.py`,
+299 tests across `test_cli.py`, `test_config.py`, `test_validators.py`, `test_cluster.py`,
 `test_registry.py` and `test_regressions.py`. They patch the helm/kubectl wrappers and
 exercise one function at a time, covering what the golden suite structurally cannot: values
 computed and never sent to a command, text printed to the user, and the precedence rules

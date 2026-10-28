@@ -137,6 +137,8 @@ def handle_helm(args):
             if os.environ.get("STUB_RELEASE_EXISTS") == "1"
             else (1, "not found")
         )
+    if verb == "list":
+        return 0, os.environ.get("STUB_HELM_LIST", "[]")
     if verb == "get" and len(args) > 1 and args[1] == "notes":
         return 0, os.environ.get("STUB_NOTES", "")
     if verb in ("repo", "dependency", "upgrade", "uninstall"):

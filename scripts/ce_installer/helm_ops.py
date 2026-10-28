@@ -13,7 +13,10 @@
 # limitations under the License.
 """Composing and running the helm install/uninstall, plus the hard clean."""
 
+import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -24,7 +27,7 @@ import yaml
 
 from .cluster import resolve_chart_source
 from .console import InstallerError, die, err, log_error, log_info, log_warn, out
-from .registry import MANAGED_BY_LABEL
+from .registry import MANAGED_BY_LABEL, hosts_file_ip
 from .settings import Settings
 from .shell import check_requirements, helm, helm_cmd, kubectl, stream
 from .ui import print_notes_table, run_deployment_progress_ui
@@ -149,6 +152,100 @@ def ingress_set_flags(settings: Settings) -> List[str]:
     return flags
 
 
+_INDEXED = re.compile(r"^(?P<key>[^\[]+)\[(?P<index>\d+)\]$")
+
+
+def _strval(raw: str) -> object:
+    """Type a --set value the way helm's strvals parser does, for the cases emitted here."""
+    if raw in ("true", "false"):
+        return raw == "true"
+    if re.fullmatch(r"-?[0-9]+", raw):
+        return int(raw)
+    return raw
+
+
+def set_flags_to_values(flags: List[str]) -> dict:
+    """Fold `--set a.b[0].c=v` pairs into the nested dict a values file would carry.
+
+    A list index replaces the chart's default list just as the --set did, because helm
+    replaces lists from a values file wholesale too.
+    """
+    values: dict = {}
+    for flag in flags[1::2]:
+        path, _, raw = flag.partition("=")
+        node: object = values
+        parts = path.split(".")
+        for position, part in enumerate(parts):
+            last = position == len(parts) - 1
+            indexed = _INDEXED.match(part)
+            key = indexed.group("key") if indexed else part
+            if not indexed:
+                if last:
+                    node[key] = _strval(raw)  # type: ignore[index]
+                else:
+                    node = node.setdefault(key, {})  # type: ignore[union-attr]
+                continue
+            items = node.setdefault(key, [])  # type: ignore[union-attr]
+            index = int(indexed.group("index"))
+            while len(items) <= index:
+                items.append(None if last else {})
+            if last:
+                items[index] = _strval(raw)
+            else:
+                node = items[index]
+    return values
+
+
+GENERATED_VALUES_HEADER = """\
+# Written by the MLRun CE installer: every value it resolved for this release, and no
+# secrets (the registry password lives only in the pull Secret). Rewritten on every run,
+# --dry-run included. A plain `helm upgrade` that omits this file drops these values.
+"""
+
+
+def write_installer_values(settings: Settings) -> str:
+    """Write the installer's values to their file and return its path, or "" if none.
+
+    A file rather than --set so a plain helm user can repeat the install exactly: values
+    passed as --set live only in the release, and a later `helm upgrade -f` without
+    --reuse-values silently resets every one of them to the chart default.
+    """
+    values = set_flags_to_values(build_set_flags(settings))
+    if not values:
+        return ""
+    path = Path(settings.generated_values_file).resolve()
+    path.write_text(GENERATED_VALUES_HEADER + yaml.safe_dump(values, sort_keys=False))
+    log_info(f"Installer values written to {path}")
+    return str(path)
+
+
+def report_ingress_hosts(settings: Settings) -> None:
+    """Print the /etc/hosts line the Ingress hosts need, as the local registry does.
+
+    `mlrun.192.168.49.2` or `jupyter.host.docker.internal` resolve nowhere by themselves,
+    so without this the install succeeds and every URL it prints is dead.
+    """
+    if not settings.enable_ingress:
+        return
+    pairs = [flag.split("=", 1) for flag in build_set_flags(settings)[1::2]]
+    hosts = [value for key, value in pairs
+             if key.endswith(("ingress.hosts[0]", "ingress.hosts[0].host"))]  # fmt: skip
+    ip = hosts_file_ip(settings.external_host_address)
+    if not hosts or not ip:
+        return
+    log_warn("The Ingress hosts resolve only once DNS or /etc/hosts knows them. Add:")
+    log_warn(f"  {ip}  {' '.join(hosts)}")
+
+
+def plain_helm_equivalent(settings: Settings, cmd: List[str]) -> List[str]:
+    """The commands a user without this installer runs to get the same release."""
+    lines = []
+    if not settings.chart_path:
+        lines.append(shlex.join(["helm", "repo", "add", "mlrun-ce", settings.helm_repo_url]))
+    lines.append(shlex.join(arg for arg in cmd if not arg.startswith("--dry-run")))
+    return lines
+
+
 def _values_file_contents(settings: Settings) -> dict:
     if not settings.values_file:
         return {}
@@ -191,7 +288,9 @@ def dry_run_flag(settings: Settings) -> str:
     return "--dry-run"
 
 
-def build_helm_install_command(settings: Settings) -> List[str]:
+def build_helm_install_command(settings: Settings, installer_values: str = "") -> List[str]:
+    """`installer_values` is the file from write_installer_values. It goes after the user's
+    -f, so its values win exactly as the --set flags they replaced did."""
     cmd = helm_cmd(
         settings,
         "upgrade",
@@ -206,11 +305,12 @@ def build_helm_install_command(settings: Settings) -> List[str]:
     )
     if settings.values_file:
         cmd += ["--values", settings.values_file]
+    if installer_values:
+        cmd += ["--values", installer_values]
     if settings.ce_version and not settings.chart_path:
         cmd += ["--version", settings.ce_version]
     if settings.dry_run:
         cmd += [dry_run_flag(settings)]
-    cmd += build_set_flags(settings)
     return cmd
 
 
@@ -251,7 +351,10 @@ def helm_install(settings: Settings) -> None:
     else:
         log_info(f"Installing MLRun CE (release: {settings.release_name})...")
 
-    cmd = build_helm_install_command(settings)
+    cmd = build_helm_install_command(settings, write_installer_values(settings))
+    log_info("Equivalent plain helm commands:")
+    for line in plain_helm_equivalent(settings, cmd):
+        log_info(f"  {line}")
 
     # `out.is_terminal` is part of the condition, not just a guard inside the progress UI:
     # the UI returns immediately off a terminal, but helm is still writing into a temp file
@@ -264,6 +367,7 @@ def helm_install(settings: Settings) -> None:
         if helm_exit != 0:
             raise die(f"Helm installation failed (exit code {helm_exit}).", helm_exit)
 
+    report_ingress_hosts(settings)
     if settings.dry_run:
         log_info("Dry-run complete (no resources deployed).")
         return
@@ -413,6 +517,32 @@ def remove_installer_resources(settings: Settings) -> None:
         MANAGED_BY_LABEL,
         "--ignore-not-found",
     )
+
+
+def refuse_a_second_release(settings: Settings) -> None:
+    """Stop when the namespace already holds mlrun-ce under another release name.
+
+    The README installs as `my-mlrun`, the old run.sh as `mlrun`, this installer as
+    `mlrun-ce`. A second release collides with the first on the fixed NodePorts and the
+    cluster-scoped resources, and helm only finds out halfway through.
+    """
+    listed = helm(settings, "list", "--namespace", settings.namespace, "--all", "-o", "json")
+    try:
+        releases = json.loads(listed.out) if listed.ok and listed.out.strip() else []
+    except ValueError:
+        return
+    others = [
+        f"{release.get('name')} ({release.get('chart')})"
+        for release in releases
+        if re.match(r"mlrun-ce-\d", str(release.get("chart", "")))
+        and release.get("name") != settings.release_name
+    ]
+    if others:
+        raise die(
+            f"Namespace '{settings.namespace}' already has MLRun CE installed as "
+            f"{', '.join(others)}. Set RELEASE_NAME to that name to upgrade it, or uninstall "
+            "it first."
+        )
 
 
 def confirm_hard_clean_without_release(settings: Settings) -> None:

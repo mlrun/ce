@@ -182,7 +182,7 @@ ingress class.
 ### `--enable-ingress` is set but the Ingress URLs don't resolve
 
 This installer never installs an ingress controller for you — `--enable-ingress` only
-flips the chart's own Ingress resources on via `--set`. If no IngressClass matching your
+flips the chart's own Ingress resources on in the installer's values file. If no IngressClass matching your
 `--enable-ingress`'s class (default `nginx`) exists in the cluster, the pre-install
 validators warn about this before the install even starts, but the install proceeds
 anyway (the Ingress resources get created either way). Install a controller providing

@@ -2,10 +2,10 @@
 # /// script
 # requires-python = ">=3.9"
 # dependencies = [
-#   "typer>=0.12",
-#   "click>=8",
-#   "rich>=13",
-#   "pyyaml>=6",
+#   "typer>=0.12,<1",
+#   "click>=8,<9",
+#   "rich>=13,<15",
+#   "pyyaml>=6,<7",
 # ]
 # ///
 #
@@ -37,7 +37,7 @@
 #
 # Without a clone — pin a release tag, see https://github.com/mlrun/ce/releases;
 # "development" also works but moves with every merge:
-#   uvx --from "git+https://github.com/mlrun/ce@mlrun-ce-0.12.0-rc.15#subdirectory=scripts" \
+#   uvx --from "git+https://github.com/mlrun/ce@mlrun-ce-0.12.1-rc.6#subdirectory=scripts" \
 #     mlrun-ce-installer install
 #
 # Commands: install (the default), uninstall, version, help. Flags may be passed with no

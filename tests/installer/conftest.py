@@ -79,9 +79,11 @@ INSTALLER_ENV_VARS = (
 
 
 @pytest.fixture(autouse=True)
-def clean_env(monkeypatch):
+def clean_env(monkeypatch, tmp_path):
     for name in INSTALLER_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
+    # helm_install writes the installer's values file; never into the checkout.
+    monkeypatch.setenv("GENERATED_VALUES_FILE", str(tmp_path / "mlrun-ce-values.yaml"))
 
 
 @pytest.fixture

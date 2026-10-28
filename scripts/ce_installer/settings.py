@@ -97,6 +97,9 @@ class Settings:
         default_factory=lambda: env_str("HELM_REPO_URL", DEFAULT_HELM_REPO_URL)
     )
     helm_timeout: str = field(default_factory=lambda: env_str("HELM_TIMEOUT", DEFAULT_HELM_TIMEOUT))
+    generated_values_file: str = field(
+        default_factory=lambda: env_str("GENERATED_VALUES_FILE", "mlrun-ce-values.yaml")
+    )
     registry_password_file: str = field(default_factory=lambda: env_str("REGISTRY_PASSWORD_FILE"))
     # 'namespace/name' of the ingress controller Service, for the --local-registry CoreDNS
     # patch. Unset means try the well-known ingress-nginx locations; see

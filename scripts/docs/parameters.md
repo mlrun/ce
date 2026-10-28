@@ -48,8 +48,8 @@ Options:
   -f, --values FILE              Use this YAML values file as the base for installation.
                                  Alone (no --config): fully self-contained, skips secret
                                  creation and prompts. Combined with --config: --config still
-                                 creates the secret and resolves as --set overrides that win
-                                 over this file. See configuration.md's "Precedence" section.
+                                 creates the secret, and its values file is passed after
+                                 this one, so it wins. See configuration.md's "Precedence" section.
   --show-progress                Live deployment progress UI during install
   --disable-system-monitoring    Disable Grafana/Prometheus stack
   --disable-spark                Disable Spark operator
@@ -70,7 +70,7 @@ Options:
   --skip-dependency-update       With --chart-path: do not fetch chart dependencies at all. Use when
                                  charts/ is already vendored and the host cannot reach the upstream
                                  Helm repos
-  --ce-version VERSION           Pin the MLRun CE Helm chart version (default: latest; ignored with --chart-path)
+  --ce-version VERSION           Pin the MLRun CE Helm chart version (default: the installer's own; ignored with --chart-path)
   --dry-run                      Show what would happen without changing anything. Renders the chart
                                  via helm --dry-run=server, and on 'uninstall' reports what would be
                                  removed. Below Helm 3.13, which has no server-side dry run, it falls
@@ -120,7 +120,8 @@ Options:
 | `ENABLE_OTEL_INSTRUMENTATION` | `false`                     | Set to `true` for `--set opentelemetry.instrumentation.enabled=true` |
 | `LOCAL_REGISTRY`       | `false`                           | Set to `true` to deploy a local `registry:2.8.3` registry |
 | `CHART_PATH`           | —                                 | Path to a local chart directory, e.g. `./charts/mlrun-ce` |
-| `CE_VERSION`           | —                                 | Pin the chart version (ignored when `CHART_PATH` is set)|
+| `CE_VERSION`           | the installer's own               | Pin the chart version (ignored when `CHART_PATH` is set)|
+| `GENERATED_VALUES_FILE` | `mlrun-ce-values.yaml`           | Where the installer writes the values it resolved, passed to helm as the last `--values` |
 | `DRY_RUN`              | `false`                           | Set to `true` to render the chart without deploying     |
 | `NON_INTERACTIVE`      | `false`                           | Set to `true` to suppress all prompts                   |
 | `CI`                   | —                                 | Set to `true` to auto-enable non-interactive mode       |

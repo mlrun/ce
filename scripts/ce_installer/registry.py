@@ -14,6 +14,7 @@
 """Registry pull secret, the optional in-cluster registry, and the CoreDNS hosts report."""
 
 import base64
+import ipaddress
 import json
 import re
 from pathlib import Path
@@ -27,8 +28,10 @@ from .shell import kubectl
 # Everything the installer creates outside the chart carries this label, so --uninstall can
 # remove exactly that and never a same-named object the user brought (a --skip-secret
 # pull secret, say).
-MANAGED_BY_LABEL = "app.kubernetes.io/managed-by=mlrun-ce-installer"
-_MANAGED_BY_YAML = "app.kubernetes.io/managed-by: mlrun-ce-installer"
+MANAGED_BY_KEY = "app.kubernetes.io/managed-by"
+MANAGED_BY_VALUE = "mlrun-ce-installer"
+MANAGED_BY_LABEL = f"{MANAGED_BY_KEY}={MANAGED_BY_VALUE}"
+_MANAGED_BY_YAML = f"{MANAGED_BY_KEY}: {MANAGED_BY_VALUE}"
 
 LOCAL_REGISTRY_IMAGE = "registry:2.8.3"
 LOCAL_REGISTRY_STORAGE = "10Gi"
@@ -210,6 +213,28 @@ def resolve_ingress_controller_ip(settings: Settings) -> str:
     return ""
 
 
+WILDCARD_DNS_SUFFIXES = (".nip.io", ".sslip.io")
+
+
+def hosts_file_ip(external_host: str) -> str:
+    """The address an /etc/hosts line for `<sub>.<external_host>` should carry, or "" when
+    the names already resolve on their own.
+
+    /etc/hosts takes an IP, never a name. host.docker.internal is localhost on Docker
+    Desktop. A wildcard-DNS name needs no line. Any other name is a domain only its DNS
+    can answer for, so the line is written against a placeholder for the user to fill in.
+    """
+    if external_host.endswith(WILDCARD_DNS_SUFFIXES):
+        return ""
+    if external_host == "host.docker.internal":
+        return "127.0.0.1"
+    try:
+        ipaddress.ip_address(external_host)
+    except ValueError:
+        return "<ingress controller IP>"
+    return external_host
+
+
 def report_coredns_entry_for_registry(settings: Settings, registry_host: str) -> None:
     """Print the CoreDNS hosts entry a local-registry install needs, and how to add it.
 
@@ -285,12 +310,10 @@ def deploy_local_registry(settings: Settings) -> None:
     log_info(f"Local registry ingress created: {settings.local_registry_url}")
     report_coredns_entry_for_registry(settings, settings.local_registry_url)
 
-    # /etc/hosts needs a real IP; host.docker.internal is already localhost on Docker Desktop.
-    hosts_ip = settings.external_host_address
-    if hosts_ip == "host.docker.internal":
-        hosts_ip = "127.0.0.1"
-    log_warn("To push images from this machine, add to /etc/hosts:")
-    log_warn(f"  {hosts_ip}  {settings.local_registry_url}")
+    hosts_ip = hosts_file_ip(settings.external_host_address)
+    if hosts_ip:
+        log_warn("To push images from this machine, add to /etc/hosts:")
+        log_warn(f"  {hosts_ip}  {settings.local_registry_url}")
     log_warn("In Docker Desktop: Settings -> Docker Engine -> add:")
     log_warn(f'  "insecure-registries": ["{settings.local_registry_url}"]')
 
@@ -308,6 +331,35 @@ def verify_existing_registry_secret(settings: Settings) -> None:
             "--skip-secret to let the installer create it."
         )
         raise InstallerError(code=1)
+
+
+def _leave_users_secret_alone(settings: Settings) -> bool:
+    """True when the pull secret already exists without the installer's label.
+
+    `apply` would add the label to it, and `--uninstall` deletes by that label — so a secret
+    the user created by hand, as the README describes, would be adopted on install and
+    destroyed on uninstall. It is used as it stands instead, exactly as with --skip-secret.
+    Read under --dry-run too, so the dry run reports what the real run would do.
+    """
+    name = settings.registry_secret_name
+    existing = kubectl(
+        settings,
+        "get",
+        "secret",
+        name,
+        "--namespace",
+        settings.namespace,
+        "-o",
+        "jsonpath={.metadata.labels." + MANAGED_BY_KEY.replace(".", "\\.") + "}",
+    )
+    if not existing.ok or existing.out.strip() == MANAGED_BY_VALUE:
+        return False
+    log_warn(f"Secret '{name}' already exists and was not created by this installer.")
+    log_warn("  Using it unchanged; the credentials given to this run are not written to it.")
+    log_warn(
+        "  To have the installer manage it, delete it first. Pass --skip-secret to silence this."
+    )
+    return True
 
 
 def _is_immutable_type_change(error: str) -> bool:
@@ -368,6 +420,8 @@ def _apply_registry_secret(settings: Settings, manifest: str) -> None:
 
 
 def _create_local_registry_secret(settings: Settings) -> None:
+    if _leave_users_secret_alone(settings):
+        return
     if settings.dry_run:
         log_info(f"Dry-run: would create local registry secret '{settings.registry_secret_name}'")
         return
@@ -441,6 +495,8 @@ def create_registry_secret(settings: Settings) -> None:
     settings.registry_password_value = password
     settings.registry_server_value = server
 
+    if _leave_users_secret_alone(settings):
+        return
     if settings.dry_run:
         log_info(f"Dry-run: would create registry secret '{settings.registry_secret_name}'")
         return

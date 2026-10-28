@@ -25,3 +25,4 @@ ce-config.yaml
 # is committed. pyproject.toml exists only so `uvx --from git+...` has an entry point.
 scripts/uv.lock
 .pytest_cache/
+mlrun-ce-values.yaml

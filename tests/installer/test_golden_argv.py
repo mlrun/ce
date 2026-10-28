@@ -132,6 +132,8 @@ def run_case(args, tmp_path):
     env = {key: value for key, value in os.environ.items() if not key.startswith("STUB_")}
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     env["STUB_LOG"] = str(log)
+    generated = tmp_path / "mlrun-ce-values.yaml"
+    env["GENERATED_VALUES_FILE"] = str(generated)
     # A complete non-interactive answer set, so the run never stops at a prompt and any
     # difference is about logic rather than about a question being asked.
     env.update(
@@ -185,7 +187,20 @@ def run_case(args, tmp_path):
         cwd=str(REPO_ROOT),
         timeout=120,
     )
-    return completed.returncode, log.read_text()
+    # The installer pins its own chart version by default. Recorded literally, every
+    # Chart.yaml bump would rewrite most of this directory and bury the real changes.
+    chart_version = re.search(
+        r"^version:\s*(\S+)", (REPO_ROOT / "charts" / "mlrun-ce" / "Chart.yaml").read_text(), re.M
+    ).group(1)
+    calls = log.read_text().replace(
+        f'"--version", "{chart_version}"', '"--version", "<installer chart version>"'
+    )
+    # The values the installer resolves now reach helm through this file, so its content
+    # is as much part of the recording as the argv that names it.
+    calls = calls.replace(str(generated.resolve()), "<installer values>")
+    if generated.exists():
+        calls += "--- installer values ---\n" + generated.read_text()
+    return completed.returncode, calls
 
 
 def render(exit_code, calls):

@@ -45,7 +45,7 @@ Pin to a release tag. Pick one from [the releases page](https://github.com/mlrun
 — the installer from tag `mlrun-ce-X` is the one tested against chart `X`:
 
 ```bash
-CE_TAG=mlrun-ce-0.12.0-rc.15
+CE_TAG=mlrun-ce-0.12.1-rc.6
 uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
   mlrun-ce-installer install
 ```
@@ -66,7 +66,7 @@ there.
 ### Install as a named command
 
 ```bash
-CE_TAG=mlrun-ce-0.12.0-rc.15
+CE_TAG=mlrun-ce-0.12.1-rc.6
 uv tool install "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts"
 mlrun-ce-installer version
 ```
@@ -137,10 +137,10 @@ is neither — the file moved to a bin directory by hand, say — reports `unkno
 nothing then records where it came from; that's what pinning to a release tag answers.
 
 They're coupled on purpose. The installer encodes chart internals — the chart's fixed
-NodePorts, and the `--set` value paths it writes — so an installer and a chart from the
-same tag are the only pairing guaranteed to agree. Independent versions would invite a
-mismatch whose failure mode is silent: a renamed value path becomes a `--set` that
-quietly does nothing.
+NodePorts, and the value paths it writes — so an installer and a chart from the same tag
+are the only pairing guaranteed to agree, and that pairing is what it installs unless
+`--ce-version` says otherwise. Independent versions would invite a mismatch whose failure
+mode is silent: a renamed value path becomes a value that quietly does nothing.
 
 Releasing follows from that. A push to `development` or a `X.Y.x` branch runs
 chart-releaser, which tags `mlrun-ce-<chart version>` and cuts a GitHub Release; that

@@ -85,9 +85,43 @@ Shows a refreshing table of deployments and statefulsets while Helm runs:
 
 ## Pin the chart version
 
+By default the installer installs the chart version it was released with (the version
+`--version` prints), rc or not, and logs which. Pass another to override:
+
 ```bash
 ./scripts/install.py --ce-version 0.11.0
 ```
+
+## Repeating the install with plain helm
+
+Everything the installer resolves (registry URL and secret name, external host, ingress,
+OpenTelemetry, kaniko) is written to `./mlrun-ce-values.yaml` (`GENERATED_VALUES_FILE` to
+move it) and passed to helm as the last `--values`, after your own `-f`. The file holds no
+secrets: the registry password lives only in the pull Secret. The run then prints the
+plain helm commands that reproduce the release, for example:
+
+```
+helm repo add mlrun-ce https://mlrun.github.io/ce
+helm upgrade --install mlrun-ce mlrun-ce/mlrun-ce --namespace mlrun --wait --timeout 960s \
+  --values /path/to/mlrun-ce-values.yaml --version 0.12.1-rc.6
+```
+
+Keep the file with the release. A later `helm upgrade` that leaves it out (and doesn't pass
+`--reuse-values`) resets every one of those values to the chart default. The file is
+rewritten on every run, `--dry-run` included.
+
+The installer refuses to install when the namespace already holds MLRun CE under another
+release name (the README's `my-mlrun`, the old `run.sh`'s `mlrun`): a second release would
+collide with the first on the fixed NodePorts and cluster-scoped resources. Set
+`RELEASE_NAME` to the existing name to upgrade it. `--skip-validators` does not bypass this.
+
+## Using a pull secret you created yourself
+
+If the pull secret (`registry-credentials` by default) already exists and the installer
+didn't create it, the installer uses it unchanged: it neither writes the credentials given
+to this run into it nor labels it, so `--uninstall` leaves it in place. It logs a warning
+saying so. Delete the secret first to have the installer manage it, or pass
+`--skip-secret` to silence the warning.
 
 ## Install with optional components disabled
 
@@ -306,7 +340,7 @@ Have working defaults:
 | `installer.registry.secret.server`     | `https://index.docker.io/v1/`                        |
 | `installer.registry.secret.email`      | unset                                                 |
 | `installer.chartSource.kind`           | `repo` (published chart); only `repo` or `path` accepted |
-| `installer.chartSource.chartVersion`   | latest                                                |
+| `installer.chartSource.chartVersion`   | the installer's own chart version                     |
 | `installer.kubeContext`                | current local kubeconfig context                     |
 | `installer.externalHostAddress`        | `auto` — existing autodetect (minikube/docker-desktop/node IP) |
 | `installer.versions.mlrun`             | chart default (no override)                          |
@@ -349,10 +383,11 @@ just chart `--set`s plus a warning check — it doesn't install an ingress contr
 ### Combining `--config` with `-f`/`--values`
 
 `--config` and `-f`/`--values` can be used together. `-f` supplies the base values file;
-`ce-config.yaml`'s curated fields resolve to `--set` flags exactly as they do when
-`--config` is used alone. Nothing extra to configure — helm always applies `--set` after
-`--values`, so a config-resolved field wins over the same key in a `-f` file with no merge
-logic needed.
+`ce-config.yaml`'s curated fields resolve into the installer's values file exactly as they
+do when `--config` is used alone. Nothing extra to configure: that file is passed after
+yours, and helm lets a later `--values` win, so a config-resolved field beats the same key
+in a `-f` file with no merge logic needed. Ingress hosts and classes are the exception
+that goes the other way: one you set in `-f` is kept.
 
 Used alone (no `--config`), `-f` keeps its original, fully self-contained behavior: you
 supply `global.registry.*`, image tags, everything yourself, `install.py` sets nothing on
@@ -366,12 +401,12 @@ itself when `--config` is supplying it.
 
 The full waterfall, highest wins:
 
-**CLI flag > environment variable > `ce-config.yaml` (`installer:` block, resolved to `--set`) > `-f`/`--values` file (raw values) > chart defaults**
+**CLI flag > environment variable > `ce-config.yaml` (`installer:` block, resolved into the installer's values file) > `-f`/`--values` file (raw values) > chart defaults**
 
 Concretely: for any key the curated `installer:` schema covers (registry, chartSource,
 versions, components, otel), a flag, env var, or `ce-config.yaml` value always overrides
-the same key in a `-f` file or the chart's own default — because it's applied as `--set`,
-and helm applies `--set` after `--values`. For anything **outside** that curated schema
+the same key in a `-f` file or the chart's own default, because the installer's values
+file is the last `--values` helm reads. For anything **outside** that curated schema
 (arbitrary chart values — resource limits, replica counts, etc.), `-f` is authoritative;
 nothing in `install.py` touches those keys.
 
@@ -380,6 +415,6 @@ nothing in `install.py` touches those keys.
 ./scripts/install.py --config scripts/ce-config.yaml.example --dry-run
 
 # Combined with a values file — config's registry/chart-source/component fields still
-# resolve as --set, layered on top of my-values.yaml:
+# land in the installer's values file, layered on top of my-values.yaml:
 ./scripts/install.py --config scripts/ce-config.yaml.example -f my-values.yaml --dry-run
 ```
