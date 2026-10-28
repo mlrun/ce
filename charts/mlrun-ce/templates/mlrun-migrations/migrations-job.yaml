@@ -1,4 +1,4 @@
-{{- if and .Values.mlrun.enabled .Values.mlrunMigrations.enabled .Release.IsUpgrade }}
+{{- if and .Values.mlrun.enabled (.Values.mlrunMigrations | default dict).enabled .Release.IsUpgrade }}
 # Triggers MLRun DB migrations after `helm upgrade`.
 # After an upgrade that requires migrations, the chief starts in `waiting_for_migrations` state and
 # rejects most requests until POST /api/v1/operations/migrations is sent. The job:

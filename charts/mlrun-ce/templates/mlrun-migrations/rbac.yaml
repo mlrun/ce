@@ -1,4 +1,4 @@
-{{- if and .Values.mlrun.enabled .Values.mlrunMigrations.enabled }}
+{{- if and .Values.mlrun.enabled (.Values.mlrunMigrations | default dict).enabled }}
 # Rendered on install as well, so they already exist when the upgrade-only Job runs
 apiVersion: v1
 kind: ServiceAccount
