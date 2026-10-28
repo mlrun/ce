@@ -471,15 +471,23 @@ def test_the_warning_validators_never_block(monkeypatch, settings, capture_logs)
 def run_cli(monkeypatch, argv):
     """Drive cli.main() with every step around the validators stubbed out.
 
-    Returns (exit code, the Settings that reached helm_install, the run_validators calls).
+    Returns (exit code, the Settings that reached helm_install, the validator calls, blocking
+    and warning-only alike).
     """
     installed = []
     validator_runs = []
 
-    for name in ("load_config", "check_requirements", "ensure_namespace", "gather_install_params"):
+    for name in (
+        "load_config",
+        "check_requirements",
+        "refuse_a_second_release",
+        "ensure_namespace",
+        "gather_install_params",
+    ):
         monkeypatch.setattr(cli, name, lambda _settings: None)
     monkeypatch.setattr(cli, "create_registry_secret", lambda _settings: None)
-    monkeypatch.setattr(cli, "run_validators", validator_runs.append)
+    monkeypatch.setattr(cli, "run_blocking_validators", lambda s: validator_runs.append("blocking"))
+    monkeypatch.setattr(cli, "run_validators", lambda s: validator_runs.append("warnings"))
     monkeypatch.setattr(cli, "helm_install", installed.append)
 
     code = cli.main(argv)
@@ -509,4 +517,4 @@ def test_validators_run_by_default(monkeypatch):
     _, _, validator_runs = run_cli(monkeypatch, [])
 
     # The other half of the flag: opt-out, never opt-in.
-    assert len(validator_runs) == 1
+    assert validator_runs == ["blocking", "warnings"]

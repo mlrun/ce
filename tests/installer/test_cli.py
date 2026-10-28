@@ -580,6 +580,17 @@ def test_uninstall_skips_every_install_step(monkeypatch):
     assert called == ["uninstall"]
 
 
+def stub_cluster_checks(monkeypatch):
+    """Stub every pre-install step that queries the cluster.
+
+    Left real, they ask whatever kubectl context the machine has: a dev laptop pointed at a
+    lab passes, a CI runner with no cluster fails the StorageClass check.
+    """
+    monkeypatch.setattr(cli, "refuse_a_second_release", lambda s: None)
+    monkeypatch.setattr(cli, "run_blocking_validators", lambda s: None)
+    monkeypatch.setattr(cli, "run_validators", lambda s: None)
+
+
 def test_a_values_file_alone_skips_secret_creation(monkeypatch, tmp_path):
     values = tmp_path / "my-values.yaml"
     values.write_text("global: {}\n")
@@ -588,7 +599,7 @@ def test_a_values_file_alone_skips_secret_creation(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "load_config", lambda s: None)
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
-    monkeypatch.setattr(cli, "run_validators", lambda s: None)
+    stub_cluster_checks(monkeypatch)
     monkeypatch.setattr(cli, "helm_install", lambda s: None)
     monkeypatch.setattr(cli, "create_registry_secret", lambda s: called.append("secret"))
     monkeypatch.setattr(cli, "gather_install_params", lambda s: called.append("params"))
@@ -609,7 +620,7 @@ def test_a_values_file_with_config_still_creates_the_secret(monkeypatch, tmp_pat
     monkeypatch.setattr(cli, "load_config", lambda s: None)
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
-    monkeypatch.setattr(cli, "run_validators", lambda s: None)
+    stub_cluster_checks(monkeypatch)
     monkeypatch.setattr(cli, "helm_install", lambda s: None)
     monkeypatch.setattr(cli, "create_registry_secret", lambda s: called.append("secret"))
     monkeypatch.setattr(cli, "gather_install_params", lambda s: called.append("params"))
@@ -643,7 +654,7 @@ def test_skip_secret_verifies_the_existing_one_instead(monkeypatch):
     monkeypatch.setattr(cli, "load_config", lambda s: None)
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
-    monkeypatch.setattr(cli, "run_validators", lambda s: None)
+    stub_cluster_checks(monkeypatch)
     monkeypatch.setattr(cli, "helm_install", lambda s: None)
     monkeypatch.setattr(cli, "gather_install_params", lambda s: None)
     monkeypatch.setattr(cli, "create_registry_secret", lambda s: called.append("create"))
