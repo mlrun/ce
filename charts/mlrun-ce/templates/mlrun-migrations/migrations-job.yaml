@@ -1,26 +1,25 @@
-{{- if and .Values.mlrun.enabled .Values.mlrunMigrations.enabled }}
+{{- if and .Values.mlrun.enabled .Values.mlrunMigrations.enabled .Release.IsUpgrade }}
 # Triggers MLRun DB migrations after `helm upgrade`.
 # After an upgrade that requires migrations, the chief starts in `waiting_for_migrations` state and
 # rejects most requests until POST /api/v1/operations/migrations is sent. The job:
 # 1. waits for the chief rollout and for all chief pods to run the new image
 # 2. waits for the chief to report the expected version via client-spec
 # 3. triggers the migrations and polls the returned background task until it finishes
+#
+# Deliberately not a Helm hook: Helm waits for hooks, so long migrations would fail the upgrade on timeout.
+# As a regular resource `helm upgrade` (also with --wait, unless --wait-for-jobs) doesn't wait for it to finish.
+# The revision suffix creates a new Job on every upgrade (Job specs are immutable); Helm deletes the
+# previous revision's Job since it is no longer part of the release.
 {{- $chief := include "mlrun-ce.mlrun.api.chief.fullname" . }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ .Release.Name }}-mlrun-migrations
+  name: {{ .Release.Name }}-mlrun-migrations-{{ .Release.Revision }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
-  annotations:
-    # post-upgrade only; the highest weight in the chart so it runs after every other post-upgrade hook
-    helm.sh/hook: post-upgrade
-    helm.sh/hook-weight: "100"
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
-  # No ttlSecondsAfterFinished: keep failed Jobs and their pods for debugging.
-  # Successful Jobs are removed by hook-succeeded, failed ones on the next upgrade by before-hook-creation
+  # No ttlSecondsAfterFinished: keep the Job and its pods for inspection until the next upgrade replaces it
   backoffLimit: {{ .Values.mlrunMigrations.backoffLimit }}
   activeDeadlineSeconds: {{ .Values.mlrunMigrations.timeoutSeconds }}
   template:
