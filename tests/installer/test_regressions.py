@@ -477,6 +477,74 @@ def test_kaniko_is_not_told_anything_when_the_registry_is_not_local(settings):
     assert not [flag for flag in flags if "kaniko" in flag]
 
 
+INGRESS_COMPONENTS = ("jupyterNotebook", "nuclio.dashboard", "mlrun.ui", "mlrun.api")
+
+
+def ingress_hosts(flags, prefix=""):
+    """The host each `<prefix>...ingress.hosts[0]` flag sets, in either chart's shape."""
+    pairs = [flag.split("=", 1) for flag in flags if "=" in flag]
+    return [value for key, value in pairs
+            if key.startswith(prefix) and ".ingress.hosts[0]" in key
+            and key.endswith(("hosts[0]", ".host"))]  # fmt: skip
+
+
+@pytest.mark.parametrize("component", INGRESS_COMPONENTS)
+def test_every_ingress_gets_the_class_and_a_host_under_the_external_address(settings, component):
+    # Only Jupyter was given the class, and every host was the chart's placeholder
+    # (`jupyter.example.com`, `nuclio.mlrun.local`, ...), so three ingresses went to the
+    # cluster default class and none answered on the address the user gave.
+    settings.enable_ingress = True
+    settings.ingress_class = "traefik"
+    settings.external_host_address = "10.0.0.5.nip.io"
+
+    flags = helm_ops.build_set_flags(settings)
+
+    assert f"{component}.ingress.ingressClassName=traefik" in flags
+    hosts = ingress_hosts(flags, f"{component}.")
+    assert len(hosts) == 1 and hosts[0].endswith(".10.0.0.5.nip.io"), hosts
+
+
+def test_ingress_hosts_are_distinct_so_the_controller_can_route_them(settings):
+    settings.enable_ingress = True
+    settings.external_host_address = "example.test"
+
+    hosts = ingress_hosts(helm_ops.build_set_flags(settings))
+    assert len(hosts) == len(INGRESS_COMPONENTS) == len(set(hosts)), hosts
+
+
+def test_ingress_hosts_and_class_from_a_values_file_are_kept(settings, tmp_path):
+    # --set beats --values, so emitting a host here would silently replace the user's own.
+    values = tmp_path / "values.yaml"
+    values.write_text(
+        "mlrun:\n  ui:\n    ingress:\n      ingressClassName: mine\n"
+        "      hosts: [{host: ui.corp.example, paths: [{path: /}]}]\n"
+        "nuclio:\n  dashboard:\n    ingress:\n      hosts: [nuclio.corp.example]\n"
+    )
+    settings.values_file = str(values)
+    settings.enable_ingress = True
+    settings.external_host_address = "example.test"
+
+    flags = helm_ops.build_set_flags(settings)
+
+    assert ingress_hosts(flags, "mlrun.ui.") == []
+    assert ingress_hosts(flags, "nuclio.dashboard.") == []
+    assert not [f for f in flags if f.startswith("mlrun.ui.ingress.ingressClassName")]
+    assert "mlrun.ui.ingress.enabled=true" in flags
+    assert "nuclio.dashboard.ingress.ingressClassName=nginx" in flags
+    assert ingress_hosts(flags, "mlrun.api.") == ["mlrun-api.example.test"]
+    assert ingress_hosts(flags, "jupyterNotebook.") == ["jupyter.example.test"]
+
+
+def test_mlrun_ingress_paths_survive_the_host_override(settings):
+    # `--set hosts[0].host=` replaces the chart's whole default hosts list, paths included;
+    # an mlrun ingress rule with no paths fails the API server's validation.
+    settings.enable_ingress = True
+
+    flags = helm_ops.build_set_flags(settings)
+    for component in ("mlrun.ui", "mlrun.api"):
+        assert f"{component}.ingress.hosts[0].paths[0].path=/" in flags
+
+
 def deep_merge(base: dict, over: dict) -> dict:
     """Merge `over` onto `base` the way helm layers a parent's values onto a subchart's.
 
@@ -530,6 +598,160 @@ def test_a_dry_run_hard_clean_lists_the_volumes_without_deleting_them(
 
     assert kube_rec.ran("get pvc") and kube_rec.ran("get pv")
     assert not kube_rec.ran("delete")
+
+
+def _uninstall_without_release(monkeypatch, settings, recorder):
+    kube_rec = recorder(answers={"get pvc": Result(0, "someone-elses-data\n")})
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(1, "not found")}))
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+    settings.uninstall = True
+    settings.hard_clean = True
+    return kube_rec
+
+
+def test_a_hard_clean_with_no_release_is_refused_non_interactively(monkeypatch, settings, recorder):
+    # A mistyped NAMESPACE finds no release, and the hard clean went on to delete every PVC
+    # in whatever namespace that turned out to be.
+    kube_rec = _uninstall_without_release(monkeypatch, settings, recorder)
+    settings.non_interactive = True
+
+    with pytest.raises(InstallerError):
+        helm_ops.do_uninstall(settings)
+    assert not kube_rec.ran("delete")
+
+
+@pytest.mark.parametrize("typed, proceeds", [("mlrun", True), ("mlurn", False), ("", False)])
+def test_a_hard_clean_with_no_release_needs_the_namespace_typed_back(
+    monkeypatch, settings, recorder, typed, proceeds
+):
+    kube_rec = _uninstall_without_release(monkeypatch, settings, recorder)
+    monkeypatch.setattr("builtins.input", lambda: typed)
+
+    if proceeds:
+        helm_ops.do_uninstall(settings)
+    else:
+        with pytest.raises(InstallerError):
+            helm_ops.do_uninstall(settings)
+    assert kube_rec.ran("delete pvc someone-elses-data") is proceeds
+
+
+def test_a_dry_run_hard_clean_with_no_release_still_lists(monkeypatch, settings, recorder):
+    kube_rec = _uninstall_without_release(monkeypatch, settings, recorder)
+    settings.non_interactive = True
+    settings.dry_run = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert kube_rec.ran("get pvc") and not kube_rec.ran("delete")
+
+
+def test_hard_clean_waits_for_the_claims_before_looking_for_released_volumes(
+    monkeypatch, settings, recorder
+):
+    # The --wait=false fallback returns while the claim still exists, so its PV was still
+    # Bound when listed and the hard clean skipped exactly the volume it had just orphaned.
+    kube_rec = recorder(answers={"get pvc": Result(0, "data-0\n")})
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+
+    helm_ops.do_hard_clean(settings)
+
+    joined = kube_rec.joined
+    wait = next(i for i, call in enumerate(joined) if call.startswith("wait --for=delete pvc"))
+    assert wait < next(i for i, call in enumerate(joined) if call.startswith("get pv "))
+
+
+# ------------------------------------------------------------------------------------------
+# The local registry and the pull secret outlived every uninstall
+# ------------------------------------------------------------------------------------------
+
+
+def test_uninstall_removes_only_what_the_installer_labelled(monkeypatch, settings, recorder):
+    kube_rec = recorder(
+        answers={"get deployment,service,ingress,secret": Result(0, "deployment.apps/x\n")}
+    )
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+
+    helm_ops.do_uninstall(settings)
+
+    [delete] = kube_rec.argv_containing("delete deployment,service,ingress,secret")
+    # By label, never by name: a --skip-secret pull secret is the user's, not ours.
+    assert delete[delete.index("-l") + 1] == registry.MANAGED_BY_LABEL
+    assert "registry-credentials" not in delete
+
+
+def test_a_dry_run_uninstall_lists_the_installer_resources_without_deleting(
+    monkeypatch, settings, recorder
+):
+    kube_rec = recorder(
+        answers={"get deployment,service,ingress,secret": Result(0, "deployment.apps/x\n")}
+    )
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+    settings.dry_run = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert not kube_rec.ran("delete")
+
+
+@pytest.mark.parametrize(
+    "manifest",
+    [registry.LOCAL_REGISTRY_MANIFEST, registry.LOCAL_REGISTRY_INGRESS,
+     registry.DOCKER_CONFIG_SECRET],
+)  # fmt: skip
+def test_everything_the_installer_creates_carries_the_uninstall_label(manifest):
+    rendered = manifest.format(
+        namespace="mlrun", ingress_class="nginx", host="h", name="n", payload="p"
+    )
+    key, value = registry.MANAGED_BY_LABEL.split("=")
+    for doc in yaml.safe_load_all(rendered):
+        assert doc["metadata"]["labels"][key] == value, doc["kind"]
+
+
+def test_the_local_registry_keeps_its_images_and_is_pinned():
+    docs = {doc["kind"]: doc for doc in yaml.safe_load_all(
+        registry.LOCAL_REGISTRY_MANIFEST.format(namespace="mlrun"))}  # fmt: skip
+    pod = docs["Deployment"]["spec"]["template"]["spec"]
+    [container] = pod["containers"]
+    assert container["image"] != "registry:2" and ":" in container["image"]
+    assert container["resources"]["limits"]["memory"]
+    [mount] = container["volumeMounts"]
+    assert mount["mountPath"] == "/var/lib/registry"
+    [volume] = pod["volumes"]
+    assert (
+        volume["persistentVolumeClaim"]["claimName"]
+        == docs["PersistentVolumeClaim"]["metadata"]["name"]
+    )
+    assert docs["Deployment"]["spec"]["strategy"]["type"] == "Recreate"
+
+
+# ------------------------------------------------------------------------------------------
+# Blocking validators ran after the namespace, registry and secret already existed
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_blocking_validator_failure_leaves_the_cluster_untouched(monkeypatch, settings):
+    mutated = []
+    for step in ("ensure_namespace", "deploy_local_registry", "create_registry_secret"):
+        monkeypatch.setattr(cli, step, lambda s, step=step: mutated.append(step))
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
+    monkeypatch.setattr(cli, "resolve_external_host", lambda s: None)
+    monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
+
+    def fail(s):
+        mutated.append("validated")
+        raise InstallerError(code=1)
+
+    monkeypatch.setattr(cli, "run_blocking_validators", fail)
+    settings.local_registry = True
+
+    with pytest.raises(InstallerError):
+        cli.execute(settings)
+    assert mutated == ["validated"]
 
 
 # ------------------------------------------------------------------------------------------
@@ -759,22 +981,29 @@ def test_a_hard_clean_leaves_a_bound_pv_alone(monkeypatch, settings, recorder):
 
 def test_the_users_helm_repository_list_is_not_rewritten(monkeypatch, tmp_path):
     # `helm repo add --force-update mlrun-ce` rebinds the alias in the user's own
-    # repositories.yaml, and nothing put it back afterwards.
-    monkeypatch.delenv("HELM_REPOSITORY_CONFIG", raising=False)
+    # repositories.yaml, and nothing put it back afterwards. The cache is the same leak one
+    # level down: `repo update` writes `mlrun-ce-index.yaml` into the shared cache.
+    # Set to "" rather than deleted, so monkeypatch restores what the installer writes.
+    monkeypatch.setenv("HELM_REPOSITORY_CONFIG", "")
+    monkeypatch.setenv("HELM_REPOSITORY_CACHE", "")
 
     cluster.isolate_helm_repo_config()
 
     configured = Path(os.environ["HELM_REPOSITORY_CONFIG"])
+    cache = Path(os.environ["HELM_REPOSITORY_CACHE"])
     assert configured != Path.home() / ".config" / "helm" / "repositories.yaml"
     assert not configured.exists(), "helm creates it; the installer only names the location"
+    assert cache.parent == configured.parent, "the cache must be isolated alongside the list"
 
 
-def test_an_explicit_helm_repository_config_is_respected(monkeypatch):
+def test_explicit_helm_repository_locations_are_respected(monkeypatch):
     monkeypatch.setenv("HELM_REPOSITORY_CONFIG", "/somewhere/mine.yaml")
+    monkeypatch.setenv("HELM_REPOSITORY_CACHE", "/somewhere/cache")
 
     cluster.isolate_helm_repo_config()
 
     assert os.environ["HELM_REPOSITORY_CONFIG"] == "/somewhere/mine.yaml"
+    assert os.environ["HELM_REPOSITORY_CACHE"] == "/somewhere/cache"
 
 
 def chart_values_with_subcharts(chart_dir: Path) -> dict:
@@ -836,10 +1065,17 @@ def test_every_set_flag_names_a_key_the_chart_declares(settings):
     for path in paths:
         node = values
         for part in path.split("."):
-            if not isinstance(node, dict) or part not in node:
+            key, _, index = part.partition("[")
+            if not isinstance(node, dict) or key not in node:
                 missing.append(path)
                 break
-            node = node[part]
+            node = node[key]
+            if index:
+                position = int(index.rstrip("]"))
+                if not isinstance(node, list) or position >= len(node):
+                    missing.append(path)
+                    break
+                node = node[position]
     assert not missing, "--set paths no chart declares: " + ", ".join(missing)
 
 
@@ -896,8 +1132,42 @@ class _ImmutableOnFirstApply(Recorder):
     def __call__(self, *args, **kwargs):
         result = super().__call__(*args, **kwargs)
         if self.calls[-1][:1] == ["apply"] and len(self.argv_containing("apply")) == 1:
-            return Result(1, "", 'Secret "registry-credentials" is invalid: type: immutable')
+            return Result(1, "", IMMUTABLE_TYPE_ERROR)
         return result
+
+
+IMMUTABLE_TYPE_ERROR = (
+    'The Secret "registry-credentials" is invalid: type: Invalid value: '
+    '"kubernetes.io/dockerconfigjson": field is immutable'
+)
+
+
+def _secret_settings(settings):
+    settings.local_registry = True
+    settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
+    return settings
+
+
+def test_a_failed_secret_update_does_not_delete_the_existing_secret(monkeypatch, settings):
+    # Any apply failure used to be read as "type is immutable", so a Forbidden, a conflict
+    # or an API timeout deleted working credentials — and the retry then failed the same way.
+    rec = Recorder(answers={"apply": Result(1, "", 'secrets "registry-credentials" is forbidden')})
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    with pytest.raises(InstallerError):
+        registry.create_registry_secret(_secret_settings(settings))
+
+    assert not rec.ran("delete"), f"a working secret must survive: {rec.joined}"
+
+
+def test_a_secret_that_cannot_be_deleted_is_not_reapplied(monkeypatch, settings):
+    rec = _ImmutableOnFirstApply(answers={"delete": Result(1, "", "forbidden")})
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    with pytest.raises(InstallerError):
+        registry.create_registry_secret(_secret_settings(settings))
+
+    assert len(rec.argv_containing("apply")) == 1, "no retry once the delete has failed"
 
 
 def test_a_secret_that_cannot_be_updated_in_place_is_replaced(monkeypatch, settings):

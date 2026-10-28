@@ -145,6 +145,8 @@ def handle_helm(args):
 
 
 def handle_docker(args):
+    if len(args) >= 2 and args[0] == "--config":
+        args = args[2:]
     if args and args[0] == "info":
         return int(os.environ.get("STUB_DOCKER_INFO_EXIT", "0")), ""
     if args and args[0] == "login":

@@ -4,3 +4,4 @@ exit: 0
 ["kubectl", "cluster-info"]
 ["docker", "info"]
 ["helm", "status", "mlrun-ce", "--namespace", "mlrun"]
+["kubectl", "get", "deployment,service,ingress,secret", "--namespace", "mlrun", "-l", "app.kubernetes.io/managed-by=mlrun-ce-installer", "--no-headers", "-o", "name"]

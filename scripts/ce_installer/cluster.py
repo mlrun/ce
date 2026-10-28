@@ -189,14 +189,23 @@ def isolate_helm_repo_config() -> None:
     somewhere else — a change to their machine that outlives the install and that nothing
     here undoes. A private file gives the run the alias it needs and leaves theirs alone.
 
-    An explicit HELM_REPOSITORY_CONFIG is left as-is: that is the user naming a file on
+    The cache goes with it: `helm repo update` writes `<alias>-index.yaml` into the shared
+    HELM_REPOSITORY_CACHE, so the user's own `mlrun-ce` alias would otherwise read this
+    run's index until they next updated.
+
+    Either variable the user set explicitly is left as-is: that is them naming a location on
     purpose.
     """
-    if os.environ.get("HELM_REPOSITORY_CONFIG"):
+    isolated = [name for name in ("HELM_REPOSITORY_CONFIG", "HELM_REPOSITORY_CACHE")
+                if not os.environ.get(name)]  # fmt: skip
+    if not isolated:
         return
-    directory = tempfile.mkdtemp(prefix="mlrun-ce-helm-repos-")
-    os.environ["HELM_REPOSITORY_CONFIG"] = str(Path(directory) / "repositories.yaml")
-    atexit.register(shutil.rmtree, directory, True)
+    directory = Path(tempfile.mkdtemp(prefix="mlrun-ce-helm-repos-"))
+    atexit.register(shutil.rmtree, str(directory), True)
+    if "HELM_REPOSITORY_CONFIG" in isolated:
+        os.environ["HELM_REPOSITORY_CONFIG"] = str(directory / "repositories.yaml")
+    if "HELM_REPOSITORY_CACHE" in isolated:
+        os.environ["HELM_REPOSITORY_CACHE"] = str(directory / "cache")
 
 
 def resolve_chart_source(settings: Settings) -> None:

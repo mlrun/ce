@@ -128,8 +128,8 @@ docker push registry.host.docker.internal/myimage
 
 **2. Kaniko inside the cluster**
 
-The installer automatically passes `mlrun.api.kaniko.insecureRegistry=true` to the Helm
-chart whenever `--local-registry` is used, with or without ingress — `registry:2` serves
+The installer automatically passes `nuclio.dashboard.kaniko.insecurePushRegistry=true` and
+`insecurePullRegistry=true` to the Helm chart whenever `--local-registry` is used, with or without ingress — `registry:2` serves
 plain HTTP on its ClusterIP too — so MLRun build jobs use HTTP when pushing to the local
 registry. No manual action needed.
 
@@ -189,10 +189,24 @@ anyway (the Ingress resources get created either way). Install a controller prov
 that class — e.g. [ingress-nginx](https://kubernetes.github.io/ingress-nginx/) — and the
 existing Ingress resources will start resolving with no re-install needed.
 
+The hosts are `mlrun.`, `mlrun-api.`, `jupyter.` and `nuclio.` prefixed to the external
+host address. With a bare IP such as `192.168.49.2`, `jupyter.192.168.49.2` is not a name
+anything resolves: use a wildcard-DNS name instead, e.g.
+`EXTERNAL_HOST_ADDRESS=192.168.49.2.nip.io`, or set your own hosts in a `-f` values file.
+
+### `--hard-clean` refuses: "release ... is not in namespace"
+
+The release was not found, so nothing vouches for the namespace — and a hard clean deletes
+every PVC in it. A mistyped `NAMESPACE` would otherwise wipe someone else's volumes.
+Interactively you are asked to type the namespace name back; under `--non-interactive` the
+run stops. Check `NAMESPACE` (and `--kube-context`), or rerun interactively to confirm.
+`--dry-run` still lists what would be deleted.
+
 ### Deleting everything, including the namespace
 
 `--uninstall --hard-clean` runs `helm uninstall` and then deletes every PVC in the
-namespace and every PV bound to it. **This is irreversible and will cause data loss.**
+namespace (the local registry's included) and every released or failed PV that was bound
+to it. **This is irreversible and will cause data loss.**
 The namespace and CRDs themselves are not deleted by `install.py`; remove them yourself
 if needed:
 

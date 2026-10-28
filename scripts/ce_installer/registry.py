@@ -11,10 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Registry pull secret, the optional in-cluster registry, and the CoreDNS patch."""
+"""Registry pull secret, the optional in-cluster registry, and the CoreDNS hosts report."""
 
 import base64
 import json
+import re
 from pathlib import Path
 from typing import List
 
@@ -23,13 +24,41 @@ from .console import InstallerError, die, log_error, log_info, log_warn
 from .settings import DEFAULT_DOCKER_SERVER, Settings, env_str, prompt_or_env
 from .shell import kubectl
 
-LOCAL_REGISTRY_MANIFEST = """apiVersion: apps/v1
+# Everything the installer creates outside the chart carries this label, so --uninstall can
+# remove exactly that and never a same-named object the user brought (a --skip-secret
+# pull secret, say).
+MANAGED_BY_LABEL = "app.kubernetes.io/managed-by=mlrun-ce-installer"
+_MANAGED_BY_YAML = "app.kubernetes.io/managed-by: mlrun-ce-installer"
+
+LOCAL_REGISTRY_IMAGE = "registry:2.8.3"
+LOCAL_REGISTRY_STORAGE = "10Gi"
+
+LOCAL_REGISTRY_MANIFEST = f"""apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-registry
+  namespace: {{namespace}}
+  labels:
+    {_MANAGED_BY_YAML}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {LOCAL_REGISTRY_STORAGE}
+---
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: local-registry
-  namespace: {namespace}
+  namespace: {{namespace}}
+  labels:
+    {_MANAGED_BY_YAML}
 spec:
   replicas: 1
+  # ReadWriteOnce: a rolling update's new pod could not mount the volume the old one holds.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: local-registry
@@ -40,15 +69,30 @@ spec:
     spec:
       containers:
         - name: registry
-          image: registry:2
+          image: {LOCAL_REGISTRY_IMAGE}
           ports:
             - containerPort: 5000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: local-registry
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: local-registry
-  namespace: {namespace}
+  namespace: {{namespace}}
+  labels:
+    {_MANAGED_BY_YAML}
 spec:
   selector:
     app: local-registry
@@ -58,17 +102,19 @@ spec:
       targetPort: 5000
 """
 
-LOCAL_REGISTRY_INGRESS = """apiVersion: networking.k8s.io/v1
+LOCAL_REGISTRY_INGRESS = f"""apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: local-registry
-  namespace: {namespace}
+  namespace: {{namespace}}
+  labels:
+    {_MANAGED_BY_YAML}
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
 spec:
-  ingressClassName: {ingress_class}
+  ingressClassName: {{ingress_class}}
   rules:
-    - host: registry.{host}
+    - host: registry.{{host}}
       http:
         paths:
           - path: /
@@ -81,14 +127,16 @@ spec:
 """
 
 
-DOCKER_CONFIG_SECRET = """apiVersion: v1
+DOCKER_CONFIG_SECRET = f"""apiVersion: v1
 kind: Secret
 metadata:
-  name: {name}
-  namespace: {namespace}
+  name: {{name}}
+  namespace: {{namespace}}
+  labels:
+    {_MANAGED_BY_YAML}
 type: kubernetes.io/dockerconfigjson
 data:
-  .dockerconfigjson: {payload}
+  .dockerconfigjson: {{payload}}
 """
 
 
@@ -262,6 +310,11 @@ def verify_existing_registry_secret(settings: Settings) -> None:
         raise InstallerError(code=1)
 
 
+def _is_immutable_type_change(error: str) -> bool:
+    # ValidateSecretUpdate: `type: Invalid value: "<new type>": field is immutable`.
+    return "field is immutable" in error and re.search(r"\btype: Invalid value", error) is not None
+
+
 def _apply_registry_secret(settings: Settings, manifest: str) -> None:
     """Create or update the pull secret in a single call.
 
@@ -271,24 +324,37 @@ def _apply_registry_secret(settings: Settings, manifest: str) -> None:
     and lost them outright if anything failed between the delete and the create.
 
     The one thing `apply` cannot do is change a Secret's `type`, which is immutable, so a
-    name already taken by an Opaque secret still needs a replace. Fall back only there.
+    name already taken by an Opaque secret still needs a replace. Fall back only there:
+    matched on the API server's own wording, because a Forbidden, a conflict or a timeout
+    would otherwise delete working credentials and then likely fail the retry the same way.
     """
+    name = settings.registry_secret_name
     applied = kubectl(
         settings, "apply", "-f", "-", "--namespace", settings.namespace, input_data=manifest
     )
     if applied.ok:
         return
 
-    log_warn(f"Could not update secret '{settings.registry_secret_name}' in place; replacing it.")
-    kubectl(
+    if not _is_immutable_type_change(applied.err):
+        log_error(f"Could not create or update secret '{name}'; the existing one is untouched.")
+        log_error(f"  {applied.err.strip() or applied.out.strip()}")
+        raise InstallerError(code=1)
+
+    log_warn(f"Secret '{name}' exists with a different type, which cannot change in place.")
+    log_warn("  Replacing it.")
+    deleted = kubectl(
         settings,
         "delete",
         "secret",
-        settings.registry_secret_name,
+        name,
         "--namespace",
         settings.namespace,
         "--ignore-not-found",
     )
+    if not deleted.ok:
+        log_error(f"Could not delete secret '{name}' to replace it; it is unchanged.")
+        log_error(f"  {deleted.err.strip() or deleted.out.strip()}")
+        raise InstallerError(code=1)
     kubectl(
         settings,
         "apply",

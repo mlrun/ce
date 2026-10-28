@@ -126,7 +126,10 @@ def run_case(args, tmp_path):
     log = tmp_path / "calls.log"
     log.write_text("")
 
-    env = dict(os.environ)
+    # STUB_* are the stub's answer knobs, so one left exported in the caller's shell (say
+    # STUB_HELM_EXIT=1) would change what every case records and make a local re-record
+    # disagree with CI. Each case sets the ones it needs explicitly below.
+    env = {key: value for key, value in os.environ.items() if not key.startswith("STUB_")}
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     env["STUB_LOG"] = str(log)
     # A complete non-interactive answer set, so the run never stops at a prompt and any

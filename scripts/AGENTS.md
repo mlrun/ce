@@ -87,13 +87,16 @@ failure raised inside the command silently exits 0.
    invocation predating commands relied on; an unrecognised bare word is an error rather
    than an install, so a typo can't deploy.
 1. `parse_args` — flags/env, precedence flag > env > default
-2. `check_requirements` — helm, kubectl, docker present and reachable
+2. `check_requirements` — helm, kubectl, docker present and reachable; then
+   `run_blocking_validators` (Helm version, default StorageClass) unless `--skip-validators`.
+   They run here, before anything below mutates the cluster, so a failure leaves nothing
+   behind
 3. `ensure_namespace` — creates `NAMESPACE`; in `--dry-run` only logs what it would do (no cluster mutation)
 4. `resolve_external_host` — only if `LOCAL_REGISTRY` or `ENABLE_INGRESS`
 5. `deploy_local_registry` — only if `--local-registry`
 6. `create_registry_secret` — skipped via `--skip-secret`, or when `-f VALUES_FILE` is given **and** `--config` is absent (pure `-f`-only mode keeps its old self-contained behavior; `-f` + `--config` together still creates the secret). In `--dry-run` only logs, doesn't touch the cluster
 7. `gather_install_params` — resolves `REGISTRY_URL` (same `-f`-only skip condition as above)
-8. `run_validators` — skippable via `--skip-validators`; includes `validate_ingress_controller`, which warns (never blocks) if `--enable-ingress`'s IngressClass isn't found
+8. `run_validators` — the warning-only checks, skippable via `--skip-validators`; includes `validate_ingress_controller`, which warns (never blocks) if `--enable-ingress`'s IngressClass isn't found, and the registry login, which runs here because it needs the credentials step 6 resolved
 9. `helm_install` → `resolve_chart_source` (published repo vs `--chart-path`) → `helm install/upgrade`, with `--values`/`--set` composed per the precedence rule below
 
 Value precedence, highest first: flag > env > `ce-config.yaml` (applied as `--set`) >
@@ -405,6 +408,39 @@ node image is the safest choice.
   frequently unreachable for those tools, which typically NodePort-map to `localhost`
   instead. Still just a suggested default — override with `EXTERNAL_HOST_ADDRESS` when
   it's wrong for a given cluster.
+- **`--enable-ingress` gave every Ingress a placeholder host and only Jupyter a class.**
+  mlrun-api, mlrun-ui and Jupyter all rendered `chart-example.local` with path `/`, which
+  collide, nuclio got `nuclio.local`, and three of the four fell to the cluster's default
+  IngressClass. `ingress_set_flags` now sets the class on all four and hosts
+  `mlrun.`/`mlrun-api.`/`jupyter.`/`nuclio.<external host>`, restating mlrun's `paths`
+  because `--set hosts[0].host=` replaces the whole default list. A host or class set in
+  the `-f` file is left out of the `--set`s, which would otherwise override it.
+- **A failed registry-secret apply deleted the secret.** Any apply failure (Forbidden,
+  conflict, timeout) led to a delete and re-apply, losing working credentials. Only the
+  API server's `type: Invalid value ... field is immutable` triggers the replace now;
+  anything else is reported with the existing secret untouched.
+- **A blocking validator failure left the namespace, registry and secret behind.** The
+  Helm-version and StorageClass checks ran after all three had been created. They now run
+  straight after `check_requirements`.
+- **`--hard-clean` with no release deleted every PVC in the namespace.** A mistyped
+  `NAMESPACE` found no release and went on wiping that namespace's volumes. With no
+  release, the namespace has to be typed back; `--non-interactive` refuses.
+- **The hard clean skipped the PVs it had just orphaned.** It listed PVs straight after a
+  `--wait=false` PVC delete, while they were still Bound. It now `kubectl wait
+  --for=delete` on the PVCs (60s) first.
+- **`--uninstall` left the local registry and the pull secret.** helm cannot see objects
+  the installer applied itself. They carry `app.kubernetes.io/managed-by=mlrun-ce-installer`
+  and `remove_installer_resources` deletes by that label — never by name, so a
+  `--skip-secret` secret the user created survives. The registry's PVC stays until
+  `--hard-clean`, like the chart's PVCs.
+- **The local registry lost every image on restart.** `registry:2` ran with no volume, an
+  unpinned tag and no resources. It now has a 10Gi PVC (Recreate strategy, since it is
+  ReadWriteOnce), `registry:2.8.3`, and requests/limits.
+- **The registry-auth check wrote the user's `~/.docker/config.json`.** `docker login`
+  now runs with a throwaway `--config` directory.
+- **`helm repo update` wrote this run's index into the user's repository cache.**
+  `isolate_helm_repo_config` already moved `HELM_REPOSITORY_CONFIG` to a temp dir; it now
+  moves `HELM_REPOSITORY_CACHE` with it, unless the user set either explicitly.
 
 ## Testing
 
@@ -431,7 +467,8 @@ flags, and what the installer exits with. `dry-rnu.txt` is the clearest example:
 - The stub derives its answers from the arguments rather than returning fixed values, so a
   test cannot pass by accident once the installer stops asking the question it was supposed
   to ask. `STUB_*` env vars steer the interesting branches (`STUB_SC_STABLE`,
-  `STUB_HELM_EXIT`, `STUB_NODE_MEMORY`, …).
+  `STUB_HELM_EXIT`, `STUB_NODE_MEMORY`, …). `run_case` drops any `STUB_*` inherited from
+  the caller's shell, so a stray export cannot make a local re-record disagree with CI.
 - Add a case to `CASES` whenever a flag gains behaviour that reaches helm or kubectl.
   Refusals belong there too — *how* the installer rejects a bad value is as much a contract
   as how it succeeds, and six of the 36 cases exist only to pin that.
@@ -452,7 +489,7 @@ flags, and what the installer exits with. `dry-rnu.txt` is the clearest example:
 
 ### Unit suites (`make installer-test-unit`)
 
-253 tests across `test_cli.py`, `test_config.py`, `test_validators.py`, `test_cluster.py`,
+276 tests across `test_cli.py`, `test_config.py`, `test_validators.py`, `test_cluster.py`,
 `test_registry.py` and `test_regressions.py`. They patch the helm/kubectl wrappers and
 exercise one function at a time, covering what the golden suite structurally cannot: values
 computed and never sent to a command, text printed to the user, and the precedence rules

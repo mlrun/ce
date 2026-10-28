@@ -24,6 +24,7 @@ Test names end in the symptom a user would report, matching test_regressions.py.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -330,6 +331,11 @@ def test_successful_docker_login_is_reported(monkeypatch, settings, capture_logs
     # The password goes over stdin; on argv it would show up in `ps` and in shell history.
     assert "--password-stdin" in argv
     assert "secret" not in argv
+    # Without its own --config, a successful login stores the credentials in the user's
+    # ~/.docker/config.json.
+    config_dir = argv[argv.index("--config") + 1]
+    assert argv.index("--config") < argv.index("login")
+    assert not Path(config_dir).exists(), "the throwaway docker config must be cleaned up"
 
 
 # ------------------------------------------------------------------------------------------
@@ -439,13 +445,21 @@ def test_run_validators_reports_every_blocking_failure_before_exiting_once(
     monkeypatch.setattr(validators, "docker_available", lambda: False)
 
     with pytest.raises(InstallerError) as excinfo:
-        validators.run_validators(settings)
+        validators.run_blocking_validators(settings)
 
     assert excinfo.value.code == 1
     assert "One or more required pre-install checks failed" in str(excinfo.value)
     assert "Helm version 3.5 is below" in log_text(logs)
     assert "No default StorageClass" in log_text(logs)
-    # The cluster is 1.30 and informational-only, so it must not have contributed a failure.
+
+
+def test_the_warning_validators_never_block(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.0")})
+    monkeypatch.setattr(validators, "docker_available", lambda: False)
+
+    validators.run_validators(settings)
+
     assert "Kubernetes version: 1.30" in log_text(logs)
 
 

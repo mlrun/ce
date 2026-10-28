@@ -63,7 +63,7 @@ Options:
   --enable-otel-collector         Deploy the OpenTelemetry Collector (OTLP -> Prometheus)
   --enable-otel-namespace-label   Auto-instrument every Python pod in the namespace
   --enable-otel-instrumentation   Create the Instrumentation CR
-  --local-registry               Deploy a local registry:2 registry inside the cluster
+  --local-registry               Deploy a local registry:2.8.3 registry inside the cluster
   --chart-path DIR               Install from a local chart directory instead of the published repo;
                                  use ./charts/mlrun-ce for this repo's chart (resolves the chart's
                                  dependencies first, honouring requirements.lock)
@@ -118,7 +118,7 @@ Options:
 | `ENABLE_OTEL_COLLECTOR`       | `false`                     | Set to `true` for `--set opentelemetry.collector.enabled=true` |
 | `ENABLE_OTEL_NAMESPACE_LABEL` | `false`                     | Set to `true` for `--set opentelemetry.namespaceLabel.enabled=true` |
 | `ENABLE_OTEL_INSTRUMENTATION` | `false`                     | Set to `true` for `--set opentelemetry.instrumentation.enabled=true` |
-| `LOCAL_REGISTRY`       | `false`                           | Set to `true` to deploy a local `registry:2` registry   |
+| `LOCAL_REGISTRY`       | `false`                           | Set to `true` to deploy a local `registry:2.8.3` registry |
 | `CHART_PATH`           | —                                 | Path to a local chart directory, e.g. `./charts/mlrun-ce` |
 | `CE_VERSION`           | —                                 | Pin the chart version (ignored when `CHART_PATH` is set)|
 | `DRY_RUN`              | `false`                           | Set to `true` to render the chart without deploying     |

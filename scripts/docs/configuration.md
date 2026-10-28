@@ -128,6 +128,21 @@ class (default `nginx`) is found, the pre-install validators warn but the instal
 proceeds — the Ingress resources are created either way, they just won't resolve until a
 controller providing that class exists.
 
+All four Ingresses use that one class, and each gets its own host under the external host
+address:
+
+| Ingress          | Host               |
+|------------------|--------------------|
+| MLRun UI         | `mlrun.<host>`     |
+| MLRun API        | `mlrun-api.<host>` |
+| Jupyter          | `jupyter.<host>`   |
+| Nuclio dashboard | `nuclio.<host>`    |
+
+These names must resolve to your controller: a wildcard DNS record for a real domain, or a
+wildcard-DNS name for a bare IP (`EXTERNAL_HOST_ADDRESS=192.168.49.2.nip.io` —
+`jupyter.192.168.49.2` resolves nowhere). A host or `ingressClassName` you set for a
+component in a `-f` values file is kept; the installer only fills in the ones you left out.
+
 ```bash
 ./scripts/install.py --enable-ingress
 
@@ -137,8 +152,13 @@ controller providing that class exists.
 
 ## Install with local registry
 
-Deploys a `registry:2` container inside the cluster as a ClusterIP service and wires
-MLRun CE to use it.
+Deploys a `registry:2.8.3` container inside the cluster as a ClusterIP service and wires
+MLRun CE to use it. Images are stored on a 10Gi PVC (`local-registry`, default
+StorageClass), so they survive a pod restart. `--uninstall` removes the registry's
+Deployment, Service and Ingress and the pull secret the installer created; the PVC, like
+the chart's own, goes only with `--hard-clean`. Objects are matched by the
+`app.kubernetes.io/managed-by=mlrun-ce-installer` label, so a pull secret you created
+yourself for `--skip-secret` is never removed.
 
 Without `--enable-ingress`, the registry is reachable only in-cluster via its Kubernetes
 service DNS name (`local-registry.<namespace>.svc.cluster.local:5000`):
@@ -166,13 +186,14 @@ Docker Desktop TLS/hosts-file setup for this combo is covered in [faq.md](faq.md
 Before every real (or dry-run) install, the installer runs a set of read-only pre-flight
 checks against the target cluster:
 
-- **Blocking** (exit 1, no `helm` call is made): Helm CLI version >= 3.6, a default
+- **Blocking** (exit 1, run before the namespace, local registry or pull secret is
+  created, so a failure leaves the cluster untouched): Helm CLI version >= 3.6, a default
   StorageClass exists.
 - **Warning only** (logged, install continues): the cluster's Kubernetes version (reported
   always, and compared only against an explicitly set `MIN_K8S_VERSION`), registry login with the resolved
-  credentials (skipped for `--local-registry`, for `--dry-run` since a successful login
-  rewrites your `~/.docker/config.json`, and when no credentials were resolved yet,
-  e.g. `-f`-only mode), an IngressClass matching `--enable-ingress`'s class exists
+  credentials into a throwaway docker config, never your `~/.docker/config.json`
+  (skipped for `--local-registry`, for `--dry-run`, and when no credentials were resolved
+  yet, e.g. `-f`-only mode), an IngressClass matching `--enable-ingress`'s class exists
   (skipped when `--enable-ingress` isn't used — this installer never installs a
   controller itself), the chart's fixed NodePorts
   (`30010/20/40/50/60/70`, `30093/94`, `30100`, `30110`) already in use by a Service this
@@ -180,8 +201,8 @@ checks against the target cluster:
   to something else is a conflict too, and total cluster node capacity below the
   documented floor (8Gi allocatable RAM / 8Gi allocatable ephemeral storage).
 
-All checks run and report together — a blocking failure doesn't stop the others from
-running, so you see every problem in one pass. Skip the whole dispatcher with
+Both blocking checks run before either fails the install, so you see both problems in one
+pass. Skip the whole dispatcher with
 `--skip-validators` / `SKIP_VALIDATORS=true` if you need to proceed anyway:
 
 ```bash

@@ -13,13 +13,14 @@
 # limitations under the License.
 """Pre-install checks.
 
-Blocking: Helm version and default StorageClass. Everything else reports and continues —
-`run_validators` collects failures and exits once at the end rather than stopping at the
-first one, so a user fixes everything in one pass.
+Blocking: Helm version and default StorageClass, run by `run_blocking_validators` before
+the cluster is touched; both run before it exits, so a user fixes everything in one pass.
+Everything in `run_validators` reports and continues.
 """
 
 import json
 import re
+import tempfile
 from typing import List, Optional, Tuple
 
 from .console import die, log_error, log_info, log_warn
@@ -188,19 +189,20 @@ def validate_registry_auth(settings: Settings) -> bool:
         )
         return True
     if settings.dry_run:
-        # The only validator that writes anywhere: a successful `docker login` rewrites the
-        # invoking user's ~/.docker/config.json. Harmless in a real install, but a dry run
-        # is supposed to leave the machine exactly as it found it.
-        log_info(
-            "  Registry auth: skipped (--dry-run; a login would rewrite ~/.docker/config.json)"
-        )
+        # A dry run sends the credentials nowhere: the login is the only validator that
+        # hands them to a third party.
+        log_info("  Registry auth: skipped (--dry-run)")
         return True
 
     server = settings.registry_server_value or DEFAULT_DOCKER_SERVER
-    result = run(
-        ["docker", "login", server, "-u", settings.registry_username_value, "--password-stdin"],
-        input_data=settings.registry_password_value,
-    )
+    # A throwaway --config, because a successful login stores the credentials in the
+    # invoking user's ~/.docker/config.json — a check has no business doing that.
+    with tempfile.TemporaryDirectory(prefix="mlrun-ce-docker-") as docker_config:
+        result = run(
+            ["docker", "--config", docker_config, "login", server,
+             "-u", settings.registry_username_value, "--password-stdin"],
+            input_data=settings.registry_password_value,
+        )  # fmt: skip
     if result.ok:
         log_info(f"  Registry auth: login to {server} succeeded")
     else:
@@ -301,21 +303,28 @@ def validate_node_capacity(settings: Settings) -> bool:
     return True
 
 
-def run_validators(settings: Settings) -> None:
+def run_blocking_validators(settings: Settings) -> None:
+    """The checks that can stop an install, run before anything mutates the cluster.
+
+    They used to run alongside the warnings, after the namespace, the local registry and
+    the pull secret had been created, so a missing StorageClass left all three behind.
+    Neither needs anything those steps produce.
+    """
     log_info("Running pre-install validators...")
-    failed = False
-
-    validate_k8s_version(settings)
-    failed |= not validate_helm_version(settings)
+    failed = not validate_helm_version(settings)
     failed |= not validate_storage_class(settings)
-    validate_registry_auth(settings)
-    validate_ingress_controller(settings)
-    validate_nodeport_conflicts(settings)
-    validate_node_capacity(settings)
-
     if failed:
         raise die(
             "One or more required pre-install checks failed (see above). Bypass with "
             "--skip-validators if you must proceed anyway."
         )
+
+
+def run_validators(settings: Settings) -> None:
+    """The warning-only checks. Registry auth needs the credentials resolved first."""
+    validate_k8s_version(settings)
+    validate_registry_auth(settings)
+    validate_ingress_controller(settings)
+    validate_nodeport_conflicts(settings)
+    validate_node_capacity(settings)
     log_info("Pre-install validation passed.")

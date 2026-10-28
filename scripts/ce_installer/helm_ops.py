@@ -15,12 +15,16 @@
 
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import List
 
+import yaml
+
 from .cluster import resolve_chart_source
 from .console import InstallerError, die, err, log_error, log_info, log_warn, out
+from .registry import MANAGED_BY_LABEL
 from .settings import Settings
 from .shell import check_requirements, helm, helm_cmd, kubectl, stream
 from .ui import print_notes_table, run_deployment_progress_ui
@@ -73,14 +77,7 @@ def build_set_flags(settings: Settings) -> List[str]:
         flags += ["--set", "timescaledb.enabled=false"]
 
     if settings.enable_ingress:
-        flags += ["--set", "jupyterNotebook.ingress.enabled=true"]
-        flags += [
-            "--set",
-            f"jupyterNotebook.ingress.ingressClassName={settings.ingress_class}",
-        ]
-        flags += ["--set", "nuclio.dashboard.ingress.enabled=true"]
-        flags += ["--set", "mlrun.api.ingress.enabled=true"]
-        flags += ["--set", "mlrun.ui.ingress.enabled=true"]
+        flags += ingress_set_flags(settings)
 
     if settings.enable_otel_operator:
         flags += ["--set", "opentelemetry-operator.enabled=true"]
@@ -104,6 +101,72 @@ def build_set_flags(settings: Settings) -> List[str]:
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePullRegistry=true"]
 
     return flags
+
+
+def ingress_set_flags(settings: Settings) -> List[str]:
+    """Enable all four ingresses on one class, each on a host under the external address.
+
+    Every subchart ships a placeholder host (`chart-example.local`, `nuclio.local`), so
+    enabling an Ingress without a host produces a rule nothing will ever match, and the
+    chart's NOTES then print the placeholder as the access URL. The class has to reach all
+    four too: set on Jupyter alone, the other three fall to the cluster's default class,
+    which may not be the controller the preflight just confirmed.
+
+    mlrun's hosts are `{host, paths}` objects. `--set hosts[0].host=...` replaces the whole
+    default list rather than merging into it, so `paths` is restated or the rule has none.
+    nuclio's hosts are plain strings, and Jupyter's template hardcodes its own path.
+
+    --set wins over --values, so a host or class the user wrote in their -f file is left
+    out here rather than silently overridden.
+    """
+    host = settings.external_host_address
+    ingress_class = settings.ingress_class
+    user_values = _values_file_contents(settings)
+    flags: List[str] = []
+    for component, subdomain in (
+        ("jupyterNotebook", "jupyter"),
+        ("nuclio.dashboard", "nuclio"),
+        ("mlrun.ui", "mlrun"),
+        ("mlrun.api", "mlrun-api"),
+    ):
+        prefix = f"{component}.ingress"
+        user_ingress = _lookup(user_values, prefix)
+        user_ingress = user_ingress if isinstance(user_ingress, dict) else {}
+        flags += ["--set", f"{prefix}.enabled=true"]
+        if not user_ingress.get("ingressClassName"):
+            flags += ["--set", f"{prefix}.ingressClassName={ingress_class}"]
+        if user_ingress.get("hosts"):
+            continue
+        if component == "nuclio.dashboard":
+            flags += ["--set", f"{prefix}.hosts[0]={subdomain}.{host}"]
+            continue
+        flags += ["--set", f"{prefix}.hosts[0].host={subdomain}.{host}"]
+        if component.startswith("mlrun."):
+            flags += [
+                "--set", f"{prefix}.hosts[0].paths[0].path=/",
+                "--set", f"{prefix}.hosts[0].paths[0].pathType=ImplementationSpecific",
+            ]  # fmt: skip
+    return flags
+
+
+def _values_file_contents(settings: Settings) -> dict:
+    if not settings.values_file:
+        return {}
+    try:
+        loaded = yaml.safe_load(Path(settings.values_file).read_text())
+    except (OSError, yaml.YAMLError):
+        # helm reads the same file next and reports the problem in its own words.
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _lookup(values: dict, dotted: str) -> object:
+    node: object = values
+    for key in dotted.split("."):
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    return node
 
 
 def dry_run_flag(settings: Settings) -> str:
@@ -253,6 +316,20 @@ def do_hard_clean(settings: Settings) -> None:
                 "--grace-period=0",
                 "--wait=false",
             )
+    if pvcs and not settings.dry_run:
+        # A PV stays Bound until its claim is gone, and the --wait=false fallback returns
+        # before that — so the listing below would skip exactly the volumes just orphaned.
+        kubectl(
+            settings,
+            "wait",
+            "--for=delete",
+            "pvc",
+            "--all",
+            "--namespace",
+            settings.namespace,
+            "--timeout",
+            "60s",
+        )
 
     log_warn(
         f"Hard clean: deleting released/failed PVs bound to namespace '{settings.namespace}'..."
@@ -295,6 +372,72 @@ def do_hard_clean(settings: Settings) -> None:
     log_info("Hard clean complete.")
 
 
+INSTALLER_RESOURCE_KINDS = "deployment,service,ingress,secret"
+
+
+def remove_installer_resources(settings: Settings) -> None:
+    """Delete what the installer created outside the chart: the local registry and the
+    pull secret. helm uninstall cannot see them, so they outlived every uninstall.
+
+    Selected by label, never by name, so a pull secret the user created for --skip-secret
+    survives. The registry's PVC is left, like the chart's own PVCs: --hard-clean is the
+    step that deletes data.
+    """
+    listed = kubectl(
+        settings,
+        "get",
+        INSTALLER_RESOURCE_KINDS,
+        "--namespace",
+        settings.namespace,
+        "-l",
+        MANAGED_BY_LABEL,
+        "--no-headers",
+        "-o",
+        "name",
+    )
+    names = [line.strip() for line in listed.out.splitlines() if line.strip()] if listed.ok else []
+    if not names:
+        return
+    if settings.dry_run:
+        for name in names:
+            log_info(f"  Dry-run: would delete {name}")
+        return
+    log_info("Removing resources the installer created outside the chart...")
+    kubectl(
+        settings,
+        "delete",
+        INSTALLER_RESOURCE_KINDS,
+        "--namespace",
+        settings.namespace,
+        "-l",
+        MANAGED_BY_LABEL,
+        "--ignore-not-found",
+    )
+
+
+def confirm_hard_clean_without_release(settings: Settings) -> None:
+    """A hard clean deletes every PVC in the namespace, release or not, so a mistyped
+    NAMESPACE would wipe someone else's volumes. With no release to vouch for the namespace,
+    make the user name it again — and under --non-interactive, where nobody can, refuse.
+    """
+    namespace = settings.namespace
+    if settings.non_interactive:
+        raise die(
+            f"--hard-clean refused: release '{settings.release_name}' is not in namespace "
+            f"'{namespace}', and a hard clean deletes every PVC there. Check NAMESPACE, or "
+            "run interactively to confirm."
+        )
+    log_warn(f"--hard-clean will delete every PVC in '{namespace}', which has no release.")
+    sys.stderr.write(f"Type the namespace name to continue anyway [{namespace}]: ")
+    sys.stderr.flush()
+    try:
+        typed = input().strip()
+    except EOFError:
+        typed = ""
+    if typed != namespace:
+        raise die("Hard clean cancelled.")
+
+
 def do_uninstall(settings: Settings) -> None:
     check_requirements(settings)
 
@@ -303,6 +446,8 @@ def do_uninstall(settings: Settings) -> None:
             f"Release '{settings.release_name}' not found in namespace "
             f"'{settings.namespace}' (already uninstalled?)."
         )
+        if settings.hard_clean and not settings.dry_run:
+            confirm_hard_clean_without_release(settings)
     elif settings.dry_run:
         # --dry-run used to be read only on the install path, so
         # `--uninstall --hard-clean --dry-run` really removed the release and really
@@ -328,6 +473,8 @@ def do_uninstall(settings: Settings) -> None:
             check=True,
         )
         log_info("Uninstall complete.")
+
+    remove_installer_resources(settings)
 
     if settings.hard_clean:
         do_hard_clean(settings)

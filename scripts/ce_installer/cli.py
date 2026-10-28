@@ -46,7 +46,7 @@ from .settings import (
     env_true,
 )
 from .shell import check_requirements
-from .validators import run_validators
+from .validators import run_blocking_validators, run_validators
 
 # --------------------------------------------------------------------------------------
 # Version
@@ -280,6 +280,8 @@ def execute(settings: Settings) -> None:
     validate_chart_path(settings)
 
     check_requirements(settings)
+    if not settings.skip_validators:
+        run_blocking_validators(settings)
     ensure_namespace(settings)
 
     if settings.local_registry or settings.enable_ingress:

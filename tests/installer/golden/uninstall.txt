@@ -5,3 +5,4 @@ exit: 0
 ["docker", "info"]
 ["helm", "status", "mlrun-ce", "--namespace", "mlrun"]
 ["helm", "uninstall", "mlrun-ce", "--namespace", "mlrun", "--timeout", "960s"]
+["kubectl", "get", "deployment,service,ingress,secret", "--namespace", "mlrun", "-l", "app.kubernetes.io/managed-by=mlrun-ce-installer", "--no-headers", "-o", "name"]
