@@ -100,6 +100,20 @@ Add `--enable-ingress` to get a name that resolves from the node as well:
 The installer warns about this when it prints the registry URL. If you cannot use ingress,
 drop `--local-registry` and set `REGISTRY_URL` to a registry the nodes can already reach.
 
+### `--local-registry` refuses: "already has objects the local registry would take over"
+
+The registry is a PVC, Deployment and Service named `local-registry` (plus an Ingress with
+`--enable-ingress`), applied by the installer rather than by helm. Everything it applies is
+labelled `app.kubernetes.io/managed-by=mlrun-ce-installer`, and `--uninstall` deletes by
+that label. If an object with one of those names already exists without the label, applying
+over it would label it, and the next uninstall would delete something that isn't the
+installer's. So the run stops before creating anything.
+
+Objects left by an earlier installer run carry the label and are updated as usual. For
+anything else, either delete it (`kubectl -n <namespace> delete deployment local-registry`,
+and so on), install into another namespace, or drop `--local-registry` and set
+`REGISTRY_URL` to the registry those objects serve.
+
 ### Docker Desktop: pushing to `--local-registry --enable-ingress` fails with a TLS error
 
 The local registry serves plain HTTP through your ingress controller (port 80). Docker

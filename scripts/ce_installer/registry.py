@@ -32,6 +32,7 @@ MANAGED_BY_KEY = "app.kubernetes.io/managed-by"
 MANAGED_BY_VALUE = "mlrun-ce-installer"
 MANAGED_BY_LABEL = f"{MANAGED_BY_KEY}={MANAGED_BY_VALUE}"
 _MANAGED_BY_YAML = f"{MANAGED_BY_KEY}: {MANAGED_BY_VALUE}"
+_MANAGED_BY_JSONPATH = "{.metadata.labels." + MANAGED_BY_KEY.replace(".", "\\.") + "}"
 
 LOCAL_REGISTRY_IMAGE = "registry:2.8.3"
 LOCAL_REGISTRY_STORAGE = "10Gi"
@@ -264,10 +265,54 @@ def report_coredns_entry_for_registry(settings: Settings, registry_host: str) ->
     log_warn("        kubectl -n kube-system rollout restart deployment/coredns")
 
 
+LOCAL_REGISTRY_KINDS = ("pvc", "deployment", "service")
+
+
+def _refuse_foreign_registry_objects(settings: Settings) -> None:
+    """Stop when an object the registry manifest would apply exists without our label.
+
+    `apply` would add the label to it, and `--uninstall` deletes by that label, so a
+    Deployment or Service of the user's that happens to be called `local-registry` would
+    be adopted on install and destroyed on uninstall. Unlike the pull secret it is not
+    used as it stands: nothing says a stranger's objects add up to a working registry, and
+    its URL is about to be handed to Nuclio. Read-only, so a dry run reports it too.
+    """
+    kinds = LOCAL_REGISTRY_KINDS + (("ingress",) if settings.enable_ingress else ())
+    foreign = []
+    for kind in kinds:
+        found = kubectl(
+            settings,
+            "get",
+            kind,
+            "local-registry",
+            "--namespace",
+            settings.namespace,
+            "-o",
+            # The literal prefix makes an existing but unlabelled object print something.
+            "jsonpath=exists:" + _MANAGED_BY_JSONPATH,
+        )
+        out = found.out.strip() if found.ok else ""
+        if out.startswith("exists:") and out != f"exists:{MANAGED_BY_VALUE}":
+            foreign.append(f"{kind}/local-registry")
+    if not foreign:
+        return
+    log_error(
+        f"Namespace '{settings.namespace}' already has objects the local registry would take "
+        f"over: {', '.join(foreign)}."
+    )
+    log_error("  They were not created by this installer, and --uninstall would delete them.")
+    log_error(
+        "  Delete them, install into another namespace, or drop --local-registry and point "
+        "REGISTRY_URL at the registry they serve."
+    )
+    raise InstallerError(code=1)
+
+
 def deploy_local_registry(settings: Settings) -> None:
     # Resolve the URL early so create_registry_secret, which runs before
     # gather_install_params, already has it.
     settings.local_registry_url = resolve_local_registry_url(settings)
+    _refuse_foreign_registry_objects(settings)
 
     # The guard sits after the URL is resolved, not before: the URL still has to reach the
     # rendered --set flags for a dry run to represent the real install. Everything below
@@ -350,7 +395,7 @@ def _leave_users_secret_alone(settings: Settings) -> bool:
         "--namespace",
         settings.namespace,
         "-o",
-        "jsonpath={.metadata.labels." + MANAGED_BY_KEY.replace(".", "\\.") + "}",
+        "jsonpath=" + _MANAGED_BY_JSONPATH,
     )
     if not existing.ok or existing.out.strip() == MANAGED_BY_VALUE:
         return False

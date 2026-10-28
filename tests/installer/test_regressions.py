@@ -309,6 +309,60 @@ def test_local_registry_real_run_still_applies(monkeypatch, settings):
 
 
 # ------------------------------------------------------------------------------------------
+# deploy_local_registry() adopted a user's own `local-registry` objects
+# ------------------------------------------------------------------------------------------
+
+FOREIGN_DEPLOYMENT = {"get deployment local-registry": Result(0, "exists:")}
+
+
+def test_a_foreign_local_registry_object_stops_the_run_before_any_apply(monkeypatch, settings):
+    settings.external_host_address = "localhost"
+    rec = Recorder(answers=FOREIGN_DEPLOYMENT)
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    with pytest.raises(InstallerError):
+        registry.deploy_local_registry(settings)
+
+    # apply would have labelled the user's Deployment, and --uninstall deletes by label.
+    assert not rec.ran("apply"), "a user's object was applied over"
+
+
+def test_the_installers_own_registry_objects_are_updated_on_a_rerun(monkeypatch, settings):
+    settings.external_host_address = "localhost"
+    ours = Result(0, f"exists:{registry.MANAGED_BY_VALUE}")
+    rec = Recorder(answers={"local-registry -o jsonpath": ours})
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    registry.deploy_local_registry(settings)
+
+    assert rec.ran("apply"), "a rerun over our own registry must still apply"
+
+
+@pytest.mark.parametrize("with_ingress", [False, True])
+def test_the_registry_ingress_is_checked_only_when_one_would_be_applied(
+    monkeypatch, settings, with_ingress
+):
+    settings.external_host_address = "localhost"
+    settings.enable_ingress = with_ingress
+    rec = Recorder()
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    registry.deploy_local_registry(settings)
+
+    assert rec.ran("get ingress local-registry") is with_ingress
+
+
+def test_a_dry_run_reports_a_foreign_local_registry_object_too(monkeypatch, settings):
+    settings.dry_run = True
+    settings.external_host_address = "localhost"
+    monkeypatch.setattr(registry, "kubectl", Recorder(answers=FOREIGN_DEPLOYMENT))
+
+    # The dry run exists to show what the real one would do, refusal included.
+    with pytest.raises(InstallerError):
+        registry.deploy_local_registry(settings)
+
+
+# ------------------------------------------------------------------------------------------
 # resolve_external_host()'s autodetect ignored KUBE_CONTEXT / generic fallback
 # ------------------------------------------------------------------------------------------
 

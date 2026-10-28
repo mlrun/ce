@@ -510,6 +510,13 @@ node image is the safest choice.
   so a secret created by hand per the README was taken over on install and deleted on
   uninstall. An existing secret without the label is now used unchanged, with a warning;
   only a secret the installer creates gets the label.
+- **The same adoption reached the local registry's objects.** `deploy_local_registry`
+  applied `local-registry` over any PVC, Deployment, Service or Ingress already called
+  that, labelling it for the next `--uninstall` to delete. `_refuse_foreign_registry_objects`
+  now stops the run, dry runs included, when one exists without the label. It refuses
+  rather than reusing them, as it does with the secret: nothing says those objects make up
+  a working registry. The check reads the label through `jsonpath=exists:{...}` so an
+  unlabelled object still prints something.
 - **With no `--ce-version`, helm installed the newest stable chart.** Not the installer's
   own, and never an rc, so its flags could meet a chart that renamed their keys.
   `pin_chart_version` now passes the installer's version unless `--ce-version` or
