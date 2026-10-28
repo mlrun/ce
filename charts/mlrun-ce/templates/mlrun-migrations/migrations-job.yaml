@@ -63,7 +63,7 @@ spec:
               body_file=/tmp/response.json
 
               fail() {
-                echo "ERROR: $*"
+                echo "ERROR: $*" >&2
                 exit 1
               }
 
