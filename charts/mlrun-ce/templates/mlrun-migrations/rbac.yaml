@@ -1,0 +1,52 @@
+{{- if and .Values.mlrun.enabled (.Values.mlrunMigrations | default dict).enabled }}
+# Rendered on install as well, so they already exist when the upgrade-only Job runs
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "mlrun-ce.mlrunMigrations.rbacName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
+---
+# Read-only access needed by `kubectl rollout status` and the chief pods image check
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "mlrun-ce.mlrunMigrations.rbacName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "mlrun-ce.mlrunMigrations.rbacName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "mlrun-ce.mlrunMigrations.rbacName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mlrun-ce.mlrunMigrations.rbacName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

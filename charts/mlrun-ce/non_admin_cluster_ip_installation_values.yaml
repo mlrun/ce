@@ -21,6 +21,10 @@ mlrun:
       type: ClusterIP
       nodePort: ""
 
+# Set to true to trigger MLRun DB migrations automatically on helm upgrade
+mlrunMigrations:
+  enabled: false
+
 jupyterNotebook:
   service:
     type: ClusterIP

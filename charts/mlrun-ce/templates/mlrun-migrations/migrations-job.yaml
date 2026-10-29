@@ -1,0 +1,139 @@
+{{- if and .Values.mlrun.enabled (.Values.mlrunMigrations | default dict).enabled .Release.IsUpgrade }}
+# Triggers MLRun DB migrations after `helm upgrade`.
+# After an upgrade that requires migrations, the chief starts in `waiting_for_migrations` state and
+# rejects most requests until POST /api/v1/operations/migrations is sent. The job:
+# 1. waits for the chief rollout and for all chief pods to run the new image
+# 2. waits for the chief to report the expected version via client-spec
+# 3. triggers the migrations and polls the returned background task until it finishes
+#
+# Deliberately not a Helm hook: Helm waits for hooks, so long migrations would fail the upgrade on timeout.
+# As a regular resource `helm upgrade` (also with --wait, unless --wait-for-jobs) doesn't wait for it to finish.
+# The revision suffix creates a new Job on every upgrade (Job specs are immutable); Helm deletes the
+# previous revision's Job since it is no longer part of the release.
+{{- $chief := include "mlrun-ce.mlrun.api.chief.fullname" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mlrun-ce.mlrunMigrations.jobName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mlrun-ce.mlrunMigrations.labels" . | nindent 4 }}
+spec:
+  # No ttlSecondsAfterFinished: keep the Job and its pods for inspection until the next upgrade replaces it
+  backoffLimit: {{ .Values.mlrunMigrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.mlrunMigrations.timeoutSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "mlrun-ce.mlrunMigrations.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "mlrun-ce.mlrunMigrations.rbacName" . }}
+      containers:
+        - name: trigger-migrations
+          image: {{ .Values.mlrunMigrations.kubectlImage.repository }}:{{ .Values.mlrunMigrations.kubectlImage.tag }}
+          resources:
+            {{- toYaml .Values.mlrunMigrations.resources | nindent 12 }}
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace }}
+            - name: CHIEF_DEPLOYMENT
+              value: {{ $chief }}
+            - name: CHIEF_SELECTOR
+              value: {{ include "mlrun-ce.mlrun.api.chief.selector" . }}
+            - name: CHIEF_CONTAINER
+              value: {{ include "mlrun-ce.mlrun.api.containerName" . }}
+            - name: EXPECTED_IMAGE
+              value: {{ include "mlrun-ce.mlrun.api.image" . | quote }}
+            - name: MLRUN_CHIEF_URL
+              value: http://{{ $chief }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.mlrun.api.chief.service.port }}
+            - name: EXPECTED_VERSION
+              value: {{ .Values.mlrunMigrations.expectedVersion | default .Values.mlrun.api.image.tag | toString | quote }}
+            - name: POLL_INTERVAL_SECONDS
+              value: {{ .Values.mlrunMigrations.pollIntervalSeconds | quote }}
+            - name: TIMEOUT_SECONDS
+              value: {{ .Values.mlrunMigrations.timeoutSeconds | quote }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              api_url="${MLRUN_CHIEF_URL%/}/api/v1"
+              deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
+              body_file=/tmp/response.json
+
+              fail() {
+                echo "ERROR: $*" >&2
+                exit 1
+              }
+
+              sleep_or_timeout() {
+                [ "$(date +%s)" -lt "${deadline}" ] || fail "Timed out waiting for $1"
+                sleep "${POLL_INTERVAL_SECONDS}"
+              }
+
+              # Sends a request, writes the body to $body_file and prints the HTTP status ("000" if unreachable)
+              call() {
+                curl -sS -o "${body_file}" -w '%{http_code}' -X "$1" "${api_url}$2" --max-time 30 || true
+              }
+
+              # Prints the first string value of "$1" in the response body (no jq in this image);
+              # fails when the key is missing so a changed response doesn't go unnoticed
+              json_string() {
+                value=$(grep -o "\"$1\" *: *\"[^\"]*\"" "${body_file}" | head -n 1 | sed 's/.*: *"\(.*\)"$/\1/')
+                [ -n "${value}" ] || fail "\"$1\" not found in response: $(cat "${body_file}")"
+                echo "${value}"
+              }
+
+              echo "Waiting for deployment ${CHIEF_DEPLOYMENT} rollout to complete..."
+              kubectl -n "${NAMESPACE}" rollout status "deployment/${CHIEF_DEPLOYMENT}" --timeout="${TIMEOUT_SECONDS}s"
+
+              # Chief uses the Recreate strategy - also wait for old (terminating) pods to be gone,
+              # so the chief service can only route to pods running the new image
+              echo "Waiting for all chief pods to run ${EXPECTED_IMAGE}..."
+              while true; do
+                images=$(kubectl -n "${NAMESPACE}" get pods -l "${CHIEF_SELECTOR}" \
+                  -o jsonpath='{range .items[*]}{.spec.containers[?(@.name=="'"${CHIEF_CONTAINER}"'")].image}{"\n"}{end}' | sort -u)
+                [ "${images}" = "${EXPECTED_IMAGE}" ] && break
+                echo "Chief pods images: $(echo ${images}), waiting..."
+                sleep_or_timeout "chief pods to run ${EXPECTED_IMAGE}"
+              done
+
+              # client-spec is served by the chief in waiting_for_migrations state as well
+              while true; do
+                status=$(call GET /client-spec)
+                if [ "${status}" = "200" ]; then
+                  version=$(json_string version)
+                  echo "Chief reports version ${version}"
+                  [ "${version}" = "${EXPECTED_VERSION}" ] && break
+                else
+                  echo "Chief is not ready yet (client-spec status: ${status})"
+                fi
+                sleep_or_timeout "chief to report version ${EXPECTED_VERSION}"
+              done
+
+              status=$(call POST /operations/migrations)
+              case "${status}" in
+                200)
+                  echo "No migrations needed"
+                  exit 0
+                  ;;
+                202) ;;
+                *) fail "Failed triggering migrations: status=${status}, body=$(cat "${body_file}")" ;;
+              esac
+
+              task_name=$(json_string name)
+              echo "Migrations triggered, background task: ${task_name}"
+              while true; do
+                status=$(call GET "/background-tasks/${task_name}")
+                [ "${status}" = "200" ] || fail "Failed getting migrations task: status=${status}, body=$(cat "${body_file}")"
+                state=$(json_string state)
+                echo "Migrations state: ${state}"
+                case "${state}" in
+                  succeeded) break ;;
+                  failed) fail "Migrations failed: $(cat "${body_file}")" ;;
+                esac
+                sleep_or_timeout "migrations to finish"
+              done
+              echo "Migrations completed successfully"
+{{- end }}

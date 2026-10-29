@@ -300,6 +300,23 @@ import mlrun
 mlrun.get_run_db().trigger_migrations()
 ```
 
+Alternatively, let the chart trigger them for you by enabling `mlrunMigrations`.
+On `helm upgrade` only, the chart creates a `<release>-mlrun-migrations-<revision>` Job. It waits until the MLRun API chief
+has rolled out and runs the new `mlrun.api.image`, then sends the migrations request and waits for it to finish:
+```bash
+helm --namespace mlrun get values my-mlrun > previous-values.yaml
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce -f previous-values.yaml \
+  --set mlrunMigrations.enabled=true
+```
+Pass your previous values with `-f` rather than `--reuse-values`: `--reuse-values` doesn't load the new chart defaults,
+so `mlrunMigrations` settings other than `enabled` would be missing when upgrading from a chart version without them.
+The Job isn't a Helm hook, so `helm upgrade` (also with `--wait`, unless `--wait-for-jobs` is set) doesn't wait for the migrations.
+Check the result with:
+```bash
+kubectl --namespace mlrun get jobs -l app.kubernetes.io/component=mlrun-migrations
+kubectl --namespace mlrun logs job/my-mlrun-mlrun-migrations-<revision>
+```
+
 > **Note:** Once the database schema is upgraded there is no way to downgrade it
 
 ## Uninstalling the Chart
