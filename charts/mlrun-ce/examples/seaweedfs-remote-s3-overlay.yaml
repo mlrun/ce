@@ -1,0 +1,29 @@
+# Copy pipeline output files to your AWS S3 bucket.
+# Fill in the S3 settings below (replace every <...> value).
+# emptyDir is for quick tests only — files on the cluster may be lost on restart; S3 keeps the copy.
+storage:
+  s3:
+    bucket: &cloud_s3_bucket <REMOTE_S3_BUCKET_NAME>
+    accessKey: <ACCESS_KEY>
+    secretKey: <SECRET_KEY>
+
+seaweedfs:
+  allInOne:
+    data:
+      type: emptyDir
+  remote:
+    enabled: true
+    provider: s3
+    bucket: *cloud_s3_bucket
+    s3:
+      endpoint: s3.<REGION>.amazonaws.com
+      region: <REGION> # e.g. us-east-2
+
+
+# Optional: uncomment to save MLRun projects in the same S3 bucket (add mode: s3):
+# storage:
+#   mode: s3
+#   s3:
+#     bucket: <REMOTE_S3_BUCKET_NAME>
+#     accessKey: <ACCESS_KEY>
+#     secretKey: <SECRET_KEY>
