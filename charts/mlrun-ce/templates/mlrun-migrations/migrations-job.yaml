@@ -28,7 +28,7 @@ spec:
         {{- include "mlrun-ce.mlrunMigrations.selectorLabels" . | nindent 8 }}
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ .Release.Name }}-mlrun-migrations
+      serviceAccountName: {{ include "mlrun-ce.mlrunMigrations.rbacName" . }}
       containers:
         - name: trigger-migrations
           image: {{ .Values.mlrunMigrations.kubectlImage.repository }}:{{ .Values.mlrunMigrations.kubectlImage.tag }}

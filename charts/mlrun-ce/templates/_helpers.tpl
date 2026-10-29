@@ -425,6 +425,13 @@ Mlrun migrations Job name: <release>-mlrun-migrations-<revision>, prefix truncat
 {{- end -}}
 
 {{/*
+Mlrun migrations ServiceAccount / Role / RoleBinding name
+*/}}
+{{- define "mlrun-ce.mlrunMigrations.rbacName" -}}
+{{- printf "%s-migration" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
 Mlrun migrations labels
 */}}
 {{- define "mlrun-ce.mlrunMigrations.labels" -}}
