@@ -1,6 +1,7 @@
-# KFP pipeline artifacts: in-cluster SeaweedFS (emptyDir) + background sync to Azure Blob.
-# storage.azure.* — credentials for seaweedfs.remote (and for MLRun if storage.mode: azure-blob).
-# emptyDir (lab/dev): no SeaweedFS PVC — ephemeral local disk; cloud is durable after sync.
+# Copy pipeline output files to your Azure storage container.
+# Fill in the Azure settings below (replace every <...> value).
+# seaweedfs.remote.bucket must use the same name as containerName.
+# emptyDir is for quick tests only — files on the cluster may be lost on restart; Azure keeps the copy.
 storage:
   azure:
     accountName: <ACCOUNT_NAME>
@@ -16,7 +17,7 @@ seaweedfs:
     provider: azure
     bucket: <CONTAINER_NAME>
 
-# Optional — add "mode: azure-blob" to use the same container for MLRun and KFP remote sync:
+# Optional: uncomment to save MLRun projects in the same Azure container (add mode: azure-blob):
 # storage:
 #   mode: azure-blob
 #   azure:

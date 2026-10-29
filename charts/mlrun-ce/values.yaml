@@ -475,9 +475,7 @@ seaweedfs:
       # When false, local bucket name is mirrored to remote without a random suffix
       createBucketWithRandomSuffix: false
     mount:
-      # Mount an existing remote bucket/container into the local filer path before first use
-      mountExisting: true
-      # Allow remote.mount when /buckets/<local> already has pipeline data (helm upgrades, overlay switches)
+      # Pass -nonempty to remote.mount so helm upgrades work when /buckets/<local> already has pipeline data
       nonempty: true
 
 spark-operator:

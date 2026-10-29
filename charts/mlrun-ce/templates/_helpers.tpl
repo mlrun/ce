@@ -199,7 +199,7 @@ S3 Bucket - for MLRun and Jupyter.
 
 {{/*
 KFP in-cluster SeaweedFS object store — always storage.local.* (independent of storage.mode).
-MLRun/Jupyter use mlrun-ce.s3.* when storage.mode is s3 or azure-blob.
+MLRun use mlrun-ce.storage.s3.* when storage.mode is s3 or azure-blob.
 */}}
 {{- define "mlrun-ce.pipelines.s3.accessKey" -}}
 {{- .Values.storage.local.accessKey -}}
@@ -276,14 +276,6 @@ app.kubernetes.io/component: seaweedfs-remote-gateway
 {{/*
 Bool mount flags — sprig "default true" treats false as empty; preserve explicit false.
 */}}
-{{- define "mlrun-ce.seaweedfs.remote.mount.mountExisting" -}}
-{{- if kindIs "bool" .Values.seaweedfs.remote.mount.mountExisting -}}
-{{- .Values.seaweedfs.remote.mount.mountExisting -}}
-{{- else -}}
-true
-{{- end -}}
-{{- end -}}
-
 {{- define "mlrun-ce.seaweedfs.remote.mount.nonempty" -}}
 {{- if kindIs "bool" .Values.seaweedfs.remote.mount.nonempty -}}
 {{- .Values.seaweedfs.remote.mount.nonempty -}}

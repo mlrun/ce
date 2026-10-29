@@ -44,8 +44,6 @@ spec:
               value: {{ include "mlrun-ce.seaweedfs.remote.localBucket" . | quote }}
             - name: REMOTE_BUCKET
               value: {{ include "mlrun-ce.seaweedfs.remote.remoteBucket" . | quote }}
-            - name: MOUNT_EXISTING
-              value: {{ include "mlrun-ce.seaweedfs.remote.mount.mountExisting" . | toString | quote }}
             - name: MOUNT_NONEMPTY
               value: {{ include "mlrun-ce.seaweedfs.remote.mount.nonempty" . | toString | quote }}
             {{- if eq .Values.seaweedfs.remote.provider "s3" }}
@@ -124,27 +122,23 @@ spec:
               {{- else if eq .Values.seaweedfs.remote.provider "azure" }}
                 echo "remote.configure -name=${REMOTE_NAME} -type=azure"
               {{- end }}
-                if [ "${MOUNT_EXISTING}" = "true" ]; then
-                  MOUNT_CMD="remote.mount -dir=${MOUNT_DIR} -remote=${REMOTE_PATH}"
-                  if [ "${MOUNT_NONEMPTY}" = "true" ]; then
-                    MOUNT_CMD="${MOUNT_CMD} -nonempty"
-                  fi
-                  echo "${MOUNT_CMD}"
+                MOUNT_CMD="remote.mount -dir=${MOUNT_DIR} -remote=${REMOTE_PATH}"
+                if [ "${MOUNT_NONEMPTY}" = "true" ]; then
+                  MOUNT_CMD="${MOUNT_CMD} -nonempty"
                 fi
+                echo "${MOUNT_CMD}"
               } | weed shell -filer="${FILER}" -master="${MASTER}"
-              if [ "${MOUNT_EXISTING}" = "true" ]; then
-                MOUNT_OUT=$(printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1)
-                echo "remote mount status:"
-                echo "${MOUNT_OUT}"
-                echo "${MOUNT_OUT}" | grep -Fq "${MOUNT_DIR}" || {
-                  echo "ERROR: remote.mount did not attach ${MOUNT_DIR}"
-                  exit 1
-                }
-                echo "${MOUNT_OUT}" | grep -Fq "${REMOTE_BUCKET}" || {
-                  echo "ERROR: remote.mount did not target remote bucket ${REMOTE_BUCKET}"
-                  exit 1
-                }
-              fi
+              MOUNT_OUT=$(printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1)
+              echo "remote mount status:"
+              echo "${MOUNT_OUT}"
+              echo "${MOUNT_OUT}" | grep -Fq "${MOUNT_DIR}" || {
+                echo "ERROR: remote.mount did not attach ${MOUNT_DIR}"
+                exit 1
+              }
+              echo "${MOUNT_OUT}" | grep -Fq "${REMOTE_BUCKET}" || {
+                echo "ERROR: remote.mount did not target remote bucket ${REMOTE_BUCKET}"
+                exit 1
+              }
           resources:
             requests:
               cpu: 50m
