@@ -16,6 +16,9 @@
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not .Values.seaweedfs.allInOne.enabled) }}
 {{ fail "seaweedfs.remote requires seaweedfs.allInOne.enabled=true." }}
 {{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (kindIs "bool" .Values.seaweedfs.remote.mount.mountExisting) (not .Values.seaweedfs.remote.mount.mountExisting) }}
+{{ fail "seaweedfs.remote always runs remote.mount into the filer; seaweedfs.remote.mount.mountExisting=false is not supported (remove the value or set true)." }}
+{{- end }}
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not .Values.seaweedfs.remote.bucket) }}
 {{ fail "seaweedfs.remote.bucket is required when seaweedfs.remote.enabled is true." }}
 {{- end }}

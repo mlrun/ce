@@ -1,6 +1,6 @@
-# KFP pipeline artifacts: in-cluster SeaweedFS (emptyDir) + background sync to AWS S3.
-# storage.s3.* — cloud bucket + credentials for seaweedfs.remote (and MLRun when storage.mode: s3).
-# emptyDir (lab/dev): no SeaweedFS PVC — ephemeral local disk; cloud is durable after sync.
+# Copy pipeline output files to your AWS S3 bucket.
+# Fill in the S3 settings below (replace every <...> value).
+# emptyDir is for quick tests only — files on the cluster may be lost on restart; S3 keeps the copy.
 storage:
   s3:
     bucket: &cloud_s3_bucket <REMOTE_S3_BUCKET_NAME>
@@ -20,7 +20,7 @@ seaweedfs:
       region: <REGION> # e.g. us-east-2
 
 
-# Optional — add "mode: s3" to use the same cloud bucket for MLRun and KFP remote sync:
+# Optional: uncomment to save MLRun projects in the same S3 bucket (add mode: s3):
 # storage:
 #   mode: s3
 #   s3:

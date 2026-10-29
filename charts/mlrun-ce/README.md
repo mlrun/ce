@@ -199,8 +199,8 @@ To persist KFP artifacts to cloud storage, enable `seaweedfs.remote`. SeaweedFS 
 
 The chart deploys:
 
-- A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and mounts the remote bucket into the filer (`s3-bucket-init` is skipped when remote is enabled with `mount.mountExisting: true`). By default the mount uses `-nonempty` so upgrades succeed even when `/buckets/<local>` already contains pipeline artifacts
-- A **gateway Deployment** that keeps the local and remote buckets in sync — init containers wait for the filer and, when `mount.mountExisting` is `true`, for the remote mount from the config Job
+- A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and `remote.mount` into the filer (`s3-bucket-init` is skipped when remote is enabled). By default the mount uses `-nonempty` so upgrades succeed even when `/buckets/<local>` already contains pipeline artifacts
+- A **gateway Deployment** that keeps the local and remote buckets in sync — init containers wait for the filer and for the remote mount from the config Job
 
 Example overlays (copy and customize, or pass as `-f` values files). See `examples/README.md` for deploy commands and Azure auth options:
 
@@ -238,7 +238,6 @@ Key values under `seaweedfs.remote`:
 | `bucket`              | Remote AWS bucket or Azure container name — must match `storage.s3.bucket` (S3) or `storage.azure.containerName` (Azure); not a separate KFP-only cloud bucket |
 | `s3.endpoint`         | Regional S3 endpoint (required when `provider: s3`)                                                                                          |
 | `s3.forcePathStyle`   | Path-style S3 URLs (default: `false` for AWS; set `true` for MinIO and other path-style endpoints)                                             |
-| `mount.mountExisting` | When `true`, config Job runs `remote.mount` and the gateway waits for that mount (default: `true`). When `false`, only `remote.configure` runs and the local bucket is created by `s3-bucket-init` |
 | `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
 
 
