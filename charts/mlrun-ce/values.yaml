@@ -523,6 +523,18 @@ pipelines:
       runAsGroup: 1001
       fsGroup: 1001
       fsGroupChangePolicy: OnRootMismatch
+    # Post-install/upgrade Job that adds the idx_run_details_created_uuid index
+    # on mlpipeline.run_details (CreatedAtInSec, UUID)
+    indexInit:
+      enabled: true
+      backoffLimit: 6
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
   images:
     driver:
       repository: ghcr.io/kubeflow/kfp-driver
