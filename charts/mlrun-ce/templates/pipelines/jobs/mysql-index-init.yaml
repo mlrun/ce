@@ -1,4 +1,4 @@
-{{- if and .Values.pipelines.enabled .Values.pipelines.db.indexInit.enabled }}
+{{- if and .Values.pipelines.enabled (.Values.pipelines.db.indexInit | default dict).enabled }}
 # Adds the idx_run_details_created_uuid index to the KFP mlpipeline.run_details table.
 #
 # The run_details table is created by the ml-pipeline API server on first startup, so this Job:
@@ -20,8 +20,9 @@ metadata:
     # only removed on success or when the next install/upgrade recreates the hook.
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
+  # No activeDeadlineSeconds: the Job is bounded by the helm --timeout (default 5m), since
+  # helm waits on hooks for --timeout. Raise --timeout if the Job needs longer.
   backoffLimit: {{ .Values.pipelines.db.indexInit.backoffLimit }}
-  activeDeadlineSeconds: {{ .Values.pipelines.db.indexInit.activeDeadlineSeconds }}
   template:
     metadata:
       labels:
@@ -41,7 +42,10 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: MYSQL_HOST
-              value: mysql.{{ .Release.Namespace }}.svc.cluster.local
+              valueFrom:
+                configMapKeyRef:
+                  name: pipeline-install-config
+                  key: mysqlHost
             - name: MYSQL_TCP_PORT
               valueFrom:
                 configMapKeyRef:

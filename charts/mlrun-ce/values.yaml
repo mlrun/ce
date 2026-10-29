@@ -493,7 +493,6 @@ pipelines:
     indexInit:
       enabled: true
       backoffLimit: 6
-      activeDeadlineSeconds: 600
       resources:
         requests:
           cpu: 50m
