@@ -1,6 +1,6 @@
 MLRUN_CE_IMAGE_PLATFORM ?= linux/amd64
-MLRUN_CE_SPARK_IMAGE_TAG ?= gcr.io/iguazio/spark-app:3.5.6-scala2.12-java17-ubuntu-1
-MLRUN_CE_SPARK_CUDA_IMAGE_TAG ?= gcr.io/iguazio/spark-app-cuda:3.5.6-scala2.12-java17-ubuntu-1
+MLRUN_CE_SPARK_IMAGE_TAG ?= quay.io/mlrun/spark-app:3.5.6-scala2.12-java17-ubuntu-1
+MLRUN_CE_SPARK_CUDA_IMAGE_TAG ?= quay.io/mlrun/spark-app-cuda:3.5.6-scala2.12-java17-ubuntu-1
 CUDA_VERSION ?= 12.8.1
 
 # Kept for backward compatibility with the pre-CUDA workflow.
@@ -29,7 +29,7 @@ validate-cuda:
 validate-all: validate validate-cuda
 
 # Spark 4 variables and targets.
-REGISTRY ?= gcr.io/iguazio
+REGISTRY ?= quay.io/mlrun
 # Spark uses a multi-platform index; CUDA uses its linux/amd64 child manifest
 # because the Spark 4 image pair is intentionally amd64-only.
 SPARK4_BASE_IMAGE ?= spark@sha256:66e39dccde81909c23e5c56f4b465db6de2bdc38cf569aacc9e2380ee5005440

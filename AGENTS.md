@@ -34,6 +34,7 @@ make package
 - `config/` — ConfigMaps and Secrets shared across components: MLRun env config, Jupyter env config, storage credentials secret, Pipelines config, Spark config, Grafana dashboards
 - `seaweedfs/` — SeaweedFS-specific resources: S3 IAM config secret, bucket init job, admin UI NodePort service, ingress
 - `kafka/` — Kafka Strimzi custom resources: KafkaNodePool, Kafka cluster CR, bootstrap alias Service, RBAC, NetworkPolicy
+- `mlrun-migrations/` — upgrade-only Job (+ ServiceAccount/Role/RoleBinding) that triggers MLRun DB migrations once the new API chief is up
 - `timescaledb/` — TimescaleDB Deployment, Service, PVC
 - `jupyter-notebook/` — Jupyter Deployment and supporting resources
 - `pipelines/` — Kubeflow Pipelines resources
@@ -90,6 +91,7 @@ From a fresh clone to a linted chart:
 | Kafka | `kafka.enabled` | Strimzi CRDs — `strimzi-kafka-operator` sub-chart must also be enabled as a prerequisite; CRs use post-install hooks to wait for CRDs | `templates/kafka/` |
 | Pipelines | `pipelines.enabled` | SeaweedFS (`seaweedfs.enabled` checked at render time; adds init container to wait for it), `mlrun-pipelines-config` ConfigMap | `templates/pipelines/`, `templates/config/mlrun-pipelines-config.yaml` |
 | TimescaleDB | `timescaledb.enabled` | none; uses its own `<release>-timescaledb-secret` for the DB password | `templates/timescaledb/` — custom StatefulSet, not a sub-chart |
+| MLRun migrations | `mlrun.enabled` and `mlrunMigrations.enabled` | MLRun API chief (`mlrun-api-chief` Deployment/Service). Regular resource (not a hook, so `helm upgrade` doesn't wait for it), rendered only when `.Release.IsUpgrade`, named `<release>-mlrun-migrations-<revision>`: waits for the chief rollout and for all chief pods to run `mlrun.api.image`, then POSTs `/api/v1/operations/migrations` once `/api/v1/client-spec` reports the expected version, and polls the background task | `templates/mlrun-migrations/` |
 | Prometheus + Grafana | `kube-prometheus-stack.enabled` | none at runtime; model monitoring dashboards are pre-loaded as static JSON ConfigMaps | sub-chart config in `values.yaml`; dashboards in `templates/config/model-monitoring-*.yml` |
 
 ## How to Add a New Component
