@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: seaweedfs-remote-config
   annotations:
     helm.sh/hook: post-install,post-upgrade
-    # Before s3-bucket-init (weight 10; skipped when remote is enabled).
+    # Before s3-bucket-init (weight 8 when remote is enabled; 10 otherwise).
     helm.sh/hook-weight: "9"
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:

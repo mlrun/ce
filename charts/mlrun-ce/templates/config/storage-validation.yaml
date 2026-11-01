@@ -10,6 +10,10 @@
 {{- if and (eq .Values.storage.mode "local") (not .Values.storage.local.bucket) }}
 {{ fail "storage.mode is set to \"local\" but storage.local.bucket is not provided. Please set storage.local.bucket." }}
 {{- end }}
+{{- $pipelinesBucket := include "mlrun-ce.storage.pipelines.bucket" . -}}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.storage.mode "local") (eq .Values.storage.local.bucket $pipelinesBucket) }}
+{{ fail "seaweedfs.remote with storage.mode \"local\" requires storage.pipelines.bucket to differ from storage.local.bucket so MLRun artifacts stay in-cluster only (KFP bucket is remote-synced)." }}
+{{- end }}
 {{- if and (eq .Values.storage.mode "azure-blob") (not .Values.storage.azure.containerName) }}
 {{ fail "storage.mode is set to \"azure-blob\" but storage.azure.containerName is not provided. Please set storage.azure.containerName." }}
 {{- end }}
@@ -19,8 +23,12 @@
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (kindIs "bool" .Values.seaweedfs.remote.mount.mountExisting) (not .Values.seaweedfs.remote.mount.mountExisting) }}
 {{ fail "seaweedfs.remote always runs remote.mount into the filer; seaweedfs.remote.mount.mountExisting=false is not supported (remove the value or set true)." }}
 {{- end }}
-{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not .Values.seaweedfs.remote.bucket) }}
-{{ fail "seaweedfs.remote.bucket is required when seaweedfs.remote.enabled is true." }}
+{{- $remoteCloudBucket := include "mlrun-ce.seaweedfs.remote.remoteBucket" . -}}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not $remoteCloudBucket) }}
+{{ fail "seaweedfs.remote.bucket (cloud target for KFP sync) is required when seaweedfs.remote.enabled is true; defaults to storage.pipelines.bucket if unset." }}
+{{- end }}
+{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.storage.mode "local") (eq $remoteCloudBucket .Values.storage.local.bucket) }}
+{{ fail "seaweedfs.remote.bucket must not equal storage.local.bucket when storage.mode is \"local\" (same name would target the MLRun in-cluster bucket name in cloud). Use a dedicated cloud bucket/container for KFP (e.g. kfp-artifacts)." }}
 {{- end }}
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (not (regexMatch "^[a-zA-Z0-9]+$" (.Values.seaweedfs.remote.name | default ""))) }}
 {{ fail "seaweedfs.remote.name must contain only letters and numbers (SeaweedFS remote.configure rejects hyphens and other characters)." }}
@@ -32,22 +40,10 @@
 {{ fail "seaweedfs.remote with provider \"s3\" requires static storage.s3.accessKey and storage.s3.secretKey; global.infrastructure.aws.s3NonAnonymous (IAM/IRSA) is not supported for the SeaweedFS remote gateway." }}
 {{- end }}
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "s3") (not .Values.global.infrastructure.aws.s3NonAnonymous) (not .Values.storage.s3.accessKey) }}
-{{ fail "seaweedfs.remote with provider \"s3\" requires storage.s3.accessKey." }}
+{{ fail "seaweedfs.remote with provider \"s3\" requires storage.s3.accessKey (gateway credentials for KFP cloud sync)." }}
 {{- end }}
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "s3") (not .Values.global.infrastructure.aws.s3NonAnonymous) (not .Values.storage.s3.secretKey) }}
-{{ fail "seaweedfs.remote with provider \"s3\" requires storage.s3.secretKey." }}
-{{- end }}
-{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "s3") (not .Values.storage.s3.bucket) }}
-{{ fail "seaweedfs.remote with provider \"s3\" requires storage.s3.bucket (KFP remote sync uses the same cloud bucket and credentials as MLRun when storage.mode is s3)." }}
-{{- end }}
-{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "s3") (ne .Values.seaweedfs.remote.bucket .Values.storage.s3.bucket) }}
-{{ fail "seaweedfs.remote.bucket must match storage.s3.bucket when provider is \"s3\" (one shared cloud bucket; separate remote-only buckets are not supported)." }}
-{{- end }}
-{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "azure") (not .Values.storage.azure.containerName) }}
-{{ fail "seaweedfs.remote with provider \"azure\" requires storage.azure.containerName (must match seaweedfs.remote.bucket)." }}
-{{- end }}
-{{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "azure") (ne .Values.seaweedfs.remote.bucket .Values.storage.azure.containerName) }}
-{{ fail "seaweedfs.remote.bucket must match storage.azure.containerName when provider is \"azure\"." }}
+{{ fail "seaweedfs.remote with provider \"s3\" requires storage.s3.secretKey (gateway credentials for KFP cloud sync)." }}
 {{- end }}
 {{- if and (eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true") (eq .Values.seaweedfs.remote.provider "azure") (not (or .Values.storage.azure.connectionString (and .Values.storage.azure.accountName .Values.storage.azure.accountKey))) }}
 {{ fail "seaweedfs.remote with provider \"azure\" requires storage.azure.connectionString or storage.azure.accountName+accountKey." }}

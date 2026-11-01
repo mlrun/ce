@@ -60,7 +60,12 @@ spec:
               exec /usr/bin/weed filer.remote.gateway \
                 -filer={{ include "mlrun-ce.seaweedfs.filerAddress" . }} \
                 -createBucketAt={{ .Values.seaweedfs.remote.name }} \
-                -createBucketWithRandomSuffix={{ .Values.seaweedfs.remote.gateway.createBucketWithRandomSuffix | default false }}
+                -createBucketWithRandomSuffix={{ .Values.seaweedfs.remote.gateway.createBucketWithRandomSuffix | default false }} \
+                -include={{ coalesce .Values.seaweedfs.remote.gateway.includeBucketPattern (include "mlrun-ce.pipelines.s3.bucket" .) | quote }} \
+                {{- $exclude := include "mlrun-ce.seaweedfs.remote.gateway.excludeBucketPattern" . -}}
+                {{- if $exclude }}
+                -exclude={{ $exclude | quote }} \
+                {{- end }}
           resources:
             requests:
               cpu: 50m

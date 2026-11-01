@@ -24,18 +24,19 @@ global:
 # S3-compatible storage configuration for MLRun and Jupyter.
 # Kubeflow Pipelines artifacts always use in-cluster SeaweedFS.
 # To persist KFP artifacts to external AWS S3 or Azure Blob, enable seaweedfs.remote below.
-# SeaweedFS acts as an S3 gateway and syncs the local bucket to the remote backend.
+# SeaweedFS acts as an S3 gateway and syncs storage.pipelines.bucket to the remote backend when seaweedfs.remote is enabled.
 # See: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
 # MLRun/Jupyter continue to use storage.mode independently.
 # =============================================================================
 
-# storage.mode selects which backend credentials are injected into the 'storage-credentials' Secret.
+# storage.mode selects which backend credentials Secret is created (storage-credentials-<mode>)
+# and mounted into MLRun/Jupyter (optional refs — only the active mode's Secret exists).
 # Options:
 #   local (default) - bundled SeaweedFS; injects AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
 #                     and AWS_ENDPOINT_URL_S3 pointing at the in-cluster SeaweedFS S3 service.
 #                     Credentials come from storage.local.accessKey/secretKey; artifact path from
-#                     storage.local.bucket.
-#                     KFP always uses storage.local.* for in-cluster SeaweedFS (see mlrun-ce.pipelines.s3.*).
+#                     storage.local.bucket (not synced by seaweedfs.remote).
+#                     KFP uses storage.pipelines.bucket on in-cluster SeaweedFS (see mlrun-ce.pipelines.s3.*).
 #   s3              - external AWS S3; injects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY only
 #                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
 #                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
@@ -43,12 +44,14 @@ global:
 #   azure-blob      - Azure Blob Storage; injects AZURE_STORAGE_* fields from storage.azure.*
 storage:
   mode: local
-  # In-cluster SeaweedFS bucket/credentials. Used by MLRun/Jupyter when storage.mode is "local",
-  # and always by KFP (regardless of storage.mode).
+  # In-cluster SeaweedFS credentials (shared S3 identity) and MLRun/Jupyter bucket when mode is "local".
   local:
     accessKey: "seaweed"
     secretKey: "seaweed123"
     bucket: "mlrun"
+  # In-cluster SeaweedFS bucket for KFP pipeline artifacts only. seaweedfs.remote mounts this bucket to cloud.
+  pipelines:
+    bucket: kfp-artifacts
   # External AWS S3 credentials — only applied to MLRun and Jupyter when mode is "s3".
   s3:
     accessKey: ""
@@ -194,7 +197,13 @@ mlrun:
       - configMapRef:
           name: mlrun-common-env
       - secretRef:
-          name: storage-credentials
+          name: storage-credentials-local
+          optional: true
+      - secretRef:
+          name: storage-credentials-s3
+          optional: true
+      - secretRef:
+          name: storage-credentials-azure-blob
           optional: true
       - configMapRef:
           name: mlrun-pipelines-config
@@ -330,7 +339,13 @@ jupyterNotebook:
         name: jupyter-common-env
         optional: true
     - secretRef:
-        name: storage-credentials
+        name: storage-credentials-local
+        optional: true
+    - secretRef:
+        name: storage-credentials-s3
+        optional: true
+    - secretRef:
+        name: storage-credentials-azure-blob
         optional: true
   persistence:
     enabled: true
@@ -477,7 +492,7 @@ seaweedfs:
     nodePort: 30094
 
   # Sync KFP pipeline artifacts to external AWS S3 or Azure Blob via SeaweedFS remote gateway.
-  # KFP always uses in-cluster SeaweedFS S3; this layer mirrors the local bucket to cloud storage.
+  # KFP uses storage.pipelines.bucket in-cluster; remote gateway mirrors only that bucket (not storage.local.bucket).
   # See examples/seaweedfs-remote-*-overlay.yaml.
   remote:
     enabled: false
@@ -486,8 +501,8 @@ seaweedfs:
     name: cloudstorage
     # Remote backend: s3 (AWS or S3-compatible) or azure (Azure Blob native API)
     provider: ""
-    # Remote bucket (AWS) or container (Azure). Local filer path uses storage.local.bucket.
-    # For provider s3, must match storage.s3.bucket. For azure, must match storage.azure.containerName.
+    # Cloud bucket (AWS) or container (Azure) for KFP remote sync only (defaults to storage.pipelines.bucket).
+    # Independent of storage.s3.bucket / storage.azure.containerName (those apply to MLRun when storage.mode is s3/azure-blob).
     bucket: ""
     s3:
       # Regional endpoint, e.g. s3.us-east-2.amazonaws.com (https:// added by the configure job)
@@ -499,6 +514,11 @@ seaweedfs:
     gateway:
       # When false, local bucket name is mirrored to remote without a random suffix
       createBucketWithRandomSuffix: false
+      # filer.remote.gateway mirrors all /buckets/* unless filtered. include = KFP bucket only;
+      # exclude (auto when storage.mode is local) = MLRun in-cluster bucket — prevents gateway from
+      # deleting the remote container when the local MLRun bucket is recreated.
+      includeBucketPattern: ""
+      excludeBucketPattern: ""
     mount:
       # Pass -nonempty to remote.mount so helm upgrades work when /buckets/<local> already has pipeline data
       nonempty: true

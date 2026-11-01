@@ -1,12 +1,22 @@
-# Copy pipeline output files to your Azure storage container.
-# Fill in the Azure settings below (replace every <...> value).
-# seaweedfs.remote.bucket must use the same name as containerName.
-# emptyDir is for quick tests only — files on the cluster may be lost on restart; Azure keeps the copy.
+# Copy this file and fill in your Azure details below.
+#
+# What it does:
+# - Saves Kubeflow pipeline files from the cluster to Azure Blob Storage (container "kfp-artifacts" by default).
+# - MLRun project files stay on the cluster unless you also turn on "azure-blob" mode (see bottom of file).
+#
+# Before you install: in the Azure portal, create two containers in your storage account if you use both features:
+#   "kfp-artifacts" (pipelines) and "mlrun" (optional, for MLRun in Azure).
+#
+# For quick tests only: cluster storage may be cleared when pods restart; Azure keeps your pipeline copies.
 storage:
+# Optional — Also store MLRun projects in Azure 
+# storage:
+#   mode: azure-blob
   azure:
     accountName: <ACCOUNT_NAME>
     accountKey: <ACCOUNT_KEY>
-    containerName: <CONTAINER_NAME>
+    connectionString: ""
+    containerName: mlrun
 
 seaweedfs:
   allInOne:
@@ -15,12 +25,6 @@ seaweedfs:
   remote:
     enabled: true
     provider: azure
-    bucket: <CONTAINER_NAME>
+    bucket: kfp-artifacts
 
-# Optional: uncomment to save MLRun projects in the same Azure container (add mode: azure-blob):
-# storage:
-#   mode: azure-blob
-#   azure:
-#     accountName: <ACCOUNT_NAME>
-#     accountKey: <ACCOUNT_KEY>
-#     containerName: <CONTAINER_NAME>
+

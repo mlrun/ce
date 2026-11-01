@@ -1,11 +1,27 @@
-# Copy pipeline output files to your AWS S3 bucket.
-# Fill in the S3 settings below (replace every <...> value).
-# emptyDir is for quick tests only — files on the cluster may be lost on restart; S3 keeps the copy.
+# Copy this file and fill in your AWS details below.
+#
+# What it does:
+# - Saves Kubeflow pipeline files from the cluster to your S3 bucket (seaweedfs.remote.bucket).
+# - MLRun project files stay on the cluster unless you set storage.mode to s3 (see optional note below).
+#
+# When storage.mode is s3:
+# - storage.s3.bucket is where MLRun writes directly.
+# - It does NOT have to be the same name as seaweedfs.remote.bucket — one bucket for both is OK,
+#   or use two different bucket names. Files use different paths inside the bucket either way.
+#
+# Before you install:
+# - Create the S3 bucket(s) in AWS and an access key that can read and write them.
+# - Set the region below (for example us-east-2).
+#
+# For quick tests only: cluster storage may be cleared when pods restart; S3 keeps your pipeline copies.
+
 storage:
+# Optional — store MLRun projects in S3 too.
+# mode: s3
   s3:
-    bucket: &cloud_s3_bucket <REMOTE_S3_BUCKET_NAME>
     accessKey: <ACCESS_KEY>
     secretKey: <SECRET_KEY>
+    bucket: ""
 
 seaweedfs:
   allInOne:
@@ -14,16 +30,8 @@ seaweedfs:
   remote:
     enabled: true
     provider: s3
-    bucket: *cloud_s3_bucket
+    bucket: <YOUR_S3_BUCKET_NAME>
     s3:
       endpoint: s3.<REGION>.amazonaws.com
       region: <REGION> # e.g. us-east-2
 
-
-# Optional: uncomment to save MLRun projects in the same S3 bucket (add mode: s3):
-# storage:
-#   mode: s3
-#   s3:
-#     bucket: <REMOTE_S3_BUCKET_NAME>
-#     accessKey: <ACCESS_KEY>
-#     secretKey: <SECRET_KEY>

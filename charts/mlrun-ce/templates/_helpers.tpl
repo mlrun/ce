@@ -189,6 +189,14 @@ S3 Secret Key - for MLRun and Jupyter.
 {{/*
 S3 Bucket - for MLRun and Jupyter.
 */}}
+{{/*
+Kubernetes Secret for MLRun storage credentials (one per storage.mode so Helm upgrades
+do not merge stale AWS keys into an azure-blob Secret).
+*/}}
+{{- define "mlrun-ce.storage.credentialsSecretName" -}}
+{{- printf "storage-credentials-%s" .Values.storage.mode -}}
+{{- end -}}
+
 {{- define "mlrun-ce.s3.bucket" -}}
 {{- if eq .Values.storage.mode "local" -}}
 {{- .Values.storage.local.bucket -}}
@@ -198,8 +206,9 @@ S3 Bucket - for MLRun and Jupyter.
 {{- end -}}
 
 {{/*
-KFP in-cluster SeaweedFS object store — always storage.local.* (independent of storage.mode).
-MLRun use mlrun-ce.storage.s3.* when storage.mode is s3 or azure-blob.
+KFP in-cluster SeaweedFS object store — storage.pipelines.bucket (credentials from storage.local.*).
+Independent of storage.mode. Remote gateway mounts only this bucket (see mlrun-ce.seaweedfs.remote.localBucket).
+MLRun/Jupyter use storage.local.bucket when storage.mode is local; mlrun-ce.storage.s3.* when mode is s3 or azure-blob.
 */}}
 {{- define "mlrun-ce.pipelines.s3.accessKey" -}}
 {{- .Values.storage.local.accessKey -}}
@@ -209,8 +218,12 @@ MLRun use mlrun-ce.storage.s3.* when storage.mode is s3 or azure-blob.
 {{- .Values.storage.local.secretKey -}}
 {{- end -}}
 
+{{- define "mlrun-ce.storage.pipelines.bucket" -}}
+{{- coalesce .Values.storage.pipelines.bucket .Values.storage.local.bucket "mlrun" -}}
+{{- end -}}
+
 {{- define "mlrun-ce.pipelines.s3.bucket" -}}
-{{- .Values.storage.local.bucket -}}
+{{- include "mlrun-ce.storage.pipelines.bucket" . -}}
 {{- end -}}
 
 {{/*
@@ -289,7 +302,13 @@ true
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.remote.remoteBucket" -}}
-{{- required "seaweedfs.remote.bucket is required when seaweedfs.remote.enabled is true" .Values.seaweedfs.remote.bucket -}}
+{{- coalesce .Values.seaweedfs.remote.bucket (include "mlrun-ce.storage.pipelines.bucket" .) | required "seaweedfs.remote.bucket is required when seaweedfs.remote.enabled is true (or set storage.pipelines.bucket)" -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.remote.gateway.excludeBucketPattern" -}}
+{{- if eq .Values.storage.mode "local" -}}
+{{- coalesce .Values.seaweedfs.remote.gateway.excludeBucketPattern .Values.storage.local.bucket -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -426,7 +445,7 @@ Uses SeaweedFS as the storage backend
   {{- if .Values.mlrun.storageAutoMountParams -}}
     {{ .Values.mlrun.storageAutoMountParams }}
   {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
-    "secret_name=storage-credentials"
+    {{ printf "secret_name=%s" (include "mlrun-ce.storage.credentialsSecretName" .) }}
   {{- else -}}
     "non_anonymous=True"
   {{- end -}}

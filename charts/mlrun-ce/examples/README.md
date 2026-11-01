@@ -4,7 +4,7 @@ These overlays enable `seaweedfs.remote` so KFP pipeline artifacts stay on in-cl
 
 Both examples set `seaweedfs.allInOne.data.type: emptyDir` (no SeaweedFS PVC) for lab/dev testing. Production installs should omit that block and keep the chart default `persistentVolumeClaim`.
 
-`storage.s3.*` / `storage.azure.*` in these overlays feed **seaweedfs.remote** (cloud credentials). KFP always uses **storage.local.*** for in-cluster SeaweedFS. MLRun/Jupyter use **storage.mode** (`local`, `s3`, or `azure-blob`).
+`storage.s3.*` / `storage.azure.*` in these overlays supply **cloud credentials** for the remote gateway. **`seaweedfs.remote.bucket`** is the **KFP** cloud bucket/container (defaults to **`storage.pipelines.bucket`**). **`storage.azure.containerName`** / **`storage.s3.bucket`** are for **MLRun only** when **`storage.mode`** is `azure-blob` / `s3`. With **`storage.mode: local`**, MLRun stays on in-cluster **`storage.local.bucket`** only.
 
 Copy the overlay, replace the `<PLACEHOLDER>` values (including credentials), then deploy. Do not commit real secrets to git.
 
@@ -22,7 +22,7 @@ If the SeaweedFS all-in-one pod restarts with `emptyDir`, remote mount state is 
 
 ## AWS S3
 
-1. Copy and customize `seaweedfs-remote-s3-overlay.yaml` (`bucket`, `accessKey`, `secretKey`, `endpoint`, `region`). `seaweedfs.remote.bucket` must match `storage.s3.bucket` (the overlay uses a YAML anchor).
+1. Copy and customize `seaweedfs-remote-s3-overlay.yaml` (`accessKey`, `secretKey`, `seaweedfs.remote.bucket` for KFP, `endpoint`, `region`).
 2. Deploy:
 
 ```bash
