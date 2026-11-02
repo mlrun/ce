@@ -206,9 +206,21 @@ do not merge stale AWS keys into an azure-blob Secret).
 {{- end -}}
 
 {{/*
-KFP in-cluster SeaweedFS object store — storage.pipelines.bucket (credentials from storage.local.*).
-Independent of storage.mode. Remote gateway mounts only this bucket (see mlrun-ce.seaweedfs.remote.localBucket).
-MLRun/Jupyter use storage.local.bucket when storage.mode is local; mlrun-ce.storage.s3.* when mode is s3 or azure-blob.
+Cloud bucket (S3) or container (Azure) for MLRun/Jupyter when storage.mode is s3 or azure-blob.
+Empty when storage.mode is local. Used to validate seaweedfs.remote targets the same cloud object as MLRun.
+*/}}
+{{- define "mlrun-ce.storage.mlrunCloudBucket" -}}
+{{- if eq .Values.storage.mode "s3" -}}
+{{- coalesce .Values.global.infrastructure.aws.bucketName .Values.storage.s3.bucket "" -}}
+{{- else if eq .Values.storage.mode "azure-blob" -}}
+{{- .Values.storage.azure.containerName -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+KFP in-cluster SeaweedFS bucket (credentials from storage.local.*).
+Always defaults to storage.local.bucket (default name "mlrun"), including with seaweedfs.remote.
+Customer AWS/Azure names live in storage.s3.bucket / storage.azure.containerName (MLRun direct + remote sync target).
 */}}
 {{- define "mlrun-ce.pipelines.s3.accessKey" -}}
 {{- .Values.storage.local.accessKey -}}
@@ -218,12 +230,8 @@ MLRun/Jupyter use storage.local.bucket when storage.mode is local; mlrun-ce.stor
 {{- .Values.storage.local.secretKey -}}
 {{- end -}}
 
-{{- define "mlrun-ce.storage.pipelines.bucket" -}}
-{{- coalesce .Values.storage.pipelines.bucket .Values.storage.local.bucket "mlrun" -}}
-{{- end -}}
-
 {{- define "mlrun-ce.pipelines.s3.bucket" -}}
-{{- include "mlrun-ce.storage.pipelines.bucket" . -}}
+{{- coalesce .Values.storage.local.bucket "mlrun" -}}
 {{- end -}}
 
 {{/*
@@ -275,7 +283,7 @@ SeaweedFS cluster addresses (allInOne mode; service name is {fullnameOverride}-a
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.remote.enabled" -}}
-{{- and .Values.seaweedfs.enabled .Values.seaweedfs.remote.enabled -}}
+{{- if and .Values.seaweedfs.enabled .Values.seaweedfs.remote.enabled -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
 {{/*
@@ -302,7 +310,7 @@ true
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.remote.remoteBucket" -}}
-{{- coalesce .Values.seaweedfs.remote.bucket (include "mlrun-ce.storage.pipelines.bucket" .) | required "seaweedfs.remote.bucket is required when seaweedfs.remote.enabled is true (or set storage.pipelines.bucket)" -}}
+{{- coalesce .Values.seaweedfs.remote.bucket (include "mlrun-ce.storage.mlrunCloudBucket" .) -}}
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.remote.gateway.excludeBucketPattern" -}}

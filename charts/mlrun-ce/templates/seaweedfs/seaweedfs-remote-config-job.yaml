@@ -1,4 +1,4 @@
-{{- if eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true" }}
+{{- if eq (include "mlrun-ce.seaweedfs.remote.enabled" .) "true" }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: seaweedfs-remote-config
   annotations:
     helm.sh/hook: post-install,post-upgrade
-    # Before s3-bucket-init (weight 8 when remote is enabled; 10 otherwise).
+    # After s3-bucket-init (hook weight 8 when remote is enabled; 10 otherwise).
     helm.sh/hook-weight: "9"
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:

@@ -189,18 +189,18 @@ helm --namespace mlrun upgrade my-mlrun \
 
 ### KFP Pipeline Artifact Storage
 
-Kubeflow Pipelines (KFP) stores run artifacts (datasets, models, metrics files) in an object store. In MLRun CE, **KFP always uses the in-cluster SeaweedFS S3 gateway** on **`storage.pipelines.bucket`** (default: `kfp-artifacts`). MLRun/Jupyter with **`storage.mode: local`** use **`storage.local.bucket`** (default: `mlrun`), which is **not** remote-synced. To persist **KFP** pipeline artifacts to external AWS S3 or Azure Blob, enable `seaweedfs.remote`. MLRun/Jupyter can use `storage.mode: s3` or `azure-blob` for external MLRun artifacts while KFP stays on in-cluster SeaweedFS.
+Kubeflow Pipelines (KFP) stores run artifacts (datasets, models, metrics files) in an object store. In MLRun CE, **KFP always uses the in-cluster SeaweedFS S3 gateway** on **`storage.local.bucket`** (default: **`mlrun`**), the same in-cluster bucket as MLRun when **`storage.mode: local`**. To persist artifacts to AWS S3 or Azure Blob, enable **`seaweedfs.remote`** and set **`storage.mode`** to **`s3`** or **`azure-blob`**: MLRun writes to the **customer bucket/container** (`storage.s3.bucket` / `storage.azure.containerName`); KFP still uses in-cluster **`storage.local.bucket`**, and the gateway syncs that bucket to the same cloud target.
 
-MLRun and Jupyter use `storage.mode` independently (`local`, `s3`, or `azure-blob`) for their own artifact paths. Changing `storage.mode` does not change where KFP stores pipeline artifacts.
+`storage.mode: local` cannot be combined with `seaweedfs.remote`.
 
 #### External AWS S3 or Azure Blob (SeaweedFS remote gateway)
 
-To persist KFP artifacts to cloud storage, enable `seaweedfs.remote`. SeaweedFS continues to serve KFP locally; a background gateway syncs **`storage.pipelines.bucket`** to AWS S3 or Azure Blob (not `storage.local.bucket`).
+Enable `seaweedfs.remote` with matching `provider` and `storage.mode`. KFP reads/writes the in-cluster bucket (default **`mlrun`**); the gateway syncs it to your cloud bucket/container where MLRun also stores artifacts.
 
 The chart deploys:
 
-- A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and `remote.mount` on `/buckets/<storage.pipelines.bucket>`. **`s3-bucket-init`** (hook weight 8) creates in-cluster buckets before this job when remote is enabled. By default the mount uses `-nonempty` so upgrades succeed even when the KFP bucket already contains pipeline artifacts
-- A **gateway Deployment** that keeps the KFP pipelines bucket and remote bucket in sync. It passes **`-include=<storage.pipelines.bucket>`** and **`-exclude=<storage.local.bucket>`** when `storage.mode` is `local`, so the MLRun bucket is never mirrored or deleted in cloud storage (without `-exclude`, SeaweedFS can **`delete remote bucket`** and remove the Azure container when the local `mlrun` bucket changes).
+- A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and `remote.mount` on `/buckets/<storage.local.bucket>` (default **`mlrun`**). **`s3-bucket-init`** (hook weight 8) creates that in-cluster bucket before this job when remote is enabled. By default the mount uses `-nonempty` so upgrades succeed when the bucket already has data
+- A **gateway Deployment** that syncs the in-cluster KFP bucket to **`storage.s3.bucket`** or **`storage.azure.containerName`**. It passes **`-include=<in-cluster bucket name>`** (default **`mlrun`**)
 
 Example overlays (copy and customize, or pass as `-f` values files). See `examples/README.md` for deploy commands and Azure auth options:
 
@@ -235,13 +235,13 @@ Key values under `seaweedfs.remote`:
 | `enabled`             | Enable remote gateway sync (default: `false`)                                                                                                |
 | `provider`            | `s3` or `azure`                                                                                                                              |
 | `name`                | Remote name for SeaweedFS — letters and numbers only (default: `cloudstorage`)                                                               |
-| `bucket`              | Cloud AWS bucket or Azure **container for KFP sync only** (defaults to **`storage.pipelines.bucket`**, e.g. `kfp-artifacts`). Not `storage.local.bucket`. MLRun uses **`storage.s3.bucket`** / **`storage.azure.containerName`** only when **`storage.mode`** is `s3` / `azure-blob`. |
+| `bucket`              | Cloud AWS bucket or Azure container — **must match** `storage.s3.bucket` or `storage.azure.containerName` (defaults from MLRun settings if empty) |
 | `s3.endpoint`         | Regional S3 endpoint (required when `provider: s3`)                                                                                          |
 | `s3.forcePathStyle`   | Path-style S3 URLs (default: `false` for AWS; set `true` for MinIO and other path-style endpoints)                                             |
 | `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
 
 
-> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout). Remote sync uses **`storage.s3.*` / `storage.azure.*`** for cloud **credentials** (static keys for S3; `global.infrastructure.aws.s3NonAnonymous`/IRSA is not supported for the remote gateway). **`seaweedfs.remote.bucket`** is the **KFP** cloud bucket/container and is **independent** of MLRun’s **`storage.s3.bucket`** / **`storage.azure.containerName`**. KFP reads/writes **`storage.pipelines.bucket`** in-cluster; the gateway mirrors **only that bucket** to **`seaweedfs.remote.bucket`**. With **`storage.mode: local`**, **`storage.local.bucket`** holds MLRun in-cluster only (gateway **`-exclude`**). With **`storage.mode: s3` or `azure-blob`**, MLRun writes **directly** to its cloud bucket/container, not via SeaweedFS remote.
+> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout) and **`storage.mode: s3`** or **`azure-blob`**. **`seaweedfs.remote.bucket`** defaults to **`storage.s3.bucket`** / **`storage.azure.containerName`** (customer cloud name). KFP’s in-cluster SeaweedFS bucket defaults to **`storage.local.bucket`** (**`mlrun`**). KFP pipeline paths under `minio://mlrun/v2/artifacts` sync into the customer cloud bucket alongside MLRun data.
 
 See also: [Kubeflow Pipelines object store configuration](https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/).
 

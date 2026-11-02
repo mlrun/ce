@@ -24,9 +24,9 @@ global:
 # S3-compatible storage configuration for MLRun and Jupyter.
 # Kubeflow Pipelines artifacts always use in-cluster SeaweedFS.
 # To persist KFP artifacts to external AWS S3 or Azure Blob, enable seaweedfs.remote below.
-# SeaweedFS acts as an S3 gateway and syncs storage.pipelines.bucket to the remote backend when seaweedfs.remote is enabled.
+# seaweedfs.remote requires storage.mode s3 or azure-blob — MLRun and KFP share the same cloud bucket/container.
+# KFP uses the same in-cluster SeaweedFS bucket as storage.local.bucket; the remote gateway syncs it to the shared cloud target.
 # See: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
-# MLRun/Jupyter continue to use storage.mode independently.
 # =============================================================================
 
 # storage.mode selects which backend credentials Secret is created (storage-credentials-<mode>)
@@ -35,8 +35,8 @@ global:
 #   local (default) - bundled SeaweedFS; injects AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
 #                     and AWS_ENDPOINT_URL_S3 pointing at the in-cluster SeaweedFS S3 service.
 #                     Credentials come from storage.local.accessKey/secretKey; artifact path from
-#                     storage.local.bucket (not synced by seaweedfs.remote).
-#                     KFP uses storage.pipelines.bucket on in-cluster SeaweedFS (see mlrun-ce.pipelines.s3.*).
+#                     storage.local.bucket. Incompatible with seaweedfs.remote (use s3 or azure-blob mode).
+#                     KFP uses the same in-cluster bucket as storage.local.bucket.
 #   s3              - external AWS S3; injects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY only
 #                     into MLRun and Jupyter (no custom endpoint — SDK uses the standard AWS endpoint).
 #                     Credentials come from storage.s3.accessKey/secretKey; artifact path from
@@ -49,9 +49,6 @@ storage:
     accessKey: "seaweed"
     secretKey: "seaweed123"
     bucket: "mlrun"
-  # In-cluster SeaweedFS bucket for KFP pipeline artifacts only. seaweedfs.remote mounts this bucket to cloud.
-  pipelines:
-    bucket: kfp-artifacts
   # External AWS S3 credentials — only applied to MLRun and Jupyter when mode is "s3".
   s3:
     accessKey: ""
@@ -492,17 +489,18 @@ seaweedfs:
     nodePort: 30094
 
   # Sync KFP pipeline artifacts to external AWS S3 or Azure Blob via SeaweedFS remote gateway.
-  # KFP uses storage.pipelines.bucket in-cluster; remote gateway mirrors only that bucket (not storage.local.bucket).
+  # Requires storage.mode s3 or azure-blob. Customer cloud bucket/container: storage.s3.bucket / storage.azure.containerName.
+  # KFP uses in-cluster SeaweedFS bucket storage.local.bucket (default "mlrun"); gateway syncs it to that cloud target.
   # See examples/seaweedfs-remote-*-overlay.yaml.
   remote:
     enabled: false
     # Logical name for remote.configure / filer.remote.gateway -createBucketAt.
     # Letters and numbers only — SeaweedFS rejects hyphens and other characters.
     name: cloudstorage
-    # Remote backend: s3 (AWS or S3-compatible) or azure (Azure Blob native API)
+    # Remote backend: s3 (requires storage.mode s3) or azure (requires storage.mode azure-blob)
     provider: ""
-    # Cloud bucket (AWS) or container (Azure) for KFP remote sync only (defaults to storage.pipelines.bucket).
-    # Independent of storage.s3.bucket / storage.azure.containerName (those apply to MLRun when storage.mode is s3/azure-blob).
+    # Cloud bucket (AWS) or container (Azure). Must match MLRun (storage.s3.bucket / storage.azure.containerName).
+    # Leave empty to default from MLRun cloud settings.
     bucket: ""
     s3:
       # Regional endpoint, e.g. s3.us-east-2.amazonaws.com (https:// added by the configure job)
@@ -514,9 +512,7 @@ seaweedfs:
     gateway:
       # When false, local bucket name is mirrored to remote without a random suffix
       createBucketWithRandomSuffix: false
-      # filer.remote.gateway mirrors all /buckets/* unless filtered. include = KFP bucket only;
-      # exclude (auto when storage.mode is local) = MLRun in-cluster bucket — prevents gateway from
-      # deleting the remote container when the local MLRun bucket is recreated.
+      # filer.remote.gateway mirrors all /buckets/* unless filtered. include = KFP in-cluster bucket only.
       includeBucketPattern: ""
       excludeBucketPattern: ""
     mount:

@@ -2,9 +2,9 @@
 
 These overlays enable `seaweedfs.remote` so KFP pipeline artifacts stay on in-cluster SeaweedFS while syncing to external AWS S3 or Azure Blob in the background.
 
-Both examples set `seaweedfs.allInOne.data.type: emptyDir` (no SeaweedFS PVC) for lab/dev testing. Production installs should omit that block and keep the chart default `persistentVolumeClaim`.
+**Requirements:** `storage.mode` must be `s3` (with `seaweedfs.remote.provider: s3`) or `azure-blob` (with `provider: azure`). Set the **customer cloud** name in `storage.s3.bucket` or `storage.azure.containerName`. KFP uses in-cluster SeaweedFS **`mlrun`** by default (`storage.local.bucket`); the gateway syncs it to that cloud target. Omit `seaweedfs.remote.bucket` to default from MLRun cloud settings.
 
-`storage.s3.*` / `storage.azure.*` in these overlays supply **cloud credentials** for the remote gateway. **`seaweedfs.remote.bucket`** is the **KFP** cloud bucket/container (defaults to **`storage.pipelines.bucket`**). **`storage.azure.containerName`** / **`storage.s3.bucket`** are for **MLRun only** when **`storage.mode`** is `azure-blob` / `s3`. With **`storage.mode: local`**, MLRun stays on in-cluster **`storage.local.bucket`** only.
+Both examples set `seaweedfs.allInOne.data.type: emptyDir` (no SeaweedFS PVC) for lab/dev testing. Production installs should omit that block and keep the chart default `persistentVolumeClaim`.
 
 Copy the overlay, replace the `<PLACEHOLDER>` values (including credentials), then deploy. Do not commit real secrets to git.
 
@@ -22,7 +22,7 @@ If the SeaweedFS all-in-one pod restarts with `emptyDir`, remote mount state is 
 
 ## AWS S3
 
-1. Copy and customize `seaweedfs-remote-s3-overlay.yaml` (`accessKey`, `secretKey`, `seaweedfs.remote.bucket` for KFP, `endpoint`, `region`).
+1. Copy and customize `seaweedfs-remote-s3-overlay.yaml` (`accessKey`, `secretKey`, `storage.s3.bucket`, `endpoint`, `region`).
 2. Deploy:
 
 ```bash
@@ -35,7 +35,7 @@ helm upgrade --install mlrun-ce charts/mlrun-ce -n mlrun \
 
 1. Copy and customize `seaweedfs-remote-azure-overlay.yaml`.
 2. Set `accountName`, `accountKey`, and `containerName` (option A), or set `connectionString` and leave `accountName`/`accountKey` empty (option B).
-3. Ensure `seaweedfs.remote.bucket` matches `storage.azure.containerName`.
+3. Use one container name for MLRun and KFP sync (`storage.azure.containerName`; optional matching `seaweedfs.remote.bucket`).
 4. Deploy:
 
 ```bash

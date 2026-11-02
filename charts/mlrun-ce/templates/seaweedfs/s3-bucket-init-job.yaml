@@ -1,4 +1,4 @@
-{{- $remoteEnabled := eq (include "mlrun-ce.seaweedfs.remote.enabled" . | toString) "true" }}
+{{- $remoteEnabled := eq (include "mlrun-ce.seaweedfs.remote.enabled" .) "true" }}
 {{- if .Values.seaweedfs.enabled }}
 apiVersion: batch/v1
 kind: Job
