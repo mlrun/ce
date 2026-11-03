@@ -1,7 +1,7 @@
 # Copy this file, replace the placeholders below, and use it with your main install settings.
 #
 # What this does:
-# - Saves your MLRun projects and pipeline run files to AWS S3 (one bucket you choose).
+# - Saves your MLRun and pipeline artifacts run files to AWS S3 (one bucket you choose).
 # - Pipeline files are copied from the SeaweedFS cluster to S3 automatically in the background.
 #
 # Before you install:

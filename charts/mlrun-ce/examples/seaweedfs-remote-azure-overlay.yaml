@@ -1,7 +1,7 @@
 # Copy this file, replace the placeholders below, and use it with your main install settings.
 #
 # What this does:
-# - Saves your MLRun projects and pipeline run files to Azure Blob Storage (one container you choose).
+# - Saves your MLRun and pipeline artifacts run files to Azure Blob Storage (one container you choose).
 # - Pipeline files are copied from the SeaweedFS cluster to Azure automatically in the background.
 #
 # Before you install:
