@@ -29,8 +29,8 @@ global:
 # See: https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/
 # =============================================================================
 
-# storage.mode selects which backend credentials Secret is created (storage-credentials-<mode>)
-# and mounted into MLRun/Jupyter (optional refs — only the active mode's Secret exists).
+# storage.mode selects which backend credentials are written to the storage-credentials Secret
+# and mounted into MLRun/Jupyter via envFrom.
 # Options:
 #   local (default) - bundled SeaweedFS; injects AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
 #                     and AWS_ENDPOINT_URL_S3 pointing at the in-cluster SeaweedFS S3 service.
@@ -194,13 +194,7 @@ mlrun:
       - configMapRef:
           name: mlrun-common-env
       - secretRef:
-          name: storage-credentials-local
-          optional: true
-      - secretRef:
-          name: storage-credentials-s3
-          optional: true
-      - secretRef:
-          name: storage-credentials-azure-blob
+          name: storage-credentials
           optional: true
       - configMapRef:
           name: mlrun-pipelines-config
@@ -336,13 +330,7 @@ jupyterNotebook:
         name: jupyter-common-env
         optional: true
     - secretRef:
-        name: storage-credentials-local
-        optional: true
-    - secretRef:
-        name: storage-credentials-s3
-        optional: true
-    - secretRef:
-        name: storage-credentials-azure-blob
+        name: storage-credentials
         optional: true
   persistence:
     enabled: true

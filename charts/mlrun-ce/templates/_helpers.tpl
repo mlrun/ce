@@ -190,11 +190,11 @@ S3 Secret Key - for MLRun and Jupyter.
 S3 Bucket - for MLRun and Jupyter.
 */}}
 {{/*
-Kubernetes Secret for MLRun storage credentials (one per storage.mode so Helm upgrades
-do not merge stale AWS keys into an azure-blob Secret).
+Kubernetes Secret for MLRun/Jupyter storage credentials (single name; content follows storage.mode).
+After changing storage.mode, helm upgrade and restart mlrun-api/Jupyter. Remove legacy storage-credentials-* Secrets if present.
 */}}
 {{- define "mlrun-ce.storage.credentialsSecretName" -}}
-{{- printf "storage-credentials-%s" .Values.storage.mode -}}
+storage-credentials
 {{- end -}}
 
 {{- define "mlrun-ce.s3.bucket" -}}
