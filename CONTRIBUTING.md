@@ -48,7 +48,7 @@ git remote add upstream https://github.com/mlrun/ce
 3. Branch from `development` — the default branch is `development`, not `main` or `master`.
 4. Branch naming convention: `<scope>/<short-description or ticket-number>`, e.g. `feature/add-redis-support` or `fix/CE-111`.
 5. All PRs target `upstream/development`.
-6. Bump the version in `charts/mlrun-ce/Chart.yaml` before opening a PR (format: `major.minor.patch` or `major.minor.patch-rc.N`, e.g. `0.11.0-rc.1`).
+6. Bump the version in `charts/mlrun-ce/Chart.yaml` before opening a PR (format: `major.minor.patch` or `major.minor.patch-rc.N`, e.g. `0.11.0-rc.1`), and update the pinned `mlrun-ce-<version>` install tags in `README.md`, `scripts/README.md` and `scripts/install.py` to match. The version has to be unreleased when the PR merges: if another PR takes it first, Installer CI fails with "already released", and you merge `development` and bump again.
 7. If you change `requirements.yaml`, run `make helm-update-dependencies` and commit the updated `requirements.lock` alongside it.
 8. Each change should support Local Mac installations and native k8s as explained in [prerequisites documentation](https://docs.mlrun.org/en/stable/install-mlrun-ce/kubernetes-install.html#prerequisites).
 

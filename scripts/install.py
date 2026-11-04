@@ -35,9 +35,10 @@
 # From a clone, installing this repo's own chart on the current branch:
 #   ./scripts/install.py --chart-path ./charts/mlrun-ce
 #
-# Without a clone — pin a release tag, see https://github.com/mlrun/ce/releases;
-# "development" also works but moves with every merge:
-#   uvx --from "git+https://github.com/mlrun/ce@mlrun-ce-0.12.1-rc.6#subdirectory=scripts" \
+# Without a clone — pin a release tag, see https://github.com/mlrun/ce/releases (if the
+# tag below is not listed yet, take the newest; releases older than the installer have no
+# scripts/ and uvx fails on them); "development" also works but moves with every merge:
+#   uvx --from "git+https://github.com/mlrun/ce@mlrun-ce-0.12.1-rc.8#subdirectory=scripts" \
 #     mlrun-ce-installer install
 #
 # Commands: install (the default), uninstall, version, help. Flags may be passed with no

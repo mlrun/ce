@@ -21,10 +21,14 @@ For a scripted install, [`scripts/install.py`](scripts/README.md) wraps those st
 secret, pre-install validation and `helm install` — behind a single command:
 
 ```bash
-CE_TAG=mlrun-ce-0.12.1-rc.6
+CE_TAG=mlrun-ce-0.12.1-rc.8
 uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
   mlrun-ce-installer install
 ```
+
+The tag is the release this README ships with. If it is not on the
+[releases page](https://github.com/mlrun/ce/releases) yet, use the newest tag listed there;
+releases older than the installer have no `scripts/` directory, and `uvx` fails on them.
 
 It needs [uv](https://docs.astral.sh/uv/), helm and kubectl; uv supplies the Python and the
 installer's dependencies itself.

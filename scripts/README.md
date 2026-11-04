@@ -45,13 +45,17 @@ Pin to a release tag. Pick one from [the releases page](https://github.com/mlrun
 — the installer from tag `mlrun-ce-X` is the one tested against chart `X`:
 
 ```bash
-CE_TAG=mlrun-ce-0.12.1-rc.6
+CE_TAG=mlrun-ce-0.12.1-rc.8
 uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
   mlrun-ce-installer install
 ```
 
 `uvx` fetches the installer, resolves its dependencies into a throwaway environment and
 runs it, leaving nothing behind on your system Python.
+
+The tag above is the release this README ships with. If it is not on the releases page yet,
+use the newest tag listed there. Releases older than the installer have no `scripts/`
+directory, and `uvx` fails on them.
 
 Substituting `development` for the tag always gets the newest installer, but it moves with
 every merge, so two runs a day apart can differ. Prefer a tag anywhere reproducibility
@@ -66,7 +70,7 @@ there.
 ### Install as a named command
 
 ```bash
-CE_TAG=mlrun-ce-0.12.1-rc.6
+CE_TAG=mlrun-ce-0.12.1-rc.8
 uv tool install "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts"
 mlrun-ce-installer version
 ```

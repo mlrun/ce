@@ -51,6 +51,20 @@ jobs:
         with:
           enable-cache: true
 
+      # Release tags are cut on merge from Chart.yaml's version, and the documented install
+      # command pins that tag. A version some other PR already released means this merge
+      # cuts no tag, and the pinned command points at a tree without this change (or,
+      # for the first installer release, without scripts/ at all).
+      - name: Check the chart version is not already released
+        if: matrix.python == '3.9'
+        run: |
+          version=$(sed -n 's/^version:[[:space:]]*//p' charts/mlrun-ce/Chart.yaml)
+          if git ls-remote --exit-code --tags https://github.com/mlrun/ce "refs/tags/mlrun-ce-${version}" >/dev/null; then
+            echo "::error file=charts/mlrun-ce/Chart.yaml::mlrun-ce-${version} is already released. Merge development and bump charts/mlrun-ce/Chart.yaml (and the pinned install tags) past it."
+            exit 1
+          fi
+          echo "mlrun-ce-${version} is not released yet."
+
       # Ruff's target-version is pinned in the config, so linting once is enough.
       - name: Lint
         if: matrix.python == '3.9'
