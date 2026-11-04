@@ -42,10 +42,10 @@
 {{- if and $remoteEnabled (eq .Values.seaweedfs.remote.provider "azure") (not (or .Values.storage.azure.connectionString (and .Values.storage.azure.accountName .Values.storage.azure.accountKey))) }}
 {{ fail "seaweedfs.remote with provider \"azure\" requires storage.azure.connectionString or storage.azure.accountName+accountKey." }}
 {{- end }}
+{{- if $remoteEnabled }}
 {{- $mlrunCloudBucket := include "mlrun-ce.storage.mlrunCloudBucket" . -}}
 {{- $remoteCloudBucket := include "mlrun-ce.seaweedfs.remote.remoteBucket" . -}}
-{{- if and $remoteEnabled (or (not $mlrunCloudBucket) (not $remoteCloudBucket)) }}
-{{ fail "seaweedfs.remote requires storage.mode \"s3\" or \"azure-blob\" with storage.s3.bucket or storage.azure.containerName set (seaweedfs.remote.bucket defaults from MLRun cloud settings)." }}
-{{- else if and $remoteEnabled (ne $remoteCloudBucket $mlrunCloudBucket) }}
+{{- if ne $remoteCloudBucket $mlrunCloudBucket }}
 {{ fail (printf "seaweedfs.remote.bucket (%q) must match MLRun cloud storage (%q). Use one shared S3 bucket or Azure container; omit seaweedfs.remote.bucket to default from storage.s3.bucket or storage.azure.containerName." $remoteCloudBucket $mlrunCloudBucket) }}
+{{- end }}
 {{- end }}

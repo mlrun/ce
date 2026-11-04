@@ -21,6 +21,10 @@ spec:
         app.kubernetes.io/component: seaweedfs-remote-config
     spec:
       restartPolicy: OnFailure
+      {{- with .Values.seaweedfs.remote.configJob.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       initContainers:
         - name: wait-for-filer
           image: busybox:1.37
@@ -37,6 +41,9 @@ spec:
         - name: remote-config
           image: {{ include "mlrun-ce.seaweedfs.image" . | quote }}
           imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: {{ include "mlrun-ce.storage.credentialsSecretName" . }}
           env:
             - name: REMOTE_NAME
               value: {{ .Values.seaweedfs.remote.name | quote }}
@@ -55,35 +62,6 @@ spec:
               value: {{ .Values.seaweedfs.remote.s3.forcePathStyle | default false | toString | quote }}
             - name: S3_STORAGE_CLASS
               value: {{ .Values.seaweedfs.remote.s3.storageClass | default "STANDARD" | quote }}
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: seaweedfs-remote-credentials
-                  key: AWS_ACCESS_KEY_ID
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: seaweedfs-remote-credentials
-                  key: AWS_SECRET_ACCESS_KEY
-            {{- else if eq .Values.seaweedfs.remote.provider "azure" }}
-            - name: AZURE_STORAGE_CONNECTION_STRING
-              valueFrom:
-                secretKeyRef:
-                  name: seaweedfs-remote-credentials
-                  key: AZURE_STORAGE_CONNECTION_STRING
-                  optional: true
-            - name: AZURE_STORAGE_ACCOUNT
-              valueFrom:
-                secretKeyRef:
-                  name: seaweedfs-remote-credentials
-                  key: AZURE_STORAGE_ACCOUNT
-                  optional: true
-            - name: AZURE_STORAGE_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: seaweedfs-remote-credentials
-                  key: AZURE_STORAGE_ACCESS_KEY
-                  optional: true
             {{- end }}
           command:
             - /bin/sh

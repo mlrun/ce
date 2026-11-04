@@ -314,9 +314,7 @@ true
 {{- end -}}
 
 {{- define "mlrun-ce.seaweedfs.remote.gateway.excludeBucketPattern" -}}
-{{- if eq .Values.storage.mode "local" -}}
-{{- coalesce .Values.seaweedfs.remote.gateway.excludeBucketPattern .Values.storage.local.bucket -}}
-{{- end -}}
+{{- .Values.seaweedfs.remote.gateway.excludeBucketPattern | default "" -}}
 {{- end -}}
 
 {{/*

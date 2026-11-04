@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/component: seaweedfs-remote-gateway
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "mlrun-ce.seaweedfs.remote.gateway.selectorLabels" . | nindent 6 }}
@@ -16,6 +18,10 @@ spec:
       labels:
         {{- include "mlrun-ce.seaweedfs.remote.gateway.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.seaweedfs.remote.gateway.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       initContainers:
         - name: wait-for-filer
           image: busybox:1.37
@@ -48,7 +54,7 @@ spec:
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
-                name: seaweedfs-remote-credentials
+                name: {{ include "mlrun-ce.storage.credentialsSecretName" . }}
           command:
             - /bin/sh
             - -ec

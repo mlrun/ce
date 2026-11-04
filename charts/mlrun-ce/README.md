@@ -220,8 +220,11 @@ Key values under `seaweedfs.remote`:
 | `s3.endpoint`         | Regional S3 endpoint (required when `provider: s3`)                                                                                          |
 | `s3.forcePathStyle`   | Path-style S3 URLs (default: `false` for AWS; set `true` for MinIO and other path-style endpoints)                                             |
 | `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
+| `mount.mountExisting` | Must stay `true` when remote is enabled; `false` fails at render (remote always mounts into the filer) |
+| `gateway.podSecurityContext` | Optional pod `securityContext` for the remote-gateway Deployment (unset = none) |
+| `configJob.podSecurityContext` | Optional pod `securityContext` for the remote-config hook Job (unset = none) |
 
-> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout) and `storage.mode: s3` or `azure-blob`. `seaweedfs.remote.bucket` defaults to `storage.s3.bucket` / `storage.azure.containerName` (customer cloud name). KFP’s in-cluster SeaweedFS bucket defaults to `storage.local.bucket` (`mlrun`). KFP pipeline paths under `minio://mlrun/v2/artifacts` sync into the customer cloud bucket alongside MLRun data.
+> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout) and `storage.mode: s3` or `azure-blob`. `seaweedfs.remote.bucket` defaults to `storage.s3.bucket` / `storage.azure.containerName` (customer cloud name). KFP’s in-cluster SeaweedFS bucket defaults to `storage.local.bucket` (`mlrun`); pipeline paths under `minio://mlrun/v2/artifacts` sync into that cloud bucket alongside MLRun data. Cloud credentials use the same **`storage-credentials`** Secret as MLRun/Jupyter; with Azure remote, that Secret also includes SeaweedFS key names (`AZURE_STORAGE_ACCOUNT` / `AZURE_STORAGE_ACCESS_KEY`) alongside MLRun’s names.
 
 #### `helm uninstall` and reinstall (same cloud overlay)
 

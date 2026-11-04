@@ -502,10 +502,19 @@ seaweedfs:
       createBucketWithRandomSuffix: false
       # filer.remote.gateway mirrors all /buckets/* unless filtered. include = KFP in-cluster bucket only.
       includeBucketPattern: ""
+      # Optional; leave empty unless you need to exclude additional bucket names from sync.
       excludeBucketPattern: ""
+      # Optional pod securityContext (same idea as pipelines.db.securityContext). Leave unset for chart default.
+      podSecurityContext: {}
+    configJob:
+      # Optional pod securityContext for the remote-config Helm hook Job.
+      podSecurityContext: {}
     mount:
       # Pass -nonempty to remote.mount so helm upgrades work when /buckets/<local> already has pipeline data
       nonempty: true
+      # Always true when remote is enabled: the config Job runs remote.mount and the gateway waits for it.
+      # Setting false fails at helm template time (legacy installs only).
+      mountExisting: true
 
 spark-operator:
   enabled: true
