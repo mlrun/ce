@@ -18,7 +18,9 @@ exit: 0
 ["kubectl", "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}"]
 ["kubectl", "get", "namespace", "mlrun"]
 ["helm", "version", "--short"]
-["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--values", "tests/installer/fixtures/values.yaml", "--values", "<installer values>", "--version", "<installer chart version>", "--dry-run=server"]
+["helm", "status", "mlrun-ce", "--namespace", "mlrun"]
+["kubectl", "get", "crd", "prometheuses.monitoring.coreos.com"]
+["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--values", "tests/installer/fixtures/values.yaml", "--values", "<installer values>", "--version", "<installer chart version>", "--dry-run=server", "--set", "kube-prometheus-stack.enabled=false"]
 --- installer values ---
 # Written by the MLRun CE installer: every value it resolved for this release, and no
 # secrets (the registry password lives only in the pull Secret). Rewritten on every run,

@@ -85,6 +85,8 @@ def handle_kubectl(args):
 
         if what == "namespace":
             return (0, "") if os.environ.get("STUB_NAMESPACE_EXISTS") == "1" else (1, "not found")
+        if what == "crd":
+            return (0, "") if os.environ.get("STUB_CRDS_EXIST") == "1" else (1, "not found")
         if what == "secret":
             return (0, "") if os.environ.get("STUB_SECRET_EXISTS") == "1" else (1, "not found")
         if what == "ingressclass":

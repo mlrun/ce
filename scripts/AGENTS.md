@@ -332,9 +332,13 @@ node image is the safest choice.
   discovery but sends nothing to the API server (no admission webhooks, no server-side
   validation). On a cluster without the Prometheus Operator CRDs, the
   `kube-prometheus-stack` subchart's `Prometheus`/`PrometheusRule` objects fail with
-  `no matches for kind ... ensure CRDs are installed first` — so the default install's
-  dry run fails on every fresh cluster (confirmed on docker-desktop, helm 4.1). A Helm
-  limitation, not an installer bug; `--disable-system-monitoring` dry-runs the rest.
+  `no matches for kind ... ensure CRDs are installed first` (confirmed on docker-desktop,
+  helm 4.1). A Helm limitation, not an installer bug. `dry_run_exclusions` works around
+  it: on a server dry run with no existing release and no `prometheuses.monitoring.coreos.com`
+  CRD, it appends `--set kube-prometheus-stack.enabled=false` to the dry-run command only,
+  after the plain-helm equivalent is printed and never into `GENERATED_VALUES_FILE`. An
+  upgrade (release exists) or a cluster with the CRDs dry-runs the whole chart. Other
+  CR-shipping components (OpenTelemetry) can still hit the error before a first install.
 - **Two `mlrun-ce` releases can't coexist on one cluster**, even in different
   namespaces with different release/secret names and NodePort overrides via `-f`.
   Confirmed live: the chart's `workflow-controller` `PriorityClass` is

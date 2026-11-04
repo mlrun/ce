@@ -29,12 +29,19 @@ ensure CRDs are installed first, ...
 to map every rendered object to a resource type. Nothing is sent to the API server, so this
 is not server-side validation: helm simply cannot map a kind the cluster does not know yet.
 On a fresh cluster the Prometheus Operator CRDs do not exist until the chart's own
-`kube-prometheus-stack` installs them, so the default install's dry run fails here. It is a
-Helm limitation (a chart that ships CRDs and objects of those kinds cannot server-dry-run
-before its first install), not an `install.py` bug, and a real install is unaffected.
+`kube-prometheus-stack` installs them. It is a Helm limitation (a chart that ships CRDs and
+objects of those kinds cannot server-dry-run before its first install), not an `install.py`
+bug, and a real install is unaffected.
 
-To dry-run the rest, leave the monitoring stack out: `--dry-run --disable-system-monitoring`.
-A dry run against a cluster where the chart is already installed has the CRDs and passes.
+The installer works around it: when the release does not exist yet and the cluster has no
+`prometheuses.monitoring.coreos.com` CRD, `--dry-run` adds
+`--set kube-prometheus-stack.enabled=false` to the dry run only (not to the generated values
+file or the printed plain helm command) and says so. An upgrade, or a cluster that already
+has the CRDs, dry-runs the whole chart.
+
+If you still see this error, it names another kind whose CRDs the chart installs (for
+example the OpenTelemetry operator's, with `--enable-otel`); dry-run without that component,
+or after the first install.
 
 On Helm older than 3.13, where `--dry-run` is a boolean flag and `--dry-run=server` does
 not parse, the installer falls back to a client-side dry run and warns that it has. That

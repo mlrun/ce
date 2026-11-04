@@ -263,9 +263,10 @@ Runs every check and prompt, prints the plan, and renders the chart with
 
 `--dry-run=server` lets helm *read* the cluster: which API versions and CRDs exist, what
 `lookup()` returns, which resources would collide. It sends nothing to the API server, so
-admission webhooks and the server's own validation are not exercised. On a cluster that does
-not have the chart's CRDs yet, the default install's dry run fails with `no matches for kind
-"PrometheusRule"` — see the [FAQ](docs/faq.md#--dry-run-fails-with-no-matches-for-kind-prometheusrule).
+admission webhooks and the server's own validation are not exercised. A first install on a
+cluster without the Prometheus Operator CRDs is dry-run without the monitoring stack, because
+those CRDs come with the chart itself; an upgrade dry-runs the whole chart — see the
+[FAQ](docs/faq.md#--dry-run-fails-with-no-matches-for-kind-prometheusrule).
 Helm older than 3.13 has no server mode and falls back to a client-side render.
 
 Pre-install validators still run in `--dry-run` — see [Configuration](docs/configuration.md#pre-install-validators).

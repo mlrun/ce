@@ -1989,3 +1989,74 @@ def test_an_unexpected_error_puts_its_traceback_in_the_log(monkeypatch, tmp_path
     assert "Full debug log" in capsys.readouterr().err
     text = (tmp_path / "run.log").read_text()
     assert "Traceback" in text and "KeyError: 'surprise'" in text
+
+
+# ------------------------------------------------------------------------------------------
+# A first install's dry run always failed on the Prometheus CRDs the chart itself installs
+# ------------------------------------------------------------------------------------------
+
+SERVER_DRY_RUN = ["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce"]
+SERVER_DRY_RUN += ["--dry-run=server"]
+
+
+def _cluster(monkeypatch, recorder, *, release=False, crds=False):
+    helm = recorder(answers={"status": Result(0 if release else 1, "")})
+    kubectl = recorder(answers={"get crd": Result(0 if crds else 1, "")})
+    monkeypatch.setattr(helm_ops, "helm", helm)
+    monkeypatch.setattr(helm_ops, "kubectl", kubectl)
+    return helm, kubectl
+
+
+def test_a_first_install_dry_runs_without_the_monitoring_stack(monkeypatch, settings, recorder):
+    _cluster(monkeypatch, recorder)
+
+    assert helm_ops.dry_run_exclusions(settings, SERVER_DRY_RUN) == [
+        "--set", "kube-prometheus-stack.enabled=false",
+    ]  # fmt: skip
+
+
+def test_an_upgrade_dry_runs_the_whole_chart(monkeypatch, settings, recorder):
+    _, kubectl = _cluster(monkeypatch, recorder, release=True)
+
+    assert helm_ops.dry_run_exclusions(settings, SERVER_DRY_RUN) == []
+    assert not kubectl.calls
+
+
+def test_a_cluster_that_has_the_crds_dry_runs_the_whole_chart(monkeypatch, settings, recorder):
+    _cluster(monkeypatch, recorder, crds=True)
+
+    assert helm_ops.dry_run_exclusions(settings, SERVER_DRY_RUN) == []
+
+
+@pytest.mark.parametrize("case", ["client fallback", "monitoring disabled"])
+def test_nothing_is_excluded_where_nothing_would_fail(monkeypatch, settings, recorder, case):
+    helm, kubectl = _cluster(monkeypatch, recorder)
+    cmd = SERVER_DRY_RUN
+    if case == "client fallback":
+        cmd = [arg.replace("--dry-run=server", "--dry-run") for arg in SERVER_DRY_RUN]
+    else:
+        settings.disable_system_monitoring = True
+
+    assert helm_ops.dry_run_exclusions(settings, cmd) == []
+    assert not helm.calls and not kubectl.calls
+
+
+def test_the_exclusion_reaches_the_dry_run_but_not_the_printed_equivalent(
+    monkeypatch, settings, recorder, capture_logs, tmp_path
+):
+    settings.dry_run = True
+    settings.chart_ref = "mlrun-ce/mlrun-ce"
+    settings.generated_values_file = str(tmp_path / "values.yaml")
+    helm = recorder(answers={"status": Result(1, ""), "version": Result(0, "v3.14.0")})
+    monkeypatch.setattr(helm_ops, "helm", helm)
+    monkeypatch.setattr(helm_ops, "kubectl", recorder(answers={"get crd": Result(1, "")}))
+    streamed = []
+    monkeypatch.setattr(helm_ops, "stream", lambda cmd: streamed.append(cmd) or 0)
+    logs = capture_logs(helm_ops)
+
+    helm_ops.helm_install(settings)
+
+    assert "kube-prometheus-stack.enabled=false" in streamed[0]
+    printed = [line for line in logs if "helm upgrade --install" in line]
+    assert printed and "kube-prometheus-stack" not in printed[0]
+    assert "kube-prometheus-stack" not in Path(settings.generated_values_file).read_text()

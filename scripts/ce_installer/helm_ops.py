@@ -341,6 +341,33 @@ def build_helm_install_command(settings: Settings, installer_values: str = "") -
     return cmd
 
 
+PROMETHEUS_CRD = "prometheuses.monitoring.coreos.com"
+
+
+def dry_run_exclusions(settings: Settings, cmd: List[str]) -> List[str]:
+    """The --set flags that keep a first install's server dry run from failing on CRDs.
+
+    The monitoring stack renders Prometheus and PrometheusRule objects whose CRDs the chart
+    itself installs, and a server dry run maps every object against the cluster's API
+    discovery, so on a cluster that has never had the chart it fails with "no matches for
+    kind". An upgrade already has the CRDs and dry-runs the whole chart, and so does a
+    cluster that has them from elsewhere. Applied to the dry run only, never written to the
+    values file or the printed equivalent.
+    """
+    if (
+        "--dry-run=server" not in cmd
+        or settings.disable_system_monitoring
+        or helm(settings, "status", settings.release_name, "--namespace", settings.namespace).ok
+        or kubectl(settings, "get", "crd", PROMETHEUS_CRD).ok
+    ):
+        return []
+    log_info(
+        "First install on a cluster without the Prometheus CRDs: dry-running without the "
+        "monitoring stack, whose CRDs the chart installs itself. The real install includes it."
+    )
+    return ["--set", "kube-prometheus-stack.enabled=false"]
+
+
 def _install_with_progress_ui(settings: Settings, cmd: List[str]) -> None:
     """Run helm quietly into a temp log while the progress table owns the terminal."""
     handle, path = tempfile.mkstemp(prefix="mlrun-ce-helm-", suffix=".log")
@@ -373,12 +400,12 @@ def _install_with_progress_ui(settings: Settings, cmd: List[str]) -> None:
 def print_failure_hints(settings: Settings) -> None:
     """Where to look next. helm's own message names the symptom, rarely the pod behind it."""
     if settings.dry_run:
-        # The default chart ships Prometheus CRs, so this is how a dry run on any cluster
-        # without the chart's CRDs ends.
+        # The monitoring stack is left out of a first install's dry run, but other
+        # components that ship CRs (OpenTelemetry) can still end it this way.
         log_info(
             "'no matches for kind ... ensure CRDs are installed first' means the cluster does "
-            "not have CRDs the chart itself installs; a dry run cannot get past that on a "
-            f"fresh cluster. See {FAQ_URL}"
+            "not have CRDs the chart itself installs; a dry run cannot get past that before "
+            f"the first install. See {FAQ_URL}"
         )
         return
     kubectl_prefix = " ".join(kubectl_cmd(settings))
@@ -404,6 +431,8 @@ def helm_install(settings: Settings) -> None:
     log_info("Equivalent plain helm commands:")
     for line in plain_helm_equivalent(settings, cmd):
         log_info(f"  {line}")
+    if settings.dry_run:
+        cmd += dry_run_exclusions(settings, cmd)
 
     # `out.is_terminal` is part of the condition, not just a guard inside the progress UI:
     # the UI returns immediately off a terminal, but helm is still writing into a temp file
