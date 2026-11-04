@@ -164,7 +164,8 @@ Work outward in this order — each step rules out a whole class of cause:
    advisory ones only warn. `--skip-validators` is for when you know better than the check,
    not a default.
 3. **Check the release state.** A prior interrupted run leaves `pending-install`, and the
-   next install fails on it: `helm list -n mlrun -a`.
+   next install fails on it: `helm list -n mlrun --pending --failed --deployed` (Helm 4
+   removed `-a`/`--all`; these status flags work on Helm 3 and 4).
 4. **Check precedence before believing a value was ignored.** Print the composed helm
    command with `--dry-run` and look at the actual `--set` flags rather than inferring from
    the config file.
