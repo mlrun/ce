@@ -53,14 +53,14 @@ from .conftest import Recorder
 # line, and TimescaleDB is last, so the otel section follows it with nothing in between.
 LIVE_NOTES = """\
 Jupyter UI is available at:
-192.168.236.51:30040
+203.0.113.51:30040
 
 SeaweedFS Admin UI is available at:
-192.168.236.51:30093
+203.0.113.51:30093
 -  S3 credentials: seaweed / seaweed123
 
 TimescaleDB is available at:
-192.168.236.51:30110
+203.0.113.51:30110
 -  username: postgres
 -  database: postgres
 
@@ -76,13 +76,13 @@ Happy MLOPSing!!! :]
 # so these isolate them. Each one fails if its own fix is reverted, independently.
 PLAIN_DETAIL_NOTES = """\
 MLRun UI is available at:
-192.168.236.51:30060
+203.0.113.51:30060
 Sign in with the admin account.
 """
 
 LATER_SECTION_NOTES = """\
 TimescaleDB is available at:
-192.168.236.51:30110
+203.0.113.51:30110
 -  username: postgres
 
 Some other component is enabled!
@@ -110,14 +110,14 @@ def test_notes_table_url_column_is_the_address_not_a_trailing_detail_line(monkey
     rows = render_table(monkeypatch, settings, LIVE_NOTES)
     # Was "-  S3 credentials: seaweed / seaweed123": every line after the header was
     # assigned to url, so the last one won instead of the first.
-    assert rows["SeaweedFS Admin UI"][0] == "192.168.236.51:30093"
+    assert rows["SeaweedFS Admin UI"][0] == "203.0.113.51:30093"
 
 
 def test_notes_table_last_service_does_not_absorb_the_rest_of_the_notes(monkeypatch, settings):
     rows = render_table(monkeypatch, settings, LIVE_NOTES)
     # Was a sentence of OpenTelemetry prose: nothing terminated the final entry, so it kept
     # consuming lines to the end of the NOTES.
-    assert rows["TimescaleDB"][0] == "192.168.236.51:30110"
+    assert rows["TimescaleDB"][0] == "203.0.113.51:30110"
     assert "OTel" not in rows["TimescaleDB"][0]
 
 
@@ -125,7 +125,7 @@ def test_notes_table_url_survives_a_following_detail_line(monkeypatch, settings)
     rows = render_table(monkeypatch, settings, PLAIN_DETAIL_NOTES)
     # Isolates "first non-empty line wins" from the credentials handling: an ordinary prose
     # line after the address used to overwrite it.
-    assert rows["MLRun UI"][0] == "192.168.236.51:30060"
+    assert rows["MLRun UI"][0] == "203.0.113.51:30060"
 
 
 def test_notes_table_credentials_do_not_leak_in_from_a_later_section(monkeypatch, settings):
@@ -377,7 +377,7 @@ def test_external_host_with_kube_context_ignores_local_machine_heuristics(monkey
 
     def answer(*args, **kwargs):
         if "InternalIP" in " ".join(args[1:]):
-            return Result(0, "192.168.236.51")
+            return Result(0, "203.0.113.51")
         return Result(0, "docker-desktop")
 
     monkeypatch.setattr(cluster, "kubectl", answer)
@@ -390,7 +390,7 @@ def test_external_host_with_kube_context_ignores_local_machine_heuristics(monkey
     # `kubectl config current-context` reports the ambient context regardless of --context,
     # so these heuristics describe the local machine, not the selected cluster. The value
     # flows into --set global.externalHostAddress, so a wrong guess is not cosmetic.
-    assert settings.external_host_address == "192.168.236.51"
+    assert settings.external_host_address == "203.0.113.51"
 
 
 def test_external_host_without_kube_context_keeps_the_docker_desktop_heuristic(

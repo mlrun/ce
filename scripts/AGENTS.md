@@ -603,7 +603,7 @@ From the external review of PR #315:
   the pod and event commands, `HELM_TIMEOUT`, that a re-run upgrades in place, and the FAQ;
   a failed dry run explains the missing-CRD error instead. The debug log carries the rest.
 
-From the real install on vmdev137 (Helm 4.1):
+From a real install on a Helm 4.1 cluster:
 
 - **Helm 4 rejected `helm list --all`, which switched the second-release guards off.**
   Helm 4 removed `--all` and lists every status by default, so the listing exited 1 with
