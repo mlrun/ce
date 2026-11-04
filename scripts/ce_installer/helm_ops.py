@@ -25,13 +25,14 @@ from typing import List
 
 import yaml
 
-from .cluster import resolve_chart_source
-from .console import InstallerError, die, err, log_error, log_info, log_warn, out
+from .console import InstallerError, die, err, log_debug, log_error, log_info, log_warn, out
 from .registry import MANAGED_BY_LABEL, hosts_file_ip
 from .settings import Settings
-from .shell import check_requirements, helm, helm_cmd, kubectl, stream
+from .shell import check_requirements, helm, helm_cmd, kubectl, kubectl_cmd, stream
 from .ui import print_notes_table, run_deployment_progress_ui
 from .validators import parse_major_minor
+
+FAQ_URL = "https://github.com/mlrun/ce/blob/development/scripts/docs/faq.md"
 
 
 def build_set_flags(settings: Settings) -> List[str]:
@@ -205,6 +206,24 @@ GENERATED_VALUES_HEADER = """\
 """
 
 
+def refuse_values_file_collision(settings: Settings) -> None:
+    """Stop when -f names the file the installer writes its own values into.
+
+    The installer rewrites that file on every run, so the user's values would be replaced
+    before helm read them, and the file they wrote would be gone.
+    """
+    if not settings.values_file:
+        return
+    generated = Path(settings.generated_values_file).resolve()
+    if Path(settings.values_file).resolve() != generated:
+        return
+    raise die(
+        f"-f {settings.values_file} is the file the installer writes its own values to "
+        f"({generated}), and would be overwritten. Rename your file, or set "
+        "GENERATED_VALUES_FILE to another path."
+    )
+
+
 def write_installer_values(settings: Settings) -> str:
     """Write the installer's values to their file and return its path, or "" if none.
 
@@ -215,6 +234,7 @@ def write_installer_values(settings: Settings) -> str:
     values = set_flags_to_values(build_set_flags(settings))
     if not values:
         return ""
+    refuse_values_file_collision(settings)
     path = Path(settings.generated_values_file).resolve()
     path.write_text(GENERATED_VALUES_HEADER + yaml.safe_dump(values, sort_keys=False))
     log_info(f"Installer values written to {path}")
@@ -331,12 +351,12 @@ def _install_with_progress_ui(settings: Settings, cmd: List[str]) -> None:
                 proc.terminate()
                 proc.wait()
                 raise InstallerError(code=130) from None
+        helm_output = log_path.read_text() if log_path.is_file() else ""
+        log_debug("--- helm output (progress UI) ---\n" + helm_output)
         if helm_exit != 0:
             log_error("Helm upgrade/install failed. Output below:")
-            if log_path.is_file():
-                err.print(log_path.read_text().rstrip("\n"))
-            else:
-                log_warn(f"Helm output log file was already removed: {path}")
+            err.print(helm_output.rstrip("\n"))
+            print_failure_hints(settings)
             raise InstallerError(code=helm_exit)
     finally:
         log_path.unlink(missing_ok=True)
@@ -345,9 +365,31 @@ def _install_with_progress_ui(settings: Settings, cmd: List[str]) -> None:
     out.print()
 
 
-def helm_install(settings: Settings) -> None:
-    resolve_chart_source(settings)
+def print_failure_hints(settings: Settings) -> None:
+    """Where to look next. helm's own message names the symptom, rarely the pod behind it."""
+    if settings.dry_run:
+        # The default chart ships Prometheus CRs, so this is how a dry run on any cluster
+        # without the chart's CRDs ends.
+        log_info(
+            "'no matches for kind ... ensure CRDs are installed first' means the cluster does "
+            "not have CRDs the chart itself installs; a dry run cannot get past that on a "
+            f"fresh cluster. See {FAQ_URL}"
+        )
+        return
+    kubectl_prefix = " ".join(kubectl_cmd(settings))
+    log_info("To see what did not come up:")
+    log_info(f"  {kubectl_prefix} get pods -n {settings.namespace}")
+    log_info(f"  {kubectl_prefix} get events -n {settings.namespace} --sort-by=.lastTimestamp")
+    log_info(
+        f"A timeout (HELM_TIMEOUT={settings.helm_timeout}) is often a slow first image pull; "
+        "running the same command again upgrades the release in place."
+    )
+    log_info(f"Common failures and their fixes: {FAQ_URL}")
 
+
+def helm_install(settings: Settings) -> None:
+    """Run helm. The chart source is resolved earlier, in execute(), so that a version that
+    is not published stops the run before anything is created."""
     if settings.dry_run:
         log_info("Dry-run mode: rendering chart without deploying...")
     else:
@@ -367,7 +409,9 @@ def helm_install(settings: Settings) -> None:
     else:
         helm_exit = stream(cmd)
         if helm_exit != 0:
-            raise die(f"Helm installation failed (exit code {helm_exit}).", helm_exit)
+            log_error(f"Helm installation failed (exit code {helm_exit}).")
+            print_failure_hints(settings)
+            raise InstallerError(code=helm_exit)
 
     report_ingress_hosts(settings)
     if settings.dry_run:

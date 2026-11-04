@@ -483,9 +483,11 @@ def run_cli(monkeypatch, argv):
         "refuse_a_second_release",
         "ensure_namespace",
         "gather_install_params",
+        "resolve_chart_source",
+        "confirm_target",
     ):
         monkeypatch.setattr(cli, name, lambda _settings: None)
-    monkeypatch.setattr(cli, "create_registry_secret", lambda _settings: None)
+    monkeypatch.setattr(cli, "prepare_registry_secret", lambda _settings: False)
     monkeypatch.setattr(cli, "run_blocking_validators", lambda s: validator_runs.append("blocking"))
     monkeypatch.setattr(cli, "run_validators", lambda s: validator_runs.append("warnings"))
     monkeypatch.setattr(cli, "helm_install", installed.append)

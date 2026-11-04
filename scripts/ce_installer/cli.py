@@ -14,8 +14,11 @@
 """Turning a command line into a run: the argv pre-parse click cannot express, the typer
 command, the run order, and the entry point."""
 
+import platform
 import re
 import sys
+import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Sequence
 
@@ -25,16 +28,34 @@ import typer
 from .cluster import (
     ensure_namespace,
     gather_install_params,
+    resolve_chart_source,
     resolve_external_host,
     validate_chart_path,
 )
 from .config import check_required_non_interactive, load_config
-from .console import InstallerError, die, log_info, log_warn, out
-from .helm_ops import do_uninstall, helm_install, refuse_a_second_release
+from .console import (
+    InstallerError,
+    close_debug_log,
+    debug_log_path,
+    die,
+    err,
+    log_debug,
+    log_info,
+    log_warn,
+    open_debug_log,
+    out,
+)
+from .helm_ops import (
+    do_uninstall,
+    helm_install,
+    refuse_a_second_release,
+    refuse_values_file_collision,
+)
 from .registry import (
-    create_registry_secret,
+    apply_registry_secret,
     deploy_local_registry,
-    verify_existing_registry_secret,
+    prepare_local_registry,
+    prepare_registry_secret,
 )
 from .settings import (
     COMMANDS,
@@ -45,7 +66,8 @@ from .settings import (
     env_str,
     env_true,
 )
-from .shell import check_requirements
+from .shell import check_requirements, redact
+from .ui import confirm_target
 from .validators import run_blocking_validators, run_validators
 
 # --------------------------------------------------------------------------------------
@@ -114,6 +136,7 @@ def pin_chart_version(settings: Settings) -> None:
         )
         return
     settings.ce_version = version
+    settings.ce_version_is_installers = True
     log_info(f"Installing chart version {version} (this installer's own).")
 
 
@@ -294,13 +317,13 @@ def execute(settings: Settings) -> None:
     check_required_non_interactive(settings)
     pin_chart_version(settings)
 
-    # Before anything touches the cluster. Further down this sat after ensure_namespace and
-    # deploy_local_registry, so a mistyped -f left a namespace and a running registry behind
-    # on the way to reporting that the file was never there.
+    # The run is split at confirm_target: everything above it only reads and asks, so a
+    # mistake caught there — a mistyped -f, an unpublished chart, a prompt answered with
+    # Ctrl-C, a "no" to the summary — leaves the cluster exactly as it was. Everything
+    # below it writes.
     if settings.values_file and not Path(settings.values_file).is_file():
         raise die(f"Values file not found: {settings.values_file}")
-    # Same reasoning: resolve_chart_source only reaches its path checks after the namespace
-    # exists and a local registry is running.
+    refuse_values_file_collision(settings)
     validate_chart_path(settings)
 
     check_requirements(settings)
@@ -308,29 +331,25 @@ def execute(settings: Settings) -> None:
     refuse_a_second_release(settings)
     if not settings.skip_validators:
         run_blocking_validators(settings)
-    ensure_namespace(settings)
+    resolve_chart_source(settings)
 
     if settings.local_registry or settings.enable_ingress:
         resolve_external_host(settings)
-
     if settings.local_registry:
-        deploy_local_registry(settings)
+        prepare_local_registry(settings)
 
     # Pure -f-only mode (no --config) stays fully self-contained: no secret creation, no
     # registry/host resolution — the values file must already reference an existing secret.
     # -f combined with --config runs the same secret creation / registry resolution as
     # --config-only, so the config-resolved fields have something to layer their --set on.
+    write_secret = False
     if settings.values_file and not settings.config_file:
         log_info(
             f"Using values file: {settings.values_file} "
             "(skipping secret creation and install prompts)"
         )
     else:
-        if settings.skip_registry_secret:
-            log_info("Skipping registry secret creation (--skip-secret or SKIP_REGISTRY_SECRET)")
-            verify_existing_registry_secret(settings)
-        else:
-            create_registry_secret(settings)
+        write_secret = prepare_registry_secret(settings)
         gather_install_params(settings)
 
     if settings.skip_validators:
@@ -338,6 +357,13 @@ def execute(settings: Settings) -> None:
     else:
         run_validators(settings)
 
+    confirm_target(settings)
+
+    ensure_namespace(settings)
+    if settings.local_registry:
+        deploy_local_registry(settings)
+    if write_secret:
+        apply_registry_secret(settings)
     helm_install(settings)
 
 
@@ -466,7 +492,8 @@ def install(
         None,
         "--ce-version",
         metavar="VERSION",
-        help="Pin a specific mlrun-ce chart version (default: latest)",
+        help="Install this published mlrun-ce chart version (default: the chart version "
+        "this installer ships with, which must be published)",
     ),
     chart_path: Optional[str] = typer.Option(
         None,
@@ -566,10 +593,39 @@ def install(
         )
         settings.otel_set_by_cli = otel_flags_present(_RAW_ARGS)
 
+        open_debug_log(settings.install_log_file, debug_log_header())
         apply_version_floors(settings)
         execute(settings)
     except InstallerError as exc:
+        point_at_debug_log()
         raise typer.Exit(exc.code) from None
+    except typer.Exit:
+        raise
+    except Exception:
+        # A bug, not a reported failure: the traceback goes to the log, where a bug report
+        # can carry it, and to the terminal when there is no log to hold it.
+        if not debug_log_path():
+            raise
+        log_debug(traceback.format_exc())
+        err.print("[ERROR] The installer hit an unexpected error.", style="red", markup=False)
+        point_at_debug_log()
+        raise typer.Exit(1) from None
+    finally:
+        close_debug_log()
+
+
+def debug_log_header() -> List[str]:
+    return [
+        f"mlrun-ce installer {installer_version()} debug log, {datetime.now().isoformat()}",
+        f"argv: {' '.join(redact(_RAW_ARGS))}",
+        f"python {platform.python_version()} on {platform.platform()}",
+    ]
+
+
+def point_at_debug_log() -> None:
+    path = debug_log_path()
+    if path:
+        err.print(f"Full debug log: {path}", markup=False, highlight=False)
 
 
 def click_exception_types() -> tuple:

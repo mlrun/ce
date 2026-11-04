@@ -27,6 +27,7 @@ import glob
 import json
 import os
 import re
+import sys
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -34,7 +35,8 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from ce_installer import cli, cluster, config, helm_ops, registry, shell, ui, validators
+from ce_installer import cli, cluster, config, console, helm_ops, registry, shell, ui, validators
+from ce_installer import settings as cli_settings
 from ce_installer.config import check_required_non_interactive
 from ce_installer.console import InstallerError
 from ce_installer.settings import prompt_or_env
@@ -290,10 +292,10 @@ def test_local_registry_dry_run_still_resolves_the_url_for_the_rendered_flags(
     settings.external_host_address = "localhost"
     monkeypatch.setattr(registry, "kubectl", Recorder())
 
-    registry.deploy_local_registry(settings)
+    registry.prepare_local_registry(settings)
 
-    # The guard sits after the URL assignment on purpose: a dry run has to render the same
-    # --set flags the real install would.
+    # Resolved in the read-only half on purpose: a dry run has to render the same --set
+    # flags the real install would.
     assert settings.local_registry_url
 
 
@@ -309,7 +311,7 @@ def test_local_registry_real_run_still_applies(monkeypatch, settings):
 
 
 # ------------------------------------------------------------------------------------------
-# deploy_local_registry() adopted a user's own `local-registry` objects
+# The local registry adopted a user's own `local-registry` objects
 # ------------------------------------------------------------------------------------------
 
 FOREIGN_DEPLOYMENT = {"get deployment local-registry": Result(0, "exists:")}
@@ -321,7 +323,7 @@ def test_a_foreign_local_registry_object_stops_the_run_before_any_apply(monkeypa
     monkeypatch.setattr(registry, "kubectl", rec)
 
     with pytest.raises(InstallerError):
-        registry.deploy_local_registry(settings)
+        registry.prepare_local_registry(settings)
 
     # apply would have labelled the user's Deployment, and --uninstall deletes by label.
     assert not rec.ran("apply"), "a user's object was applied over"
@@ -333,6 +335,7 @@ def test_the_installers_own_registry_objects_are_updated_on_a_rerun(monkeypatch,
     rec = Recorder(answers={"local-registry -o jsonpath": ours})
     monkeypatch.setattr(registry, "kubectl", rec)
 
+    registry.prepare_local_registry(settings)
     registry.deploy_local_registry(settings)
 
     assert rec.ran("apply"), "a rerun over our own registry must still apply"
@@ -347,7 +350,7 @@ def test_the_registry_ingress_is_checked_only_when_one_would_be_applied(
     rec = Recorder()
     monkeypatch.setattr(registry, "kubectl", rec)
 
-    registry.deploy_local_registry(settings)
+    registry.prepare_local_registry(settings)
 
     assert rec.ran("get ingress local-registry") is with_ingress
 
@@ -359,7 +362,7 @@ def test_a_dry_run_reports_a_foreign_local_registry_object_too(monkeypatch, sett
 
     # The dry run exists to show what the real one would do, refusal included.
     with pytest.raises(InstallerError):
-        registry.deploy_local_registry(settings)
+        registry.prepare_local_registry(settings)
 
 
 # ------------------------------------------------------------------------------------------
@@ -894,7 +897,7 @@ def test_the_local_registry_keeps_its_images_and_is_pinned():
 
 def test_a_blocking_validator_failure_leaves_the_cluster_untouched(monkeypatch, settings):
     mutated = []
-    for step in ("ensure_namespace", "deploy_local_registry", "create_registry_secret"):
+    for step in ("ensure_namespace", "deploy_local_registry", "apply_registry_secret"):
         monkeypatch.setattr(cli, step, lambda s, step=step: mutated.append(step))
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "resolve_external_host", lambda s: None)
@@ -1017,8 +1020,8 @@ def test_a_nodeport_owned_by_this_release_is_not_a_conflict(
 
 
 def test_a_bad_chart_path_is_caught_before_the_namespace_is_created(monkeypatch, settings):
-    # resolve_chart_source validates the path, but only runs after ensure_namespace and
-    # deploy_local_registry — so a typo left a namespace and a running registry behind.
+    # resolve_chart_source validates the path, but used to run only after ensure_namespace
+    # and deploy_local_registry — so a typo left a namespace and a running registry behind.
     settings.chart_path = "/no/such/chart"
 
     with pytest.raises(InstallerError):
@@ -1109,7 +1112,9 @@ def test_minikube_ip_is_asked_once(monkeypatch, settings, recorder):
     rec = recorder(answers={"minikube ip": Result(0, "192.168.49.2")})
     monkeypatch.setattr(cluster, "run", rec)
     monkeypatch.setattr(cluster.shutil, "which", lambda name: "/usr/bin/minikube")
-    monkeypatch.setattr(cluster, "kubectl", recorder())
+    monkeypatch.setattr(
+        cluster, "kubectl", recorder(answers={"current-context": Result(0, "minikube")})
+    )
     monkeypatch.setenv("EXTERNAL_HOST_ADDRESS", "")
     settings.non_interactive = True
     settings.kube_context = ""
@@ -1117,7 +1122,7 @@ def test_minikube_ip_is_asked_once(monkeypatch, settings, recorder):
     cluster.resolve_external_host(settings)
 
     assert settings.external_host_address == "192.168.49.2"
-    assert len([call for call in rec.calls if "minikube" in " ".join(call)]) == 1
+    assert rec.joined == ["minikube ip -p minikube"]
 
 
 def test_a_hard_clean_leaves_a_bound_pv_alone(monkeypatch, settings, recorder):
@@ -1249,7 +1254,6 @@ def test_show_progress_off_a_terminal_falls_back_to_helm_output(monkeypatch, set
     # writing into a temp file that a successful run deleted — so --show-progress in CI
     # produced no install output at all.
     settings.show_progress = True
-    monkeypatch.setattr(helm_ops, "resolve_chart_source", lambda s: None)
     # rich exposes is_terminal as a read-only property, so the class is the only seam.
     monkeypatch.setattr(type(helm_ops.out), "is_terminal", property(lambda self: False))
     monkeypatch.setattr(
@@ -1280,14 +1284,14 @@ def test_an_existing_pull_secret_is_updated_without_being_deleted_first(
     settings.local_registry = True
     settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
 
-    registry.create_registry_secret(settings)
+    _create_secret(settings)
 
     assert not rec.ran("delete secret")
     assert rec.ran("apply")
 
 
 # The pull secret already exists and carries the installer's label.
-OURS = {"get secret": Result(0, registry.MANAGED_BY_VALUE)}
+OURS = {"get secret": Result(0, f"exists:{registry.MANAGED_BY_VALUE}")}
 
 
 class _ImmutableOnFirstApply(Recorder):
@@ -1306,6 +1310,11 @@ IMMUTABLE_TYPE_ERROR = (
 )
 
 
+def _create_secret(settings):
+    if registry.prepare_registry_secret(settings):
+        registry.apply_registry_secret(settings)
+
+
 def _secret_settings(settings):
     settings.local_registry = True
     settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
@@ -1321,7 +1330,7 @@ def test_a_failed_secret_update_does_not_delete_the_existing_secret(monkeypatch,
     monkeypatch.setattr(registry, "kubectl", rec)
 
     with pytest.raises(InstallerError):
-        registry.create_registry_secret(_secret_settings(settings))
+        _create_secret(_secret_settings(settings))
 
     assert not rec.ran("delete"), f"a working secret must survive: {rec.joined}"
 
@@ -1331,7 +1340,7 @@ def test_a_secret_that_cannot_be_deleted_is_not_reapplied(monkeypatch, settings)
     monkeypatch.setattr(registry, "kubectl", rec)
 
     with pytest.raises(InstallerError):
-        registry.create_registry_secret(_secret_settings(settings))
+        _create_secret(_secret_settings(settings))
 
     assert len(rec.argv_containing("apply")) == 1, "no retry once the delete has failed"
 
@@ -1344,7 +1353,7 @@ def test_a_secret_that_cannot_be_updated_in_place_is_replaced(monkeypatch, setti
     settings.local_registry = True
     settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
 
-    registry.create_registry_secret(settings)
+    _create_secret(settings)
 
     assert rec.ran("delete secret")
     assert len(rec.argv_containing("apply")) == 2
@@ -1365,13 +1374,13 @@ def test_a_users_own_pull_secret_is_neither_labelled_nor_changed(
     for name, value in (("REGISTRY_USERNAME", "u"), ("REGISTRY_PASSWORD", "p")):
         monkeypatch.setenv(name, value)
     logs = capture_logs(registry)
-    rec = recorder(answers={"get secret": Result(0, "")})
+    rec = recorder(answers={"get secret": Result(0, "exists:")})
     monkeypatch.setattr(registry, "kubectl", rec)
     settings.non_interactive = True
     settings.local_registry = local
     settings.local_registry_url = "local-registry.mlrun.svc.cluster.local:5000"
 
-    registry.create_registry_secret(settings)
+    _create_secret(settings)
 
     assert not rec.ran("apply") and not rec.ran("delete"), rec.joined
     assert "was not created by this installer" in "\n".join(logs)
@@ -1381,7 +1390,7 @@ def test_a_missing_pull_secret_is_created_with_the_label(monkeypatch, settings, 
     rec = recorder(answers={"get secret": Result(1, "", "NotFound")})
     monkeypatch.setattr(registry, "kubectl", rec)
 
-    registry.create_registry_secret(_secret_settings(settings))
+    _create_secret(_secret_settings(settings))
 
     [manifest] = [rec.inputs[i] for i, c in enumerate(rec.calls) if c[:1] == ["apply"]]
     assert yaml.safe_load(manifest)["metadata"]["labels"] == {
@@ -1565,3 +1574,418 @@ def test_the_ingress_hosts_are_printed_for_etc_hosts(settings, capture_logs):
     line = next(entry for entry in logs if entry.strip().startswith("192.168.49.2"))
     for sub in ("mlrun", "mlrun-api", "jupyter", "nuclio"):
         assert f"{sub}.192.168.49.2" in line.split()
+
+
+# ------------------------------------------------------------------------------------------
+# -f naming the installer's own values file was overwritten before helm read it
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_values_file_that_is_the_generated_file_is_refused_up_front(
+    monkeypatch, settings, tmp_path
+):
+    generated = tmp_path / "mlrun-ce-values.yaml"
+    generated.write_text("mine: true\n")
+    settings.values_file = str(generated)
+    settings.generated_values_file = str(generated)
+    touched = []
+    monkeypatch.setattr(cli, "check_requirements", lambda s: touched.append("cluster"))
+    monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
+    monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
+
+    with pytest.raises(InstallerError) as excinfo:
+        cli.execute(settings)
+
+    assert "GENERATED_VALUES_FILE" in str(excinfo.value)
+    assert touched == [], "refused only after reaching the cluster"
+    assert generated.read_text() == "mine: true\n", "the user's file was rewritten"
+
+
+def test_writing_the_installer_values_never_replaces_the_users_file(settings, tmp_path):
+    generated = tmp_path / "values.yaml"
+    generated.write_text("mine: true\n")
+    settings.values_file = str(generated)
+    settings.config_file = "ce-config.yaml"
+    settings.generated_values_file = str(generated)
+
+    with pytest.raises(InstallerError):
+        helm_ops.write_installer_values(settings)
+    assert generated.read_text() == "mine: true\n"
+
+
+# ------------------------------------------------------------------------------------------
+# An unpublished chart version failed at the very end, after namespace, registry and secret
+# ------------------------------------------------------------------------------------------
+
+
+def _search(monkeypatch, recorder, pinned, newest="0.12.0"):
+    rec = recorder(
+        answers={
+            "--version": Result(0, json.dumps(pinned)),
+            "search": Result(0, json.dumps([{"name": "mlrun-ce/mlrun-ce", "version": newest}])),
+        }
+    )
+    monkeypatch.setattr(cluster, "helm", rec)
+    return rec
+
+
+def test_an_unpublished_installer_chart_version_names_both_ways_out(
+    monkeypatch, settings, recorder, capture_logs
+):
+    _search(monkeypatch, recorder, pinned=[])
+    logs = capture_logs(cluster)
+    settings.ce_version = "0.12.1-rc.8"
+    settings.ce_version_is_installers = True
+
+    with pytest.raises(InstallerError):
+        cluster.verify_chart_version_published(settings)
+
+    text = "\n".join(logs)
+    assert "0.12.1-rc.8 is not published" in text
+    assert "--chart-path ./charts/mlrun-ce" in text
+    assert "--ce-version 0.12.0" in text
+
+
+def test_a_published_version_passes(monkeypatch, settings, recorder):
+    _search(monkeypatch, recorder, pinned=[{"name": "mlrun-ce/mlrun-ce", "version": "0.12.0"}])
+    settings.ce_version = "0.12.0"
+
+    cluster.verify_chart_version_published(settings)
+
+
+def test_a_similarly_named_chart_does_not_count_as_published(monkeypatch, settings, recorder):
+    # `helm search repo` matches the keyword as a substring.
+    _search(monkeypatch, recorder, pinned=[{"name": "mlrun-ce/mlrun-ce-extras", "version": "1"}])
+    settings.ce_version = "1"
+
+    with pytest.raises(InstallerError):
+        cluster.verify_chart_version_published(settings)
+
+
+def test_a_search_that_fails_does_not_block_the_install(
+    monkeypatch, settings, recorder, capture_logs
+):
+    monkeypatch.setattr(cluster, "helm", recorder(answers={"search": Result(1, "", "boom")}))
+    logs = capture_logs(cluster)
+    settings.ce_version = "0.12.0"
+
+    cluster.verify_chart_version_published(settings)
+
+    assert any("Could not check" in line for line in logs)
+
+
+# ------------------------------------------------------------------------------------------
+# The namespace was created before the prompts, and nothing named the target cluster
+# ------------------------------------------------------------------------------------------
+
+
+def _record_execute_steps(monkeypatch, steps):
+    for name in ("check_requirements", "refuse_a_second_release", "run_blocking_validators",
+                 "resolve_chart_source", "resolve_external_host", "prepare_local_registry",
+                 "prepare_registry_secret", "gather_install_params", "run_validators",
+                 "confirm_target", "ensure_namespace", "deploy_local_registry",
+                 "apply_registry_secret", "helm_install"):  # fmt: skip
+        monkeypatch.setattr(cli, name, lambda s, name=name: steps.append(name) or True)
+    monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
+    monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
+
+
+WRITES = {"ensure_namespace", "deploy_local_registry", "apply_registry_secret", "helm_install"}
+
+
+def test_every_prompt_and_read_comes_before_the_first_write(monkeypatch, settings):
+    steps = []
+    _record_execute_steps(monkeypatch, steps)
+    settings.local_registry = True
+
+    cli.execute(settings)
+
+    first_write = min(steps.index(step) for step in WRITES)
+    assert steps.index("confirm_target") == first_write - 1, steps
+    for step in ("resolve_chart_source", "prepare_registry_secret", "gather_install_params",
+                 "resolve_external_host", "prepare_local_registry"):  # fmt: skip
+        assert steps.index(step) < first_write, f"{step} ran after a write: {steps}"
+
+
+@pytest.mark.parametrize("failing", ["resolve_chart_source", "prepare_registry_secret",
+                                     "confirm_target"])  # fmt: skip
+def test_a_run_stopped_before_the_summary_changes_nothing(monkeypatch, settings, failing):
+    steps = []
+    _record_execute_steps(monkeypatch, steps)
+
+    def stop(s):
+        raise InstallerError(code=1)
+
+    monkeypatch.setattr(cli, failing, stop)
+
+    with pytest.raises(InstallerError):
+        cli.execute(settings)
+    assert not WRITES & set(steps), steps
+
+
+def _target(monkeypatch, recorder, settings):
+    monkeypatch.setattr(
+        cluster,
+        "kubectl",
+        recorder(
+            answers={
+                "current-context": Result(0, "prod-east"),
+                "cluster.server": Result(0, "https://10.1.2.3:6443"),
+            }
+        ),
+    )
+    settings.registry_url = "index.docker.io/me"
+
+
+def test_the_summary_names_the_cluster_and_asks_before_writing(
+    monkeypatch, settings, recorder, capture_logs
+):
+    _target(monkeypatch, recorder, settings)
+    logs = capture_logs(ui)
+    asked = []
+    monkeypatch.setattr(ui, "confirm", lambda s, q: asked.append(q) or False)
+
+    with pytest.raises(InstallerError):
+        ui.confirm_target(settings)
+
+    text = "\n".join(logs)
+    assert "prod-east (https://10.1.2.3:6443)" in text
+    assert "Namespace: mlrun" in text and "index.docker.io/me" in text
+    assert asked == ["Proceed?"]
+
+
+@pytest.mark.parametrize("field", ["dry_run", "non_interactive"])
+def test_the_summary_does_not_ask_when_nothing_changes_or_nobody_answers(
+    monkeypatch, settings, recorder, field
+):
+    _target(monkeypatch, recorder, settings)
+    monkeypatch.setattr(ui, "confirm", lambda s, q: pytest.fail("asked"))
+    setattr(settings, field, True)
+
+    ui.confirm_target(settings)
+
+
+@pytest.mark.parametrize("answer, expected", [("", True), ("y", True), ("n", False)])
+def test_confirm_defaults_to_yes(monkeypatch, settings, answer, expected):
+    monkeypatch.setattr("builtins.input", lambda: answer)
+
+    assert cli_settings.confirm(settings, "Proceed?") is expected
+
+
+def test_confirm_with_stdin_closed_is_a_no(monkeypatch, settings):
+    def closed():
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", closed)
+
+    assert cli_settings.confirm(settings, "Proceed?") is False
+
+
+# ------------------------------------------------------------------------------------------
+# The external-host guess followed whatever was installed, not the cluster targeted
+# ------------------------------------------------------------------------------------------
+
+
+def _host_guess(monkeypatch, recorder, *, context, provider="", kube_context=""):
+    ran = recorder(answers={"minikube ip": Result(0, "192.168.58.2")})
+    monkeypatch.setattr(cluster, "run", ran)
+    monkeypatch.setattr(cluster.shutil, "which", lambda name: f"/usr/bin/{name}")
+    kubectl = recorder(
+        answers={
+            "current-context": Result(0, context),
+            "extension.provider": Result(0, provider),
+            "InternalIP": Result(0, "192.168.65.3"),
+        }
+    )
+    monkeypatch.setattr(cluster, "kubectl", kubectl)
+    return ran, kubectl
+
+
+def test_an_installed_minikube_does_not_decide_the_host_for_a_kind_cluster(
+    monkeypatch, settings, recorder
+):
+    ran, _ = _host_guess(monkeypatch, recorder, context="kind-kind")
+
+    assert cluster.suggest_external_host(settings) == "localhost"
+    assert not ran.calls, "minikube was asked about a cluster it does not run"
+
+
+def test_a_minikube_profile_is_recognised_by_its_provider_extension(
+    monkeypatch, settings, recorder
+):
+    ran, _ = _host_guess(monkeypatch, recorder, context="dev", provider=cluster.MINIKUBE_PROVIDER)
+
+    assert cluster.suggest_external_host(settings) == "192.168.58.2"
+    assert ran.joined == ["minikube ip -p dev"]
+
+
+def test_docker_desktop_chosen_through_kube_context_still_gets_its_host_name(
+    monkeypatch, settings, recorder
+):
+    settings.kube_context = "docker-desktop"
+    _, kubectl = _host_guess(monkeypatch, recorder, context="other", kube_context="x")
+
+    # The node IP (192.168.65.3 here) is inside Docker Desktop's VM, not reachable from
+    # the host.
+    assert cluster.suggest_external_host(settings) == "host.docker.internal"
+    assert not kubectl.ran("InternalIP")
+
+
+def test_an_explicit_remote_context_suggests_its_node_ip(monkeypatch, settings, recorder):
+    settings.kube_context = "lab"
+    _host_guess(monkeypatch, recorder, context="docker-desktop")
+
+    assert cluster.suggest_external_host(settings) == "192.168.65.3"
+
+
+# ------------------------------------------------------------------------------------------
+# A failed install said only "Helm installation failed"
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_failed_install_says_where_to_look_next(monkeypatch, settings, capture_logs):
+    settings.kube_context = "lab"
+    monkeypatch.setattr(helm_ops, "stream", lambda cmd: 1)
+    monkeypatch.setattr(helm_ops, "helm", lambda *a, **k: Result(0, "v3.14.0"))
+    logs = capture_logs(helm_ops)
+
+    with pytest.raises(InstallerError):
+        helm_ops.helm_install(settings)
+
+    text = "\n".join(logs)
+    assert "kubectl --context lab get pods -n mlrun" in text
+    assert "get events -n mlrun --sort-by=.lastTimestamp" in text
+    assert "HELM_TIMEOUT=960s" in text and "upgrades the release in place" in text
+    assert helm_ops.FAQ_URL in text
+
+
+# ------------------------------------------------------------------------------------------
+# A re-run asked for a registry password it had already stored
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def interactive_secret(monkeypatch, settings):
+    monkeypatch.setattr(registry, "kubectl", Recorder(answers=OURS))
+    prompted = []
+    monkeypatch.setattr(
+        registry, "prompt_or_env", lambda s, var, *a, **k: prompted.append(var) or "x"
+    )
+    return prompted
+
+
+def test_a_rerun_can_reuse_the_secret_it_created(monkeypatch, settings, interactive_secret):
+    monkeypatch.setattr(registry, "confirm", lambda s, q: True)
+
+    assert registry.prepare_registry_secret(settings) is False
+    assert interactive_secret == [], "asked for credentials it was going to ignore"
+
+
+def test_declining_the_reuse_asks_for_new_credentials(monkeypatch, settings, interactive_secret):
+    monkeypatch.setattr(registry, "confirm", lambda s, q: False)
+
+    assert registry.prepare_registry_secret(settings) is True
+    assert "REGISTRY_PASSWORD" in interactive_secret
+
+
+def test_credentials_handed_to_the_run_replace_the_stored_ones(
+    monkeypatch, settings, interactive_secret
+):
+    monkeypatch.setenv("REGISTRY_PASSWORD", "new")
+    monkeypatch.setattr(registry, "confirm", lambda s, q: pytest.fail("asked"))
+
+    assert registry.prepare_registry_secret(settings) is True
+
+
+def test_a_users_own_secret_asks_for_no_credentials(monkeypatch, settings):
+    monkeypatch.setattr(registry, "kubectl", Recorder(answers={"get secret": Result(0, "exists:")}))
+    monkeypatch.setattr(registry, "prompt_or_env", lambda *a, **k: pytest.fail("prompted"))
+
+    assert registry.prepare_registry_secret(settings) is False
+
+
+# ------------------------------------------------------------------------------------------
+# A failure left nothing to attach to a bug report beyond the last screenful
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def debug_log(tmp_path):
+    path = tmp_path / "install.log"
+    console.open_debug_log(str(path), ["header line"])
+    yield path
+    console.close_debug_log()
+
+
+def test_the_debug_log_records_a_failing_command_and_its_stderr(debug_log):
+    shell.run([sys.executable, "-c", "import sys; sys.stderr.write('kaboom'); sys.exit(3)"])
+    console.close_debug_log()
+
+    text = debug_log.read_text()
+    assert "header line" in text
+    assert "exit 3" in text and "kaboom" in text
+
+
+def test_the_debug_log_never_holds_the_password(debug_log, monkeypatch, settings):
+    monkeypatch.setattr(registry, "kubectl", Recorder())
+    monkeypatch.setenv("REGISTRY_USERNAME", "me")
+    monkeypatch.setenv("REGISTRY_PASSWORD", "hunter2-secret")
+    settings.non_interactive = True
+
+    registry.collect_registry_credentials(settings)
+    registry.apply_registry_secret(settings)
+    shell.run([sys.executable, "-c", "print('hunter2-secret')"], input_data="hunter2-secret")
+    console.log_info("echoing hunter2-secret by mistake")
+    console.close_debug_log()
+
+    assert "hunter2-secret" not in debug_log.read_text()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
+def test_the_debug_log_is_readable_by_its_owner_only(tmp_path):
+    path = tmp_path / "install.log"
+    path.write_text("left by an earlier run")
+    path.chmod(0o644)
+
+    console.open_debug_log(str(path), [])
+    console.close_debug_log()
+
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert "earlier run" not in path.read_text()
+
+
+def test_streamed_helm_output_reaches_both_the_terminal_and_the_log(debug_log, capsys):
+    script = "import sys; print('to-out'); sys.stderr.write('to-err\\n'); sys.exit(2)"
+    code = shell.stream([sys.executable, "-c", script])
+    console.close_debug_log()
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "to-out" in captured.out and "to-err" in captured.err
+    text = debug_log.read_text()
+    assert "to-out" in text and "to-err" in text and "exit 2" in text
+
+
+def _main_failing_with(monkeypatch, tmp_path, error):
+    def execute(settings):
+        raise error
+
+    monkeypatch.setattr(cli, "execute", execute)
+    monkeypatch.setenv("INSTALL_LOG_FILE", str(tmp_path / "run.log"))
+    return cli.main(["--non-interactive"])
+
+
+def test_a_failed_run_points_at_its_debug_log(monkeypatch, tmp_path, capsys):
+    code = _main_failing_with(monkeypatch, tmp_path, InstallerError("nope", code=4))
+
+    assert code == 4
+    assert f"Full debug log: {tmp_path / 'run.log'}" in capsys.readouterr().err
+
+
+def test_an_unexpected_error_puts_its_traceback_in_the_log(monkeypatch, tmp_path, capsys):
+    code = _main_failing_with(monkeypatch, tmp_path, KeyError("surprise"))
+
+    assert code == 1
+    assert "Full debug log" in capsys.readouterr().err
+    text = (tmp_path / "run.log").read_text()
+    assert "Traceback" in text and "KeyError: 'surprise'" in text

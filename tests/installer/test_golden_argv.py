@@ -134,6 +134,7 @@ def run_case(args, tmp_path):
     env["STUB_LOG"] = str(log)
     generated = tmp_path / "mlrun-ce-values.yaml"
     env["GENERATED_VALUES_FILE"] = str(generated)
+    env["INSTALL_LOG_FILE"] = str(tmp_path / "mlrun-ce-install.log")
     # A complete non-interactive answer set, so the run never stops at a prompt and any
     # difference is about logic rather than about a question being asked.
     env.update(

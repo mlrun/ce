@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import List
 
 from .cluster import resolve_local_registry_url
-from .console import InstallerError, die, log_error, log_info, log_warn
-from .settings import DEFAULT_DOCKER_SERVER, Settings, env_str, prompt_or_env
+from .console import InstallerError, add_secret, die, log_error, log_info, log_warn
+from .settings import DEFAULT_DOCKER_SERVER, Settings, confirm, env_str, prompt_or_env
 from .shell import kubectl
 
 # Everything the installer creates outside the chart carries this label, so --uninstall can
@@ -308,16 +308,16 @@ def _refuse_foreign_registry_objects(settings: Settings) -> None:
     raise InstallerError(code=1)
 
 
-def deploy_local_registry(settings: Settings) -> None:
-    # Resolve the URL early so create_registry_secret, which runs before
-    # gather_install_params, already has it.
+def prepare_local_registry(settings: Settings) -> None:
+    """The read-only half of the local registry, run before anything is created: its URL,
+    which the pull secret and the --set flags need, and the check for objects in the way."""
     settings.local_registry_url = resolve_local_registry_url(settings)
     _refuse_foreign_registry_objects(settings)
 
-    # The guard sits after the URL is resolved, not before: the URL still has to reach the
-    # rendered --set flags for a dry run to represent the real install. Everything below
-    # this point mutates the cluster, which a dry run must not do — and on a cluster where
-    # the namespace does exist, an unguarded apply would quietly deploy a real registry.
+
+def deploy_local_registry(settings: Settings) -> None:
+    # Everything below mutates the cluster, which a dry run must not do — and on a cluster
+    # where the namespace does exist, an unguarded apply would quietly deploy a real registry.
     if settings.dry_run:
         log_info(f"Dry-run: would deploy local registry at '{settings.local_registry_url}'")
         return
@@ -378,32 +378,76 @@ def verify_existing_registry_secret(settings: Settings) -> None:
         raise InstallerError(code=1)
 
 
-def _leave_users_secret_alone(settings: Settings) -> bool:
-    """True when the pull secret already exists without the installer's label.
+SECRET_ABSENT, SECRET_OURS, SECRET_FOREIGN = "absent", "ours", "foreign"
 
-    `apply` would add the label to it, and `--uninstall` deletes by that label — so a secret
-    the user created by hand, as the README describes, would be adopted on install and
-    destroyed on uninstall. It is used as it stands instead, exactly as with --skip-secret.
-    Read under --dry-run too, so the dry run reports what the real run would do.
-    """
-    name = settings.registry_secret_name
+
+def registry_secret_owner(settings: Settings) -> str:
+    """Whether the pull secret is absent, the installer's (labelled), or someone else's."""
     existing = kubectl(
         settings,
         "get",
         "secret",
-        name,
+        settings.registry_secret_name,
         "--namespace",
         settings.namespace,
         "-o",
-        "jsonpath=" + _MANAGED_BY_JSONPATH,
+        # The literal prefix makes an existing but unlabelled secret print something.
+        "jsonpath=exists:" + _MANAGED_BY_JSONPATH,
     )
-    if not existing.ok or existing.out.strip() == MANAGED_BY_VALUE:
+    out = existing.out.strip() if existing.ok else ""
+    if not out.startswith("exists:"):
+        return SECRET_ABSENT
+    return SECRET_OURS if out == f"exists:{MANAGED_BY_VALUE}" else SECRET_FOREIGN
+
+
+def _credentials_supplied(settings: Settings) -> bool:
+    return bool(env_str("REGISTRY_PASSWORD") or settings.registry_password_file)
+
+
+def prepare_registry_secret(settings: Settings) -> bool:
+    """Settle the pull secret before anything is created; True when it has to be written.
+
+    Every prompt happens here, so a run cancelled at a prompt has changed nothing. A secret
+    without the installer's label is the user's: `apply` would add the label to it, and
+    `--uninstall` deletes by that label, so one created by hand as the README describes
+    would be adopted on install and destroyed on uninstall. It is used as it stands, exactly
+    as with --skip-secret, and nothing is asked for it. Reads only, so a dry run reports what
+    the real run would do.
+    """
+    name = settings.registry_secret_name
+    if settings.skip_registry_secret:
+        log_info("Skipping registry secret creation (--skip-secret or SKIP_REGISTRY_SECRET)")
+        verify_existing_registry_secret(settings)
         return False
-    log_warn(f"Secret '{name}' already exists and was not created by this installer.")
-    log_warn("  Using it unchanged; the credentials given to this run are not written to it.")
-    log_warn(
-        "  To have the installer manage it, delete it first. Pass --skip-secret to silence this."
-    )
+
+    owner = registry_secret_owner(settings)
+    if owner == SECRET_FOREIGN:
+        log_warn(f"Secret '{name}' already exists and was not created by this installer.")
+        log_warn("  Using it unchanged; no registry credentials are asked for or written.")
+        log_warn(
+            "  To have the installer manage it, delete it first. "
+            "Pass --skip-secret to silence this."
+        )
+        return False
+
+    if settings.local_registry:
+        return True
+
+    # A re-run would otherwise ask for a password it already stored. Only offered when the
+    # run was not handed credentials, which are then meant to replace the stored ones.
+    if (
+        owner == SECRET_OURS
+        and not settings.non_interactive
+        and not _credentials_supplied(settings)
+        and confirm(
+            settings,
+            f"Secret '{name}' from a previous install exists in '{settings.namespace}'. Reuse it?",
+        )
+    ):
+        log_info(f"Reusing secret '{name}' (same as --skip-secret).")
+        return False
+
+    collect_registry_credentials(settings)
     return True
 
 
@@ -464,31 +508,17 @@ def _apply_registry_secret(settings: Settings, manifest: str) -> None:
     )
 
 
-def _create_local_registry_secret(settings: Settings) -> None:
-    if _leave_users_secret_alone(settings):
-        return
-    if settings.dry_run:
-        log_info(f"Dry-run: would create local registry secret '{settings.registry_secret_name}'")
-        return
-
-    log_info(f"Creating local registry secret '{settings.registry_secret_name}'...")
-    _apply_registry_secret(
-        settings,
-        docker_config_secret(
-            name=settings.registry_secret_name,
-            namespace=settings.namespace,
-            server=settings.local_registry_url,
-            username="local",
-            password="local",
-            email="local@local",
-        ),
-    )
-
-
-def create_registry_secret(settings: Settings) -> None:
-    if settings.local_registry:
-        _create_local_registry_secret(settings)
-        return
+def collect_registry_credentials(settings: Settings) -> None:
+    will_prompt = not (env_str("REGISTRY_USERNAME") and _credentials_supplied(settings))
+    if will_prompt and not settings.non_interactive:
+        log_info(
+            "MLRun builds an image for each function you deploy and pushes it to a container "
+            "registry, which the cluster then pulls it from."
+        )
+        log_info(
+            "  Give one you can push to (a Docker Hub username and access token is enough), "
+            "or re-run with --local-registry to run one inside the cluster."
+        )
 
     username = prompt_or_env(
         settings,
@@ -536,21 +566,35 @@ def create_registry_secret(settings: Settings) -> None:
     if not username or not password:
         raise die("Registry username and password are required.")
 
+    add_secret(password)
     settings.registry_username_value = username
     settings.registry_password_value = password
     settings.registry_server_value = server
+    settings.registry_email_value = email
 
-    if _leave_users_secret_alone(settings):
-        return
+
+def apply_registry_secret(settings: Settings) -> None:
+    """Write the pull secret prepare_registry_secret decided on."""
+    name = settings.registry_secret_name
+    kind = "local registry secret" if settings.local_registry else "Docker registry secret"
     if settings.dry_run:
-        log_info(f"Dry-run: would create registry secret '{settings.registry_secret_name}'")
+        log_info(f"Dry-run: would create {kind} '{name}'")
         return
 
-    log_info(f"Creating Docker registry secret '{settings.registry_secret_name}'...")
+    log_info(f"Creating {kind} '{name}'...")
+    if settings.local_registry:
+        server, username, password, email = (
+            settings.local_registry_url, "local", "local", "local@local",
+        )  # fmt: skip
+    else:
+        server = settings.registry_server_value
+        username = settings.registry_username_value
+        password = settings.registry_password_value
+        email = settings.registry_email_value
     _apply_registry_secret(
         settings,
         docker_config_secret(
-            name=settings.registry_secret_name,
+            name=name,
             namespace=settings.namespace,
             server=server,
             username=username,

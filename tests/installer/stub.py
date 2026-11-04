@@ -66,6 +66,14 @@ def handle_kubectl(args):
     if verb == "config" and len(args) > 1 and args[1] == "current-context":
         return 0, os.environ.get("STUB_CURRENT_CONTEXT", "stub-context")
 
+    if verb == "config" and len(args) > 1 and args[1] == "view":
+        path = jsonpath_of(args)
+        if "cluster.server" in path:
+            return 0, "https://127.0.0.1:6443"
+        if "extension.provider" in path:
+            return 0, os.environ.get("STUB_CONTEXT_PROVIDER", "")
+        return 0, ""
+
     if verb == "version":
         return 0, json.dumps(
             {"serverVersion": {"gitVersion": os.environ.get("STUB_K8S_VERSION", "v1.30.2")}}
@@ -139,6 +147,16 @@ def handle_helm(args):
         )
     if verb == "list":
         return 0, os.environ.get("STUB_HELM_LIST", "[]")
+    if verb == "search":
+        # Every pinned version is published unless the case says otherwise; without
+        # --version helm reports the newest.
+        if "--version" in args:
+            if os.environ.get("STUB_CHART_UNPUBLISHED") == "1":
+                return 0, "[]"
+            version = args[args.index("--version") + 1]
+        else:
+            version = os.environ.get("STUB_NEWEST_CHART", "0.12.0")
+        return 0, json.dumps([{"name": "mlrun-ce/mlrun-ce", "version": version}])
     if verb == "get" and len(args) > 1 and args[1] == "notes":
         return 0, os.environ.get("STUB_NOTES", "")
     if verb in ("repo", "dependency", "upgrade", "uninstall"):

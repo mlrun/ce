@@ -11,7 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Logging and the fatal-error type."""
+"""Logging, the per-run debug log, and the fatal-error type."""
+
+import os
+import threading
+from pathlib import Path
+from typing import List, Optional, TextIO
 
 from rich.console import Console
 from rich.text import Text
@@ -32,6 +37,72 @@ class InstallerError(Exception):
         self.code = code
 
 
+# --------------------------------------------------------------------------------------
+# Debug log
+#
+# One file per run, overwritten each time, holding everything the terminal shows plus what
+# it does not: every command with its exit code, timing and output. A failed install points
+# at it, so a bug report can carry the whole run instead of the last screenful.
+# --------------------------------------------------------------------------------------
+
+_debug_log: Optional[TextIO] = None
+_debug_log_path = ""
+# Values that must never reach the file, whatever printed them. The registry password is
+# kept off argv and out of stdout already; this is the backstop if either ever changes.
+_secrets: List[str] = []
+# helm's stdout and stderr are teed from two threads.
+_debug_lock = threading.Lock()
+
+
+def open_debug_log(path: str, header: List[str]) -> str:
+    """Start the run's debug log at `path`, owner-readable only. Returns the resolved path,
+    or "" when the file cannot be written — a missing log must not stop an install."""
+    global _debug_log, _debug_log_path  # noqa: PLW0603
+    close_debug_log()
+    resolved = Path(path).expanduser().resolve()
+    try:
+        fd = os.open(str(resolved), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        # O_CREAT's mode applies only to a new file; one left by an earlier run keeps its own.
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        _debug_log = os.fdopen(fd, "w", encoding="utf-8")
+    except OSError as exc:
+        log_warn(f"Could not write the debug log {resolved} ({exc.strerror}); continuing without.")
+        return ""
+    _debug_log_path = str(resolved)
+    for line in header:
+        log_debug(line)
+    return _debug_log_path
+
+
+def close_debug_log() -> None:
+    global _debug_log  # noqa: PLW0603
+    if _debug_log is not None:
+        _debug_log.close()
+        _debug_log = None
+
+
+def debug_log_path() -> str:
+    return _debug_log_path if _debug_log is not None else ""
+
+
+def add_secret(value: str) -> None:
+    """Mask `value` wherever it would be written to the debug log."""
+    if value and value not in _secrets:
+        _secrets.append(value)
+
+
+def log_debug(message: str) -> None:
+    """Write to the debug log only; the terminal never sees it."""
+    if _debug_log is None:
+        return
+    for secret in _secrets:
+        message = message.replace(secret, "<redacted>")
+    with _debug_lock:
+        _debug_log.write(message if message.endswith("\n") else message + "\n")
+        _debug_log.flush()
+
+
 def _emit(console: Console, tag: str, style: str, message: str) -> None:
     # Built as a Text rather than markup: log messages routinely contain square brackets
     # (jsonpath expressions, arrays, "[ERROR]") that rich would try to parse as tags.
@@ -39,6 +110,7 @@ def _emit(console: Console, tag: str, style: str, message: str) -> None:
     line.append(tag, style=style)
     line.append(" " + message)
     console.print(line)
+    log_debug(f"{tag} {message}")
 
 
 def log_info(message: str) -> None:

@@ -26,3 +26,4 @@ ce-config.yaml
 scripts/uv.lock
 .pytest_cache/
 mlrun-ce-values.yaml
+mlrun-ce-install.log

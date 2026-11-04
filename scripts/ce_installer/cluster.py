@@ -14,15 +14,16 @@
 """Namespace, external-host resolution and chart-source selection."""
 
 import atexit
+import json
 import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import yaml
 
-from .console import die, log_info, log_warn
+from .console import InstallerError, die, log_error, log_info, log_warn
 from .settings import Settings, prompt_or_env
 from .shell import helm, kubectl, run
 
@@ -37,18 +38,58 @@ def ensure_namespace(settings: Settings) -> None:
         kubectl(settings, "create", "namespace", settings.namespace, check=True)
 
 
-def resolve_external_host(settings: Settings) -> None:
-    if settings.external_host_address:
-        return
-
-    suggested = "localhost"
-    # minikube/docker-desktop are heuristics about the ambient local environment —
-    # meaningless once KUBE_CONTEXT explicitly selects a different (possibly remote)
-    # cluster, and `kubectl config current-context` always reports the kubeconfig's ambient
-    # current-context regardless of --context, so it cannot be made KUBE_CONTEXT-aware.
-    # Skip straight to the node-IP fallback, which already goes through the
-    # KUBE_CONTEXT-aware kubectl wrapper.
+def effective_context(settings: Settings) -> str:
+    """The kubeconfig context every call targets: KUBE_CONTEXT, else the current one."""
     if settings.kube_context:
+        return settings.kube_context
+    current = kubectl(settings, "config", "current-context")
+    return current.out.strip() if current.ok else ""
+
+
+def api_server(settings: Settings) -> str:
+    # --minify narrows the view to the context the wrapper selects.
+    server = kubectl(
+        settings, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}"
+    )
+    return server.out.strip() if server.ok else ""
+
+
+MINIKUBE_PROVIDER = "minikube.sigs.k8s.io"
+
+
+def _is_minikube_context(settings: Settings, context: str) -> bool:
+    """minikube names the context after the profile and tags it with a provider extension,
+    so a profile called anything but `minikube` is still recognised."""
+    if context == "minikube":
+        return True
+    provider = kubectl(
+        settings,
+        "config",
+        "view",
+        "-o",
+        f'jsonpath={{.contexts[?(@.name=="{context}")].context.extensions[*].extension.provider}}',
+    )
+    return provider.ok and MINIKUBE_PROVIDER in provider.out
+
+
+def suggest_external_host(settings: Settings) -> str:
+    """Guess the address this machine reaches the target cluster's NodePorts on.
+
+    Keyed on the context the run targets, not on what happens to be installed: an installed
+    minikube says nothing about a kind cluster being the target, and a docker-desktop
+    context selected through KUBE_CONTEXT is still Docker Desktop, whose node IP is not
+    reachable from the host.
+    """
+    context = effective_context(settings)
+    if context and _is_minikube_context(settings, context) and shutil.which("minikube"):
+        minikube_ip = run(["minikube", "ip", "-p", context])
+        if minikube_ip.ok and minikube_ip.out.strip():
+            return minikube_ip.out.strip()
+    if context in ("docker-desktop", "docker-for-desktop"):
+        # Resolves to the host from both pods and the host terminal on Docker Desktop.
+        return "host.docker.internal"
+    if settings.kube_context:
+        # An explicitly chosen context is often a remote cluster, where localhost is wrong.
         node_ip = kubectl(
             settings,
             "get",
@@ -57,30 +98,22 @@ def resolve_external_host(settings: Settings) -> None:
             'jsonpath={.items[0].status.addresses[?(@.type=="InternalIP")].address}',
         )
         if node_ip.ok and node_ip.out.strip():
-            suggested = node_ip.out.strip()
-    else:
-        # Asked once, not once to test and once to read: `minikube ip` shells out to the
-        # node container, so the second call doubled the wait on every run for an answer
-        # the first had already produced.
-        minikube_ip = run(["minikube", "ip"]) if shutil.which("minikube") else None
-        if minikube_ip is not None and minikube_ip.ok and minikube_ip.out.strip():
-            suggested = minikube_ip.out.strip()
-        else:
-            current = kubectl(settings, "config", "current-context")
-            if current.ok and "docker-desktop" in current.out:
-                # host.docker.internal resolves to the host from both pods and the host
-                # terminal on Docker Desktop.
-                suggested = "host.docker.internal"
-    # No heuristic matched (e.g. kind/k3d, or a local cluster type not special-cased):
-    # `suggested` keeps its "localhost" default. Those tools typically NodePort-map to
-    # localhost rather than an internal Docker-network IP, so this is a better generic
-    # guess than a node-IP lookup that may not be reachable from here.
+            return node_ip.out.strip()
+    # kind, k3d and the like map NodePorts to localhost rather than to an internal
+    # Docker-network IP.
+    return "localhost"
 
+
+def resolve_external_host(settings: Settings) -> None:
+    if settings.external_host_address:
+        return
+
+    suggested = settings.config_external_host_address or suggest_external_host(settings)
     settings.external_host_address = prompt_or_env(
         settings,
         "EXTERNAL_HOST_ADDRESS",
         "Local URL / address to reach the cluster (e.g. localhost or minikube ip)",
-        settings.config_external_host_address or suggested,
+        suggested,
     )
 
     if not settings.external_host_address:
@@ -243,6 +276,62 @@ def register_dependency_repos(settings: Settings, chart_dir: Path) -> None:
         helm(settings, "repo", "add", "--force-update", f"mlrun-ce-dep-{index}", url, check=True)
 
 
+def _published_versions(settings: Settings, version: str = "") -> Optional[List[str]]:
+    """Versions of mlrun-ce/mlrun-ce `helm search` reports, or None if it could not say.
+    Without `version`, helm reports only the newest (prereleases included)."""
+    args = ["search", "repo", "mlrun-ce/mlrun-ce", "--devel", "-o", "json"]
+    if version:
+        args += ["--version", version]
+    found = helm(settings, *args)
+    try:
+        entries = json.loads(found.out) if found.ok else None
+    except ValueError:
+        return None
+    if not isinstance(entries, list):
+        return None
+    # The keyword is a substring match, so mlrun-ce/mlrun-ce-anything would match too.
+    return [
+        str(entry.get("version", "")).lstrip("v")
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("name") == "mlrun-ce/mlrun-ce"
+    ]
+
+
+def verify_chart_version_published(settings: Settings) -> None:
+    """Stop before anything is created when the pinned chart version is not in the repo.
+
+    By default the installer pins its own chart version, and an installer taken from a
+    branch or a fresh tag is newer than anything published: helm would then fail at the
+    very end, after the namespace, registry and secret exist. A search that itself fails
+    proves nothing, so that only warns.
+    """
+    wanted = settings.ce_version
+    if not wanted:
+        return
+    matches = _published_versions(settings, wanted)
+    if matches is None:
+        log_warn(f"Could not check that chart version {wanted} is published; continuing.")
+        return
+    if wanted.lstrip("v") in matches:
+        return
+
+    newest = _published_versions(settings) or []
+    newest_hint = f" The newest there is {newest[0]}." if newest else ""
+    log_error(f"Chart mlrun-ce {wanted} is not published at {settings.helm_repo_url}.{newest_hint}")
+    if settings.ce_version_is_installers:
+        log_error(
+            "  That is this installer's own chart version, so it comes from a branch or a tag "
+            "whose chart is not released yet."
+        )
+        log_error(
+            "  From a clone of github.com/mlrun/ce, install that chart with "
+            "--chart-path ./charts/mlrun-ce."
+        )
+    if newest:
+        log_error(f"  To install the published chart, pass --ce-version {newest[0]}.")
+    raise InstallerError(code=1)
+
+
 def resolve_chart_source(settings: Settings) -> None:
     if not settings.chart_path:
         isolate_helm_repo_config()
@@ -262,6 +351,7 @@ def resolve_chart_source(settings: Settings) -> None:
         )
         helm(settings, "repo", "update")
         settings.chart_ref = "mlrun-ce/mlrun-ce"
+        verify_chart_version_published(settings)
         return
 
     validate_chart_path(settings)

@@ -25,6 +25,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+from ce_installer import console  # noqa: E402
 from ce_installer.settings import Settings  # noqa: E402
 from ce_installer.shell import Result  # noqa: E402
 
@@ -86,8 +87,12 @@ INSTALLER_ENV_VARS = (
 def clean_env(monkeypatch, tmp_path):
     for name in INSTALLER_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
-    # helm_install writes the installer's values file; never into the checkout.
+    # Module state in console: a password one test registered must not mask another's log.
+    monkeypatch.setattr(console, "_secrets", [])
+    # helm_install writes the installer's values file and every run its debug log; never
+    # into the checkout.
     monkeypatch.setenv("GENERATED_VALUES_FILE", str(tmp_path / "mlrun-ce-values.yaml"))
+    monkeypatch.setenv("INSTALL_LOG_FILE", str(tmp_path / "mlrun-ce-install.log"))
 
 
 @pytest.fixture

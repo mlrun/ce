@@ -38,14 +38,20 @@ from ce_installer.shell import Result
 def no_cluster(monkeypatch, recorder):
     """Answer every kubectl call as "not found" unless a test installs its own recorder.
 
-    create_registry_secret reads the existing secret even under --dry-run, and left real
+    prepare_registry_secret reads the existing secret even under --dry-run, and left real
     that read goes to whatever cluster the developer's kubeconfig points at.
     """
     monkeypatch.setattr(registry, "kubectl", recorder(default=Result(1, "", "NotFound")))
 
 
+def create_secret(settings):
+    """The secret step as execute() runs it: settle everything, then write if needed."""
+    if registry.prepare_registry_secret(settings):
+        registry.apply_registry_secret(settings)
+
+
 def prepare(monkeypatch, settings):
-    """Supply everything create_registry_secret needs apart from the password."""
+    """Supply everything the secret step needs apart from the password."""
     monkeypatch.setenv("REGISTRY_USERNAME", "myuser")
     monkeypatch.setenv("REGISTRY_EMAIL", "me@example.com")
     # Pinned to empty rather than deleted: env_str() mirrors bash's ${VAR:-}, so "" already
@@ -69,7 +75,7 @@ def test_password_is_read_from_the_password_file_when_the_env_var_is_unset(
     settings.registry_password_file = str(password_file)
     settings.dry_run = True
 
-    registry.create_registry_secret(settings)
+    create_secret(settings)
 
     # The trailing newline every editor and `echo` leaves at EOF is not part of the
     # password; carrying it through produces a 401 from the registry at image-pull time.
@@ -83,7 +89,7 @@ def test_password_file_windows_line_ending_is_stripped(monkeypatch, settings, tm
     settings.registry_password_file = str(password_file)
     settings.dry_run = True
 
-    registry.create_registry_secret(settings)
+    create_secret(settings)
 
     # A file authored on Windows, or mounted from a Secret created there, is the same case
     # as above but leaves a \r that is invisible in every log and error message.
@@ -98,7 +104,7 @@ def test_password_env_var_wins_over_the_password_file(monkeypatch, settings, tmp
     settings.registry_password_file = str(password_file)
     settings.dry_run = True
 
-    registry.create_registry_secret(settings)
+    create_secret(settings)
 
     # Both set at once is the "override what the CI mount provides" case, so the explicit
     # variable has to win. The file must not even be consulted.
@@ -114,7 +120,7 @@ def test_missing_password_file_is_rejected_naming_the_variable_and_the_path(
     settings.dry_run = True
 
     with pytest.raises(InstallerError) as excinfo:
-        registry.create_registry_secret(settings)
+        create_secret(settings)
 
     # Falling back to the prompt (or to an empty password) would turn a typo'd mount path
     # into a secret containing nothing, discovered only when a pod cannot pull.
@@ -133,7 +139,7 @@ def test_registry_password_reaches_only_the_secret_creation_call(monkeypatch, se
     rec = recorder(answers={"get secret": Result(1, "NotFound")})
     monkeypatch.setattr(registry, "kubectl", rec)
 
-    registry.create_registry_secret(settings)
+    create_secret(settings)
 
     # Not in argv at all. install.sh passed it to `kubectl create secret docker-registry`,
     # which put it in the process table for the length of the call and in the text `run`
@@ -154,7 +160,7 @@ def test_password_from_a_file_is_not_exported_to_child_processes(
     settings.registry_password_file = str(password_file)
     monkeypatch.setattr(registry, "kubectl", recorder())
 
-    registry.create_registry_secret(settings)
+    create_secret(settings)
 
     # This used to be assigned into os.environ to reach prompt_or_env, which handed it to
     # every helm, kubectl and docker subprocess the run starts afterwards. A file-supplied
@@ -172,7 +178,7 @@ def test_the_secret_is_piped_as_a_manifest_kubectl_would_have_produced(
     rec = recorder(answers={"get secret": Result(1, "NotFound")})
     monkeypatch.setattr(registry, "kubectl", rec)
 
-    registry.create_registry_secret(settings)
+    create_secret(settings)
 
     applied = [
         text for call, text in zip(rec.calls, rec.inputs) if call[:3] == ["apply", "-f", "-"]
@@ -199,7 +205,7 @@ def test_registry_password_never_appears_in_log_output(
     monkeypatch.setattr(registry, "kubectl", recorder())
     logs = capture_logs(registry)
 
-    registry.create_registry_secret(settings)
+    create_secret(settings)
 
     # Installer output routinely gets pasted into tickets and CI logs, which outlive the
     # process table by a long way.

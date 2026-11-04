@@ -17,10 +17,13 @@ carry KUBE_CONTEXT, and the pre-flight check that the binaries are there at all.
 import functools
 import shutil
 import subprocess
+import sys
+import threading
+import time
 from dataclasses import dataclass
-from typing import List, Optional, Sequence
+from typing import IO, List, Optional, Sequence
 
-from .console import InstallerError, die, err, log_error, log_info
+from .console import InstallerError, debug_log_path, die, err, log_debug, log_error, log_info
 from .settings import Settings
 
 
@@ -66,6 +69,27 @@ def redact(cmd: Sequence[str]) -> List[str]:
     return masked
 
 
+# Per stream, per command. `kubectl get svc --all-namespaces` on a big cluster runs to
+# megabytes, and the head of a failing command's output is what explains it.
+DEBUG_OUTPUT_LIMIT = 20_000
+
+
+def _clip(text: str) -> str:
+    if len(text) <= DEBUG_OUTPUT_LIMIT:
+        return text
+    return text[:DEBUG_OUTPUT_LIMIT] + f"\n... ({len(text) - DEBUG_OUTPUT_LIMIT} more characters)"
+
+
+def _log_command(cmd: Sequence[str], code: int, seconds: float, out: str, error: str) -> None:
+    """Record one finished command. stdin is never written: it carries the pull secret."""
+    lines = [f"$ {' '.join(redact(cmd))}", f"  exit {code} in {seconds:.2f}s"]
+    for label, text in (("stdout", out), ("stderr", error)):
+        if text.strip():
+            lines.append(f"  --- {label} ---")
+            lines.append(_clip(text.rstrip("\n")))
+    log_debug("\n".join(lines))
+
+
 def run(
     cmd: Sequence[str],
     *,
@@ -87,6 +111,7 @@ def run(
     first `vN.N` anywhere in the string, and a warning naming a Kubernetes version would be
     read as the cluster's own.
     """
+    started = time.monotonic()
     try:
         proc = subprocess.run(
             list(cmd),
@@ -95,11 +120,13 @@ def run(
             text=True,
         )
     except FileNotFoundError:
+        _log_command(cmd, 127, time.monotonic() - started, "", "command not found")
         if check:
             raise die(f"Command not found: {cmd[0]}") from None
         return Result(127, "")
 
     result = Result(proc.returncode, proc.stdout or "", proc.stderr or "")
+    _log_command(cmd, result.code, time.monotonic() - started, result.out, result.err)
     if check and not result.ok:
         # Diagnostics land on stderr, but fall back to stdout for tools that report
         # failures there rather than lose the only explanation the user would get.
@@ -110,12 +137,41 @@ def run(
     return result
 
 
+def _tee(source: IO[str], sink: IO[str]) -> None:
+    for line in source:
+        sink.write(line)
+        sink.flush()
+        log_debug(line)
+
+
 def stream(cmd: Sequence[str]) -> int:
-    """Run a command with its output going straight to the terminal."""
+    """Run a command with its output going to the terminal, and to the debug log if open.
+
+    Each stream keeps its own destination, so a helm error still reaches stderr for anyone
+    piping stdout.
+    """
+    log_debug(f"$ {' '.join(redact(cmd))}  (output follows as it streams)")
+    started = time.monotonic()
     try:
-        return subprocess.call(list(cmd))
+        if not debug_log_path():
+            code = subprocess.call(list(cmd))
+        else:
+            proc = subprocess.Popen(
+                list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
+            )
+            threads = [
+                threading.Thread(target=_tee, args=(proc.stdout, sys.stdout), daemon=True),
+                threading.Thread(target=_tee, args=(proc.stderr, sys.stderr), daemon=True),
+            ]
+            for thread in threads:
+                thread.start()
+            code = proc.wait()
+            for thread in threads:
+                thread.join()
     except FileNotFoundError:
         raise die(f"Command not found: {cmd[0]}") from None
+    log_debug(f"  exit {code} in {time.monotonic() - started:.2f}s")
+    return code
 
 
 # The wrappers below exist so every call in the installer honours KUBE_CONTEXT

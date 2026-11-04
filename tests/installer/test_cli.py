@@ -23,7 +23,7 @@ from pathlib import Path
 import hatch_build
 import pytest
 
-from ce_installer import cli, console
+from ce_installer import cli, console, registry
 from ce_installer.console import InstallerError
 from ce_installer.settings import UNKNOWN_VERSION, Settings, env_str, prompt_or_env
 
@@ -589,6 +589,8 @@ def stub_cluster_checks(monkeypatch):
     monkeypatch.setattr(cli, "refuse_a_second_release", lambda s: None)
     monkeypatch.setattr(cli, "run_blocking_validators", lambda s: None)
     monkeypatch.setattr(cli, "run_validators", lambda s: None)
+    monkeypatch.setattr(cli, "resolve_chart_source", lambda s: None)
+    monkeypatch.setattr(cli, "confirm_target", lambda s: None)
 
 
 def test_a_values_file_alone_skips_secret_creation(monkeypatch, tmp_path):
@@ -601,7 +603,8 @@ def test_a_values_file_alone_skips_secret_creation(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
     stub_cluster_checks(monkeypatch)
     monkeypatch.setattr(cli, "helm_install", lambda s: None)
-    monkeypatch.setattr(cli, "create_registry_secret", lambda s: called.append("secret"))
+    monkeypatch.setattr(cli, "prepare_registry_secret", lambda s: called.append("secret"))
+    monkeypatch.setattr(cli, "apply_registry_secret", lambda s: called.append("apply"))
     monkeypatch.setattr(cli, "gather_install_params", lambda s: called.append("params"))
 
     cli.execute(Settings(values_file=str(values)))
@@ -622,14 +625,15 @@ def test_a_values_file_with_config_still_creates_the_secret(monkeypatch, tmp_pat
     monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
     stub_cluster_checks(monkeypatch)
     monkeypatch.setattr(cli, "helm_install", lambda s: None)
-    monkeypatch.setattr(cli, "create_registry_secret", lambda s: called.append("secret"))
+    monkeypatch.setattr(cli, "prepare_registry_secret", lambda s: called.append("secret") or True)
+    monkeypatch.setattr(cli, "apply_registry_secret", lambda s: called.append("apply"))
     monkeypatch.setattr(cli, "gather_install_params", lambda s: called.append("params"))
 
     cli.execute(Settings(values_file=str(values), config_file=str(config)))
 
     # Composition, not exclusivity: --config still drives secret creation so its curated
     # fields have something to layer --set on.
-    assert called == ["secret", "params"]
+    assert called == ["secret", "params", "apply"]
 
 
 def test_a_missing_values_file_is_refused_before_anything_runs(monkeypatch):
@@ -657,8 +661,10 @@ def test_skip_secret_verifies_the_existing_one_instead(monkeypatch):
     stub_cluster_checks(monkeypatch)
     monkeypatch.setattr(cli, "helm_install", lambda s: None)
     monkeypatch.setattr(cli, "gather_install_params", lambda s: None)
-    monkeypatch.setattr(cli, "create_registry_secret", lambda s: called.append("create"))
-    monkeypatch.setattr(cli, "verify_existing_registry_secret", lambda s: called.append("verify"))
+    monkeypatch.setattr(cli, "apply_registry_secret", lambda s: called.append("create"))
+    monkeypatch.setattr(
+        registry, "verify_existing_registry_secret", lambda s: called.append("verify")
+    )
 
     cli.execute(Settings(skip_registry_secret=True))
 
@@ -672,7 +678,9 @@ def test_skip_validators_bypasses_the_checks(monkeypatch):
     monkeypatch.setattr(cli, "load_config", lambda s: None)
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
-    monkeypatch.setattr(cli, "create_registry_secret", lambda s: None)
+    monkeypatch.setattr(cli, "resolve_chart_source", lambda s: None)
+    monkeypatch.setattr(cli, "confirm_target", lambda s: None)
+    monkeypatch.setattr(cli, "prepare_registry_secret", lambda s: False)
     monkeypatch.setattr(cli, "gather_install_params", lambda s: None)
     monkeypatch.setattr(cli, "helm_install", lambda s: None)
     monkeypatch.setattr(cli, "run_validators", lambda s: called.append("validators"))

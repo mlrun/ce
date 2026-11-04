@@ -22,8 +22,9 @@ from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 
-from .console import out
-from .settings import Settings
+from .cluster import api_server, effective_context
+from .console import die, log_info, out
+from .settings import Settings, confirm
 from .shell import helm, kubectl
 
 
@@ -90,6 +91,39 @@ def run_deployment_progress_ui(settings: Settings, proc: subprocess.Popen) -> No
             while waited < interval and proc.poll() is None:
                 time.sleep(0.25)
                 waited += 0.25
+
+
+def confirm_target(settings: Settings) -> None:
+    """Show where the install is about to land, and ask before the first write.
+
+    A kubeconfig left pointing at the wrong cluster is the costliest mistake an installer
+    can make, and nothing else in the run names the cluster. Printed every time; asked only
+    when someone is there to answer and something would actually change.
+    """
+    context = effective_context(settings) or "(none)"
+    server = api_server(settings)
+    if settings.chart_path:
+        chart = f"{settings.chart_path} (local chart)"
+    else:
+        chart = f"{settings.chart_ref or 'mlrun-ce/mlrun-ce'} {settings.ce_version or '(newest)'}"
+    if settings.values_file and not settings.config_file:
+        registry = f"from {settings.values_file}"
+    else:
+        registry = f"{settings.registry_url} (pull secret '{settings.registry_secret_name}')"
+
+    log_info("Dry run of:" if settings.dry_run else "About to install:")
+    log_info(f"  Cluster:   {context}" + (f" ({server})" if server else ""))
+    log_info(f"  Namespace: {settings.namespace}")
+    log_info(f"  Release:   {settings.release_name}")
+    log_info(f"  Chart:     {chart}")
+    log_info(f"  Registry:  {registry}")
+    if settings.external_host_address:
+        log_info(f"  Address:   {settings.external_host_address}")
+
+    if settings.dry_run or settings.non_interactive:
+        return
+    if not confirm(settings, "Proceed?"):
+        raise die("Cancelled; nothing on the cluster was changed.")
 
 
 def print_notes_table(settings: Settings) -> None:

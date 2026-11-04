@@ -22,7 +22,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
-from .console import die
+from .console import die, log_debug
 
 # --------------------------------------------------------------------------------------
 # Built-in defaults
@@ -100,6 +100,9 @@ class Settings:
     generated_values_file: str = field(
         default_factory=lambda: env_str("GENERATED_VALUES_FILE", "mlrun-ce-values.yaml")
     )
+    install_log_file: str = field(
+        default_factory=lambda: env_str("INSTALL_LOG_FILE", "mlrun-ce-install.log")
+    )
     registry_password_file: str = field(default_factory=lambda: env_str("REGISTRY_PASSWORD_FILE"))
     # 'namespace/name' of the ingress controller Service, for the --local-registry CoreDNS
     # patch. Unset means try the well-known ingress-nginx locations; see
@@ -141,6 +144,8 @@ class Settings:
     otel_set_by_cli: bool = False
     local_registry: bool = False
     ce_version: str = ""
+    # True when ce_version is the installer's own chart version rather than --ce-version.
+    ce_version_is_installers: bool = False
     chart_path: str = ""
     skip_dependency_update: bool = False
     dry_run: bool = False
@@ -154,6 +159,7 @@ class Settings:
     registry_username_value: str = ""
     registry_password_value: str = ""
     registry_server_value: str = ""
+    registry_email_value: str = ""
 
     # Defaults sourced from ce-config.yaml, used as prompt fallbacks.
     config_registry_url: str = ""
@@ -215,7 +221,28 @@ def prompt_or_env(
     except EOFError:
         entered = ""
 
-    return entered or default
+    value = entered or default
+    if not secret:
+        log_debug(f"Prompted for {env_var}: {value!r}")
+    return value
+
+
+def confirm(settings: Settings, question: str, default_yes: bool = True) -> bool:
+    """Ask a yes/no question on stderr. Never asked under --non-interactive, where the
+    default stands. A closed stdin is a no: nobody is there to agree."""
+    if settings.non_interactive:
+        return default_yes
+    sys.stderr.write(f"{question} {'[Y/n]' if default_yes else '[y/N]'}: ")
+    sys.stderr.flush()
+    try:
+        answer = input().strip().lower()
+    except EOFError:
+        log_debug(f"Asked '{question}': stdin closed, treated as no")
+        return False
+    log_debug(f"Asked '{question}': {answer!r}")
+    if not answer:
+        return default_yes
+    return answer in ("y", "yes")
 
 
 def parse_floor(raw: str, name: str) -> Tuple[int, int]:
