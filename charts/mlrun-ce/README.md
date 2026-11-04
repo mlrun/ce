@@ -223,6 +223,16 @@ Key values under `seaweedfs.remote`:
 
 > **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout) and `storage.mode: s3` or `azure-blob`. `seaweedfs.remote.bucket` defaults to `storage.s3.bucket` / `storage.azure.containerName` (customer cloud name). KFP’s in-cluster SeaweedFS bucket defaults to `storage.local.bucket` (`mlrun`). KFP pipeline paths under `minio://mlrun/v2/artifacts` sync into the customer cloud bucket alongside MLRun data.
 
+#### `helm uninstall` and reinstall (same cloud overlay)
+
+The chart does **not** delete your AWS S3 bucket or Azure container. MLRun and synced KFP data written to cloud storage **remain there** after `helm uninstall`.
+
+On a fresh **`helm install`** or **`helm upgrade`** with the same remote overlay, the **remote-config** hook unmounts an existing filer mount at `/buckets/<storage.local.bucket>` if present (filer metadata only — cloud objects are not deleted), then runs `remote.configure` and `remote.mount` (with `-nonempty` by default). After a new filer (e.g. post-`helm uninstall`), remount attaches that path to your cloud bucket or container again; data that was already in Azure or S3 remains there.
+
+**MLRun** with `storage.mode: s3` or `azure-blob` also keeps reading and writing the same customer bucket or container; reinstall does not remove those objects.
+
+**KFP UI / run history** is stored in pipelines MySQL, not in blob storage alone. If `helm uninstall` removed the release database, a new install starts with an empty run list even when old artifact blobs still exist in Azure or S3. The overlays use `emptyDir` for SeaweedFS lab installs so in-cluster volume state is not preserved across uninstall; cloud storage is the durable copy.
+
 See also: [Kubeflow Pipelines object store configuration](https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/).
 
 ### Working with ECR

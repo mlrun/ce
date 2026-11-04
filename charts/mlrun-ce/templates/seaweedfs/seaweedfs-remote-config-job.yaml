@@ -97,7 +97,7 @@ spec:
 
               EXISTING_MOUNT=$(printf 'remote.mount\n' | weed shell -filer="${FILER}" -master="${MASTER}" 2>&1)
               if echo "${EXISTING_MOUNT}" | grep -Fq "${MOUNT_DIR}"; then
-                echo "Unmounting stale remote mount at ${MOUNT_DIR} before reconfigure..."
+                echo "Unmounting remote mount at ${MOUNT_DIR} before reconfigure..."
                 printf 'remote.unmount -dir=%s\n' "${MOUNT_DIR}" | weed shell -filer="${FILER}" -master="${MASTER}"
               fi
 
