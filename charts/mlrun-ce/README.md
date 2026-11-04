@@ -18,7 +18,7 @@ The Open source MLRun ce chart includes the following stack:
 
 ## Prerequisites
 
-- Helm >=3.6 installed from [here](https://helm.sh/docs/intro/install/)
+- Helm >=3.17 (4.1 recommended) installed from [here](https://helm.sh/docs/intro/install/)
 
 - Preprovisioned Kubernetes StorageClass
   

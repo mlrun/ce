@@ -299,10 +299,16 @@ sub-chart tarballs and has nothing to do with Python.
 
 ## Version floors
 
-The installer's floors track the chart's own prerequisites, not the product install docs:
+The installer's blocking floors track what the chart itself needs; the product install
+docs' stricter Helm requirement only warns:
 
-- **Helm >= 3.6, blocking** — mirrors `charts/mlrun-ce/README.md`'s prerequisites, so the
-  installer can't refuse a Helm the chart itself supports. `MIN_HELM_VERSION` raises it.
+- **Helm >= 3.17, blocking** — the oldest Helm that renders the chart. SeaweedFS 4.17.0
+  (#283) calls `fromToml` in `templates/shared/security-configmap.yaml`, added in Helm
+  3.17.0; 3.16.4 fails to parse the chart with `function "fromToml" not defined`. Matches
+  `charts/mlrun-ce/README.md`. `MIN_HELM_VERSION` raises it; lowered below 3.17 the check
+  passes with a warning that helm will still fail.
+- **Helm < 4.1 warns** (`RECOMMENDED_HELM_VERSION`), naming the MLRun CE install docs,
+  which require 4.1. Not blocking: 3.17–4.0 render and install the chart.
 - **No Kubernetes floor.** `validate_k8s_version` is informational: it reports the detected
   version, returns 0 on every path, and is not in `run_validators`' `|| failed=1` group.
   The chart declares no `kubeVersion` and the README states no cluster version, so there is
@@ -614,6 +620,12 @@ From a real install on a Helm 4.1 cluster:
   status flag lists only deployed and failed), and a listing that fails or is not JSON
   stops the run, naming the command and helm's error. The stub answers `list --all` with
   that error when `STUB_HELM_VERSION` is a v4.
+- **The Helm floor (3.6) let through a Helm that cannot render the chart.** SeaweedFS
+  4.17.0 (#283) uses `fromToml`, added in Helm 3.17.0, so Helm 3.6–3.16 passed the check
+  and then failed at `helm upgrade` with `function "fromToml" not defined`, after the
+  namespace and pull secret existed. The floor is now 3.17, the block names the reason, and
+  Helm below 4.1 (the MLRun CE docs' requirement) warns. The stub's default Helm moved from
+  3.14.2 to 3.17.0 with it.
 
 ## Testing
 

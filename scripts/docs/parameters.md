@@ -75,8 +75,8 @@ Options:
                                  ignored with --chart-path)
   --dry-run                      Show what would happen without changing anything. Renders the chart
                                  via helm --dry-run=server, and on 'uninstall' reports what would be
-                                 removed. Below Helm 3.13, which has no server-side dry run, it falls
-                                 back to a client-side one and says so
+                                 removed. Below Helm 3.13 (only reachable with --skip-validators or a
+                                 lowered MIN_HELM_VERSION) it falls back to a client-side one and says so
   --non-interactive              Never prompt; fail with exit 1 if a required value is missing
                                  (auto-set when CI=true)
   --config FILE                  Read defaults from a ce-config.yaml file's 'installer:' block
@@ -105,7 +105,7 @@ Options:
 | `SKIP_VALIDATORS`      | `false`                           | Set to `true` to skip the pre-install validators         |
 | `HELM_TIMEOUT`         | `960s`                            | Timeout for helm's `--wait` on install/upgrade, and for `uninstall`. Raise it on slow networks — a cold pull of the 4.2Gi jupyter image alone can take ~6 minutes |
 | `MIN_K8S_VERSION`      | — (no floor)                      | Kubernetes version to warn below (`MAJOR.MINOR`); never blocks the install |
-| `MIN_HELM_VERSION`     | `3.6`                             | Helm CLI version floor the blocking validator enforces (`MAJOR.MINOR`) |
+| `MIN_HELM_VERSION`     | `3.17`                            | Helm CLI version floor the blocking validator enforces (`MAJOR.MINOR`); below 4.1 it warns |
 | `DISABLE_SYSTEM_MONITORING` | `false`                     | Set to `true` to disable the Grafana/Prometheus stack    |
 | `DISABLE_SPARK`        | `false`                           | Set to `true` to disable the Spark operator              |
 | `DISABLE_MPI`          | `false`                           | Set to `true` to disable MPI operator resources          |

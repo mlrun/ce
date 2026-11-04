@@ -1040,7 +1040,8 @@ def test_a_helm_older_than_313_gets_a_client_side_dry_run(
     monkeypatch, settings, recorder, capture_logs
 ):
     # --dry-run only became a string flag in helm 3.13; before that `--dry-run=server` is an
-    # invalid boolean and the install never starts. The chart's own floor is 3.6.
+    # invalid boolean and the install never starts. Below the 3.17 floor, so only reachable
+    # with --skip-validators or a lowered MIN_HELM_VERSION.
     monkeypatch.setattr(helm_ops, "helm", recorder(answers={"version": Result(0, "v3.12.3")}))
     logs = capture_logs(helm_ops)
     settings.dry_run = True
@@ -2133,3 +2134,60 @@ def test_a_release_listing_that_is_not_json_stops_the_run(monkeypatch, settings,
 
     with pytest.raises(InstallerError):
         helm_ops.other_mlrun_ce_releases(settings)
+
+
+# ------------------------------------------------------------------------------------------
+# The Helm floor (3.6) let through a Helm that cannot render the chart
+# ------------------------------------------------------------------------------------------
+
+
+def _helm_check(monkeypatch, recorder, settings, version):
+    monkeypatch.setattr(validators, "helm", recorder(answers={"version": Result(0, version)}))
+    logs = {"info": [], "warn": [], "error": []}
+    for level, messages in logs.items():
+        monkeypatch.setattr(validators, f"log_{level}", messages.append)
+    cli_settings.apply_version_floors(settings)
+    return validators.validate_helm_version(settings), logs
+
+
+def test_a_helm_without_fromtoml_is_refused_with_the_reason(monkeypatch, settings, recorder):
+    ok, logs = _helm_check(monkeypatch, recorder, settings, "v3.16.4+g7877b45")
+
+    assert ok is False
+    assert "below the minimum supported version (3.17)" in " ".join(logs["error"])
+    assert "fromToml" in " ".join(logs["info"]), "say why, not just that"
+
+
+def test_helm_317_passes_with_a_warning_naming_the_mlrun_docs(monkeypatch, settings, recorder):
+    ok, logs = _helm_check(monkeypatch, recorder, settings, "v3.17.0+g301108e")
+
+    assert ok is True
+    warning = " ".join(logs["warn"])
+    assert ">= 4.1" in warning
+    assert cli_settings.MLRUN_CE_INSTALL_DOCS_URL in warning
+
+
+@pytest.mark.parametrize("version", ["v4.1.1+g5caf004", "v4.2.0"])
+def test_helm_41_and_later_pass_without_a_warning(monkeypatch, settings, recorder, version):
+    ok, logs = _helm_check(monkeypatch, recorder, settings, version)
+
+    assert ok is True
+    assert logs["warn"] == []
+
+
+def test_a_lowered_helm_floor_still_lets_an_old_helm_through(monkeypatch, settings, recorder):
+    settings.min_helm_version = "3.6"
+
+    ok, logs = _helm_check(monkeypatch, recorder, settings, "v3.16.4+g7877b45")
+
+    assert ok is True, "MIN_HELM_VERSION is the user's override"
+    assert "fromToml" in " ".join(logs["warn"]), "but helm will fail, so say so"
+
+
+def test_a_raised_helm_floor_blocks_a_helm_the_chart_renders_on(monkeypatch, settings, recorder):
+    settings.min_helm_version = "4.1"
+
+    ok, logs = _helm_check(monkeypatch, recorder, settings, "v3.19.0")
+
+    assert ok is False
+    assert "fromToml" not in " ".join(logs["info"]), "3.19 has it; the reason would mislead"

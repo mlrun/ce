@@ -140,7 +140,7 @@ def handle_helm(args):
     verb = args[0]
 
     if verb == "version":
-        return 0, os.environ.get("STUB_HELM_VERSION", "v3.14.2+g2a2fb3b")
+        return 0, os.environ.get("STUB_HELM_VERSION", "v3.17.0+g301108e")
     if verb == "status":
         return (
             (0, "STATUS: deployed")

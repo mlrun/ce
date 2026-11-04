@@ -43,7 +43,8 @@ If you still see this error, it names another kind whose CRDs the chart installs
 example the OpenTelemetry operator's, with `--enable-otel`); dry-run without that component,
 or after the first install.
 
-On Helm older than 3.13, where `--dry-run` is a boolean flag and `--dry-run=server` does
+On Helm older than 3.13 (below the 3.17 floor, so only with `--skip-validators` or a
+lowered `MIN_HELM_VERSION`), where `--dry-run` is a boolean flag and `--dry-run=server` does
 not parse, the installer falls back to a client-side dry run and warns that it has. That
 renders without connecting to the cluster, so this failure doesn't arise, and nothing
 cluster-specific (API versions, `lookup()`, existing resources) is checked either.

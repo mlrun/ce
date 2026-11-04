@@ -293,8 +293,8 @@ def dry_run_flag(settings: Settings) -> str:
 
     --dry-run only became a string flag in helm 3.13. Before that it is a bool, and
     `--dry-run=server` parses as an invalid boolean value, so the whole install fails to
-    start. The chart's own floor is 3.6, so the documented `--dry-run` was unusable on any
-    supported helm older than 3.13.
+    start. The Helm floor (3.17) is above 3.13, so only a run with --skip-validators or a
+    lowered MIN_HELM_VERSION gets here.
 
     Neither mode sends anything to the API server. Server mode lets helm read the cluster
     (API versions, CRDs, lookup(), existing resources); the fallback renders without

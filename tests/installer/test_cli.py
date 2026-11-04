@@ -551,7 +551,7 @@ def test_an_empty_version_floor_means_no_floor(ran, monkeypatch):
 
 def test_the_helm_floor_defaults_to_the_charts_stated_requirement(ran):
     _, settings = ran()
-    assert (settings.min_helm_major, settings.min_helm_minor) == (3, 6)
+    assert (settings.min_helm_major, settings.min_helm_minor) == (3, 17)
 
 
 # ------------------------------------------------------------------------------------------

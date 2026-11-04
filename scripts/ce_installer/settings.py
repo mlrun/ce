@@ -41,14 +41,20 @@ DEFAULT_HELM_TIMEOUT = "960s"
 DEFAULT_INGRESS_CLASS = "nginx"
 DEFAULT_DOCKER_SERVER = "https://index.docker.io/v1/"
 
-# The Helm floor mirrors charts/mlrun-ce/README.md's "Helm >=3.6" — the chart's own stated
-# requirement, so the installer never refuses a Helm the chart itself supports.
+# The Helm floor is the oldest Helm that renders the chart: the SeaweedFS subchart (4.17.0
+# since #283) calls fromToml, which Helm added in 3.17.0, and an older Helm fails to parse
+# the chart at all. charts/mlrun-ce/README.md states the same. The MLRun CE docs ask for
+# Helm >= 4.1; below that the installer warns rather than refusing a Helm the chart renders on.
 #
 # Kubernetes has no floor by default: the chart declares no kubeVersion in Chart.yaml and
 # the README states no cluster version, so there is nothing to enforce. The check reports
 # what it finds and only warns when MIN_K8S_VERSION is set explicitly. Both are overridable
 # upward for anyone who wants to enforce a stricter environment.
-DEFAULT_MIN_HELM_VERSION = "3.6"
+DEFAULT_MIN_HELM_VERSION = "3.17"
+RECOMMENDED_HELM_VERSION = "4.1"
+MLRUN_CE_INSTALL_DOCS_URL = (
+    "https://github.com/mlrun/mlrun/blob/development/docs/install-mlrun-ce/kubernetes-install.md"
+)
 
 # The chart's fixed NodePorts (not configurable via values.yaml).
 REQUIRED_NODEPORTS = [30010, 30020, 30040, 30050, 30060, 30070, 30093, 30094, 30100, 30110]
@@ -172,7 +178,7 @@ class Settings:
     min_k8s_major: Optional[int] = None
     min_k8s_minor: Optional[int] = None
     min_helm_major: int = 3
-    min_helm_minor: int = 6
+    min_helm_minor: int = 17
 
 
 # --------------------------------------------------------------------------------------
@@ -249,7 +255,7 @@ def parse_floor(raw: str, name: str) -> Tuple[int, int]:
     """Parse a MAJOR.MINOR version floor, rejecting anything else."""
     match = re.fullmatch(r"(\d+)\.(\d+)", raw)
     if not match:
-        example = "1.30" if "K8S" in name else "3.6"
+        example = "1.30" if "K8S" in name else DEFAULT_MIN_HELM_VERSION
         raise die(f"{name} must be in MAJOR.MINOR form (e.g. {example}), got: '{raw}'")
     return int(match.group(1)), int(match.group(2))
 

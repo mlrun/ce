@@ -221,9 +221,10 @@ Before every real (or dry-run) install, the installer runs a set of read-only pr
 checks against the target cluster:
 
 - **Blocking** (exit 1, run before the namespace, local registry or pull secret is
-  created, so a failure leaves the cluster untouched): Helm CLI version >= 3.6, a default
+  created, so a failure leaves the cluster untouched): Helm CLI version >= 3.17, a default
   StorageClass exists.
-- **Warning only** (logged, install continues): the cluster's Kubernetes version (reported
+- **Warning only** (logged, install continues): a Helm below 4.1, the version the MLRun CE
+  docs require, the cluster's Kubernetes version (reported
   always, and compared only against an explicitly set `MIN_K8S_VERSION`), registry login with the resolved
   credentials into a throwaway docker config, never your `~/.docker/config.json`
   (skipped for `--local-registry`, for `--dry-run`, and when no credentials were resolved
@@ -245,9 +246,14 @@ pass. Skip the whole dispatcher with
 
 ### Version floors
 
-The Helm >= 3.6 floor mirrors the prerequisite in
-[the chart README](../../charts/mlrun-ce/README.md#prerequisites), so the installer never
-refuses a Helm version the chart itself supports.
+The Helm >= 3.17 floor is the oldest Helm that renders the chart: the SeaweedFS subchart
+uses the `fromToml` template function, which Helm added in 3.17.0, and an older Helm stops
+with `function "fromToml" not defined`. It matches the prerequisite in
+[the chart README](../../charts/mlrun-ce/README.md#prerequisites).
+
+The [MLRun CE install docs](https://github.com/mlrun/mlrun/blob/development/docs/install-mlrun-ce/kubernetes-install.md)
+ask for Helm >= 4.1. Between 3.17 and 4.1 the installer warns and carries on, since the
+chart renders and installs there.
 
 **There is no Kubernetes floor.** The chart declares no `kubeVersion` in `Chart.yaml` and the
 README states no cluster version, so the installer has nothing to enforce and doesn't invent
@@ -262,7 +268,8 @@ MIN_K8S_VERSION=1.34 MIN_HELM_VERSION=4.1 ./scripts/install.py --chart-path ./ch
 ```
 
 `MIN_K8S_VERSION` only ever warns; it never blocks the install. Only `MIN_HELM_VERSION` is
-enforced as a hard floor.
+enforced as a hard floor. Lowering it below 3.17 lets the check pass with a warning, but
+helm itself still fails to render the chart.
 
 ---
 

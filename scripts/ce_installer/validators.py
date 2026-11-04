@@ -24,7 +24,14 @@ import tempfile
 from typing import List, Optional, Tuple
 
 from .console import die, log_error, log_info, log_warn
-from .settings import DEFAULT_DOCKER_SERVER, REQUIRED_NODEPORTS, Settings
+from .settings import (
+    DEFAULT_DOCKER_SERVER,
+    DEFAULT_MIN_HELM_VERSION,
+    MLRUN_CE_INSTALL_DOCS_URL,
+    RECOMMENDED_HELM_VERSION,
+    REQUIRED_NODEPORTS,
+    Settings,
+)
 from .shell import docker_available, helm, kubectl, run
 
 STORAGECLASS_JSONPATH = (
@@ -56,6 +63,17 @@ def parse_major_minor(raw: str) -> Optional[Tuple[int, int]]:
     if not match:
         return None
     return int(match.group(1)), int(match.group(2))
+
+
+def _major_minor(version: str) -> Tuple[int, int]:
+    major, minor = version.split(".")
+    return int(major), int(minor)
+
+
+CHART_NEEDS_HELM = (
+    f"The chart needs Helm >= {DEFAULT_MIN_HELM_VERSION}: the SeaweedFS subchart uses the "
+    "fromToml template function, which Helm added in 3.17.0"
+)
 
 
 def validate_k8s_version(settings: Settings) -> bool:
@@ -114,10 +132,22 @@ def validate_helm_version(settings: Settings) -> bool:
     major, minor = parsed
     found = f"{major}.{minor}"
     floor = f"{settings.min_helm_major}.{settings.min_helm_minor}"
+    renders_the_chart = parsed >= _major_minor(DEFAULT_MIN_HELM_VERSION)
     if (major, minor) < (settings.min_helm_major, settings.min_helm_minor):
         log_error(f"  Helm version {found} is below the minimum supported version ({floor}).")
+        if not renders_the_chart:
+            log_info(f"  {CHART_NEEDS_HELM}.")
+        log_info("  Install a newer Helm: https://helm.sh/docs/intro/install/")
         return False
     log_info(f"  Helm version: {found} (>= {floor} required)")
+    if not renders_the_chart:
+        # Only reachable with MIN_HELM_VERSION lowered below the chart's own floor.
+        log_warn(f"  {CHART_NEEDS_HELM}, so helm will fail to render it.")
+    elif parsed < _major_minor(RECOMMENDED_HELM_VERSION):
+        log_warn(
+            f"  Helm {found} renders the chart, but the MLRun CE docs require Helm >= "
+            f"{RECOMMENDED_HELM_VERSION}: {MLRUN_CE_INSTALL_DOCS_URL}"
+        )
     return True
 
 

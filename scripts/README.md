@@ -267,7 +267,8 @@ admission webhooks and the server's own validation are not exercised. A first in
 cluster without the Prometheus Operator CRDs is dry-run without the monitoring stack, because
 those CRDs come with the chart itself; an upgrade dry-runs the whole chart — see the
 [FAQ](docs/faq.md#--dry-run-fails-with-no-matches-for-kind-prometheusrule).
-Helm older than 3.13 has no server mode and falls back to a client-side render.
+Helm older than 3.13 has no server mode; it is below the installer's 3.17 floor, so only a
+run with `--skip-validators` or a lowered `MIN_HELM_VERSION` falls back to a client-side render.
 
 Pre-install validators still run in `--dry-run` — see [Configuration](docs/configuration.md#pre-install-validators).
 
