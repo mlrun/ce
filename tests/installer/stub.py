@@ -148,6 +148,8 @@ def handle_helm(args):
             else (1, "not found")
         )
     if verb == "list":
+        if "--all" in args and os.environ.get("STUB_HELM_VERSION", "").startswith("v4"):
+            return 1, "Error: unknown flag: --all"
         return 0, os.environ.get("STUB_HELM_LIST", "[]")
     if verb == "search":
         # Every pinned version is published unless the case says otherwise; without

@@ -24,6 +24,7 @@ what regressed rather than which assertion tripped.
 """
 
 import glob
+import importlib.util
 import json
 import os
 import re
@@ -2060,3 +2061,75 @@ def test_the_exclusion_reaches_the_dry_run_but_not_the_printed_equivalent(
     printed = [line for line in logs if "helm upgrade --install" in line]
     assert printed and "kube-prometheus-stack" not in printed[0]
     assert "kube-prometheus-stack" not in Path(settings.generated_values_file).read_text()
+
+
+# ------------------------------------------------------------------------------------------
+# Helm 4 rejected `helm list --all`, and the empty answer switched the second-release guard off
+# ------------------------------------------------------------------------------------------
+
+
+def _stub_helm(monkeypatch, helm_version):
+    spec = importlib.util.spec_from_file_location("ce_stub", Path(__file__).parent / "stub.py")
+    stub = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(stub)
+    monkeypatch.setenv("STUB_HELM_VERSION", helm_version)
+    return stub.handle_helm
+
+
+def test_the_release_listing_uses_status_flags_both_helm_majors_accept(
+    monkeypatch, settings, recorder
+):
+    helm = recorder(answers={"list": Result(0, "[]")})
+    monkeypatch.setattr(helm_ops, "helm", helm)
+
+    helm_ops.other_mlrun_ce_releases(settings)
+
+    listed = helm.calls[0]
+    assert "--all" not in listed, "Helm 4 removed --all: 'unknown flag: --all'"
+    # Helm 3 without a status flag lists only deployed and failed releases.
+    assert {"--deployed", "--failed", "--pending"} <= set(listed)
+
+
+@pytest.mark.parametrize("helm_version", ["v3.14.2+g2a2fb3b", "v4.1.1+g5caf004"])
+def test_the_stub_accepts_the_listing_on_either_helm_major(monkeypatch, settings, helm_version):
+    handle_helm = _stub_helm(monkeypatch, helm_version)
+    args = ["list", "--namespace", "mlrun", *helm_ops.RELEASE_STATUS_FLAGS, "-o", "json"]
+
+    assert handle_helm(args)[0] == 0
+    assert handle_helm(["list", "--all"])[0] == (1 if helm_version.startswith("v4") else 0)
+
+
+HELM_4_LIST_ERROR = Result(1, "", "Error: unknown flag: --all")
+
+
+def test_a_failed_release_listing_stops_the_install(monkeypatch, settings, recorder):
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"list": HELM_4_LIST_ERROR}))
+
+    with pytest.raises(InstallerError) as excinfo:
+        helm_ops.refuse_a_second_release(settings)
+
+    assert "unknown flag: --all" in str(excinfo.value)
+    assert "helm list --namespace" in str(excinfo.value), "name the command that failed"
+
+
+def test_a_failed_release_listing_stops_an_uninstall_cleanup(monkeypatch, settings, recorder):
+    kube_rec = recorder(
+        answers={"get deployment,service,ingress,secret": Result(0, "secret/registry\n")}
+    )
+    helm_rec = recorder(answers={"status": Result(1, "", "not found"), "list": HELM_4_LIST_ERROR})
+    monkeypatch.setattr(helm_ops, "helm", helm_rec)
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+    settings.release_name = "typo"
+
+    with pytest.raises(InstallerError):
+        helm_ops.do_uninstall(settings)
+
+    assert not kube_rec.ran("delete")
+
+
+def test_a_release_listing_that_is_not_json_stops_the_run(monkeypatch, settings, recorder):
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"list": Result(0, "NAME  CHART")}))
+
+    with pytest.raises(InstallerError):
+        helm_ops.other_mlrun_ce_releases(settings)

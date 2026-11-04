@@ -603,6 +603,18 @@ From the external review of PR #315:
   the pod and event commands, `HELM_TIMEOUT`, that a re-run upgrades in place, and the FAQ;
   a failed dry run explains the missing-CRD error instead. The debug log carries the rest.
 
+From the real install on vmdev137 (Helm 4.1):
+
+- **Helm 4 rejected `helm list --all`, which switched the second-release guards off.**
+  Helm 4 removed `--all` and lists every status by default, so the listing exited 1 with
+  `unknown flag: --all`, and `other_mlrun_ce_releases` read a failure as "no releases".
+  `refuse_a_second_release` and the uninstall mistyped-`RELEASE_NAME` check then never
+  fired. It now passes `RELEASE_STATUS_FLAGS` (`--deployed --failed --pending
+  --superseded --uninstalling`), which mean the same on Helm 3 and 4 (Helm 3 without a
+  status flag lists only deployed and failed), and a listing that fails or is not JSON
+  stops the run, naming the command and helm's error. The stub answers `list --all` with
+  that error when `STUB_HELM_VERSION` is a v4.
+
 ## Testing
 
 `make installer-test` runs everything. `make installer-lint` runs `uvx ruff check` +

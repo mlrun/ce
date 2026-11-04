@@ -677,6 +677,7 @@ def test_skip_validators_bypasses_the_checks(monkeypatch):
     called = []
     monkeypatch.setattr(cli, "load_config", lambda s: None)
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
+    monkeypatch.setattr(cli, "refuse_a_second_release", lambda s: None)
     monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
     monkeypatch.setattr(cli, "resolve_chart_source", lambda s: None)
     monkeypatch.setattr(cli, "confirm_target", lambda s: None)

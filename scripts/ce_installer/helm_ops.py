@@ -599,13 +599,28 @@ def remove_installer_resources(settings: Settings) -> None:
     )
 
 
+# Every status except uninstalled (kept history, no resources). Helm 4 removed `--all` and
+# lists every status by default; Helm 3 without a status flag shows only deployed and
+# failed. These flags mean the same on both.
+RELEASE_STATUS_FLAGS = ("--deployed", "--failed", "--pending", "--superseded", "--uninstalling")
+
+
 def other_mlrun_ce_releases(settings: Settings) -> List[str]:
-    """`name (chart)` for every mlrun-ce release in the namespace not named RELEASE_NAME."""
-    listed = helm(settings, "list", "--namespace", settings.namespace, "--all", "-o", "json")
+    """`name (chart)` for every mlrun-ce release in the namespace not named RELEASE_NAME.
+
+    A listing that fails is an error, not an empty namespace: both callers guard against
+    damaging another release, and an empty answer would switch the guard off.
+    """
+    args = ["list", "--namespace", settings.namespace, *RELEASE_STATUS_FLAGS, "-o", "json"]
+    listed = helm(settings, *args)
+    command = " ".join(helm_cmd(settings, *args))
+    if not listed.ok:
+        detail = (listed.err or listed.out).strip()
+        raise die(f"Could not list the releases in '{settings.namespace}' ({command}): {detail}")
     try:
-        releases = json.loads(listed.out) if listed.ok and listed.out.strip() else []
+        releases = json.loads(listed.out) if listed.out.strip() else []
     except ValueError:
-        return []
+        raise die(f"'{command}' did not return JSON: {listed.out.strip()[:200]}") from None
     return [
         f"{release.get('name')} ({release.get('chart')})"
         for release in releases
