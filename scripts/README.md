@@ -331,6 +331,11 @@ PVCs in the namespace and the released PVs bound to them (data loss). A PVC that
 still mounts stays `Terminating`; the run then ends with "Hard clean finished with
 leftovers", naming them — see the
 [FAQ](docs/faq.md#--hard-clean-didnt-delete-everything--a-kafka-pod-and-its-pvc-are-still-there).
+
+Either way the run ends by naming anything else still labelled
+`app.kubernetes.io/instance=<release>` that helm no longer tracks, such as a migrations Job
+left by a failed upgrade, with the `kubectl delete` command for it. It reports them and
+deletes nothing. The SeaweedFS Secrets above are listed separately as kept on purpose.
 Add `--dry-run` to either to see what would be removed. For removing the namespace too, see the
 [FAQ](docs/faq.md#deleting-everything-including-the-namespace).
 

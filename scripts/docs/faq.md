@@ -100,13 +100,32 @@ kubectl delete kafka,kafkanodepool --all -n mlrun
 ```
 
 Not something `do_hard_clean` can anticipate from `install.py` alone — it's a
-chart/Strimzi ordering issue. Then run the hard clean again.
+chart/Strimzi ordering issue.
+
+A PVC the hard clean already asked to delete goes on its own once the pod releases it. Check
+what is left:
+
+```bash
+kubectl get pvc -n mlrun
+kubectl get pv | grep mlrun/
+```
+
+If a PVC or a `Released` PV remains, run the hard clean again **interactively**:
+`./scripts/install.py uninstall --hard-clean`. With the release already gone it warns that
+the namespace has no release and asks you to type the namespace name; anything else
+cancels. Under `--non-interactive` (or `CI=true`) it refuses instead, since nobody can
+confirm a namespace with no release to vouch for it — see
+[`--hard-clean` refuses](#--hard-clean-refuses-release--is-not-in-namespace).
+
+The run's last lines also name any other object still labelled with the release (for
+example a migrations Job left by a failed upgrade, which helm no longer tracks) and print
+the `kubectl delete` command for them; the installer reports these but does not delete them.
 
 Some Secrets outlive a hard clean by design: SeaweedFS's `seaweedfs-admin-secret`,
 `seaweedfs-s3-secret` and `seaweedfs-sftp-secret` (pre-install hooks marked
-`helm.sh/resource-policy: keep`) and the Spark operator's runtime-generated
-`spark-operator-webhook-certs`, which carries no release label. The installer leaves them;
-deleting the namespace removes them (see below).
+`helm.sh/resource-policy: keep`, reported as "Kept on purpose") and the Spark operator's
+runtime-generated `spark-operator-webhook-certs`, which carries no release label. The
+installer leaves them; deleting the namespace removes them (see below).
 
 ### What address does the installer suggest for `EXTERNAL_HOST_ADDRESS`, and why?
 

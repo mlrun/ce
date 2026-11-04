@@ -2394,8 +2394,9 @@ def test_a_hard_clean_names_the_pvcs_it_could_not_remove(monkeypatch, settings, 
     )
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
     logs = capture_by_level(monkeypatch, helm_ops)
+    settings.hard_clean = True
 
-    helm_ops.do_hard_clean(settings)
+    helm_ops.report_uninstall_leftovers(settings, helm_ops.do_hard_clean(settings))
 
     warning = " ".join(logs["warn"])
     assert "finished with leftovers: data-kafka-0 (Terminating)" in warning
@@ -2409,8 +2410,9 @@ def test_a_clean_hard_clean_still_says_complete(monkeypatch, settings, recorder)
     )
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
     logs = capture_by_level(monkeypatch, helm_ops)
+    settings.hard_clean = True
 
-    helm_ops.do_hard_clean(settings)
+    helm_ops.report_uninstall_leftovers(settings, helm_ops.do_hard_clean(settings))
 
     assert "Hard clean complete." in logs["info"]
     assert not any("leftovers" in message for message in logs["warn"])
@@ -2513,3 +2515,155 @@ def test_the_access_table_lists_the_s3_endpoint(monkeypatch, settings):
     table = render_table(monkeypatch, settings, notes)
 
     assert table["SeaweedFS S3 API"][0] == "203.0.113.51:30094"
+
+
+# ------------------------------------------------------------------------------------------
+# Uninstall and --hard-clean were silent about non-PVC leftovers
+# ------------------------------------------------------------------------------------------
+
+# One line per object, as RELEASE_LEFTOVER_KINDS' jsonpath prints them: kind/name, the
+# resource policy, the deletion timestamp, the first owner's kind.
+LABELLED_OBJECTS = """\
+Job/mlrun-ce-mlrun-migrations-4|||
+Pod/mlrun-ce-mlrun-migrations-4-x7k2p|||Job
+Secret/seaweedfs-s3-secret|keep||
+Service/mlrun-api|||
+ReplicaSet/mlrun-api-6d9f|||Deployment
+ConfigMap/being-deleted||2026-11-04T12:00:00Z|
+"""
+
+
+def _uninstall_with_release(monkeypatch, settings, recorder, labelled=LABELLED_OBJECTS):
+    kube_rec = recorder(answers={"app.kubernetes.io/instance=": Result(0, labelled)})
+    monkeypatch.setattr(helm_ops, "helm", recorder())
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
+    settings.uninstall = True
+    return kube_rec, capture_by_level(monkeypatch, helm_ops)
+
+
+def test_leftovers_are_found_by_the_release_label_without_crds_or_pvcs(
+    monkeypatch, settings, recorder
+):
+    kube_rec, _ = _uninstall_with_release(monkeypatch, settings, recorder)
+
+    leftovers, kept = helm_ops.release_leftovers(settings)
+
+    query = kube_rec.argv_containing("app.kubernetes.io/instance=")[0]
+    assert "app.kubernetes.io/instance=mlrun-ce" in query
+    kinds = query[1].split(",")
+    assert "jobs" in kinds and "persistentvolumeclaims" not in kinds and "pvc" not in kinds
+    assert all("." not in kind for kind in kinds), "a CRD kind fails on clusters without it"
+    # Owned objects are still being cascaded away; deleting ones are on their way out.
+    assert leftovers == ["job/mlrun-ce-mlrun-migrations-4", "service/mlrun-api"]
+    assert kept == ["secret/seaweedfs-s3-secret"]
+
+
+def test_a_plain_uninstall_names_the_leftovers_and_how_to_delete_them(
+    monkeypatch, settings, recorder
+):
+    kube_rec, logs = _uninstall_with_release(monkeypatch, settings, recorder)
+
+    helm_ops.do_uninstall(settings)
+
+    warning = " ".join(logs["warn"])
+    assert "job/mlrun-ce-mlrun-migrations-4" in warning
+    assert "kubectl delete -n mlrun job/mlrun-ce-mlrun-migrations-4 service/mlrun-api" in warning
+    assert "seaweedfs-s3-secret" not in warning, "kept on purpose is not a surprise"
+    assert any("Kept on purpose" in line and "seaweedfs-s3-secret" in line for line in logs["info"])
+    assert not kube_rec.ran("delete jobs") and not kube_rec.ran("delete job/"), "report only"
+
+
+def test_a_hard_clean_folds_them_into_its_leftovers_line(monkeypatch, settings, recorder):
+    kube_rec, logs = _uninstall_with_release(monkeypatch, settings, recorder)
+    kube_rec.answers["deletionTimestamp"] = Result(0, "data-kafka-0   2026-11-04T12:00:00Z\n")
+    kube_rec.answers["get pvc"] = Result(0, "data-kafka-0\n")
+    settings.hard_clean = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert any(
+        "finished with leftovers: data-kafka-0 (Terminating), job/mlrun-ce-mlrun-migrations-4"
+        in line
+        for line in logs["warn"]
+    )
+    assert "Hard clean complete." not in logs["info"]
+
+
+def test_only_kept_objects_still_make_a_complete_hard_clean(monkeypatch, settings, recorder):
+    _, logs = _uninstall_with_release(
+        monkeypatch, settings, recorder, labelled="Secret/seaweedfs-s3-secret|keep||\n"
+    )
+    settings.hard_clean = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert "Hard clean complete." in logs["info"]
+    assert not any("leftovers" in line or "Still in" in line for line in logs["warn"])
+
+
+def test_a_dry_run_uninstall_reports_no_leftovers(monkeypatch, settings, recorder):
+    kube_rec, _ = _uninstall_with_release(monkeypatch, settings, recorder)
+    settings.dry_run = True
+
+    helm_ops.do_uninstall(settings)
+
+    # Nothing was removed, so everything would read as left over.
+    assert not kube_rec.ran("app.kubernetes.io/instance=")
+
+
+def test_the_migrations_job_carries_the_label_the_query_selects_on():
+    helpers = (CHART / "templates" / "_helpers.tpl").read_text()
+    selector = helpers[helpers.index('define "mlrun-ce.common.selectorLabels"') :]
+    migrations = helpers[helpers.index('define "mlrun-ce.mlrunMigrations.selectorLabels"') :]
+
+    assert "app.kubernetes.io/instance: {{ .Release.Name }}" in selector.split("{{- end")[0]
+    assert 'include "mlrun-ce.common.selectorLabels"' in migrations.split("{{- end")[0]
+
+
+# ------------------------------------------------------------------------------------------
+# The hard-clean namespace prompt showed "[mlrun]", which reads as a default
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("typed", ["", "mlurn"])
+def test_the_namespace_prompt_shows_no_default_and_anything_else_cancels(
+    monkeypatch, settings, capsys, typed
+):
+    monkeypatch.setattr("builtins.input", lambda: typed)
+    settings.non_interactive = False
+
+    with pytest.raises(console.Cancelled):
+        helm_ops.confirm_hard_clean_without_release(settings)
+
+    prompt = capsys.readouterr().err
+    assert "[mlrun]" not in prompt and "'mlrun'" in prompt
+    assert "anything else cancels" in prompt
+
+
+def test_typing_the_namespace_back_confirms(monkeypatch, settings):
+    monkeypatch.setattr("builtins.input", lambda: "mlrun")
+    settings.non_interactive = False
+
+    helm_ops.confirm_hard_clean_without_release(settings)
+
+
+# ------------------------------------------------------------------------------------------
+# The FAQ said "run the hard clean again", which --non-interactive refuses without a release
+# ------------------------------------------------------------------------------------------
+
+
+def _faq_slug(heading):
+    return "#" + re.sub(r"[^\w\- ]", "", heading[4:].lower()).replace(" ", "-")
+
+
+def test_the_strimzi_entry_sends_the_rerun_through_the_interactive_confirmation():
+    faq = (Path(__file__).resolve().parents[2] / "scripts" / "docs" / "faq.md").read_text()
+    start = faq.index("### `--hard-clean` didn't delete everything")
+    entry = faq[start : faq.index("\n### ", start + 1)]
+
+    assert "kubectl get pvc -n mlrun" in entry
+    assert "interactively" in entry and "type the namespace" in entry
+    headings = faq.splitlines()
+    refuses = next(line for line in headings if line.startswith("### `--hard-clean` refuses"))
+    assert f"]({_faq_slug(refuses)})" in entry, "the link must land on the refuses entry"

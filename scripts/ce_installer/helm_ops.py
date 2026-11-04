@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import yaml
 
@@ -468,7 +468,8 @@ def helm_install(settings: Settings) -> None:
         print_notes_table(settings)
 
 
-def do_hard_clean(settings: Settings) -> None:
+def do_hard_clean(settings: Settings) -> List[str]:
+    """Delete the namespace's PVCs and their released PVs; returns the PVCs that remain."""
     # The reads below run under --dry-run too: listing what would be destroyed is the whole
     # point of dry-running a hard clean, and neither `get` touches anything.
     if settings.dry_run:
@@ -565,21 +566,86 @@ def do_hard_clean(settings: Settings) -> None:
         if not graceful.ok:
             kubectl(settings, "delete", "pv", pv, "--force", "--grace-period=0", "--wait=false")
 
-    if not leftovers:
-        log_info("Hard clean complete.")
-        return
-    # Exit 0 all the same: the release and everything else is gone, and what holds these is
-    # outside the installer's reach (a pod or custom resource that outlived the release).
-    log_warn(f"Hard clean finished with leftovers: {', '.join(leftovers)}")
-    log_warn(
-        "  A pod still mounting a PVC keeps it Terminating (pvc-protection); orphaned Strimzi "
-        f"Kafka resources are the usual cause. See {FAQ_URL}{STRIMZI_LEFTOVERS_ANCHOR}"
-    )
+    return leftovers
 
 
 STRIMZI_LEFTOVERS_ANCHOR = (
     "#--hard-clean-didnt-delete-everything--a-kafka-pod-and-its-pvc-are-still-there"
 )
+
+# Namespaced built-in kinds only, so the one `get` cannot fail on a CRD the cluster lacks.
+# PVCs are left out: a plain uninstall keeps them on purpose and a hard clean lists every
+# PVC itself.
+RELEASE_LEFTOVER_KINDS = (
+    "jobs,cronjobs,pods,deployments,statefulsets,daemonsets,replicasets,services,"
+    "configmaps,secrets,serviceaccounts,roles,rolebindings,ingresses"
+)
+_LEFTOVER_FIELDS = (
+    r"{range .items[*]}{.kind}/{.metadata.name}|{.metadata.annotations.helm\.sh/resource-policy}"
+    r'|{.metadata.deletionTimestamp}|{.metadata.ownerReferences[0].kind}{"\n"}{end}'
+)
+
+
+def release_leftovers(settings: Settings) -> Tuple[List[str], List[str]]:
+    """(leftovers, kept): objects still carrying the release's instance label.
+
+    Helm only deletes what the last successful revision rendered, so an object from a
+    failed upgrade (the migrations Job is named per revision) outlives the uninstall.
+    Objects with an owner are skipped, since their owner's deletion is still cascading,
+    and so are ones already being deleted. `helm.sh/resource-policy: keep` marks what a
+    subchart keeps on purpose (SeaweedFS's credential Secrets).
+    """
+    result = kubectl(
+        settings,
+        "get",
+        RELEASE_LEFTOVER_KINDS,
+        "--namespace",
+        settings.namespace,
+        "-l",
+        f"app.kubernetes.io/instance={settings.release_name}",
+        "-o",
+        f"jsonpath={_LEFTOVER_FIELDS}",
+    )
+    leftovers: List[str] = []
+    kept: List[str] = []
+    for line in result.out.splitlines() if result.ok else []:
+        fields = [*line.split("|"), "", "", ""][:4]
+        name, policy, deleting, owner = (field.strip() for field in fields)
+        if not name or deleting or owner:
+            continue
+        kind, _, rest = name.partition("/")
+        (kept if policy == "keep" else leftovers).append(f"{kind.lower()}/{rest}")
+    return leftovers, kept
+
+
+def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
+    """Name what is still in the namespace. Reports only; exit 0 all the same, since the
+    release is gone and what remains is either kept on purpose or needs a human decision."""
+    others, kept = ([], []) if settings.dry_run else release_leftovers(settings)
+    namespace = settings.namespace
+    if kept:
+        log_info(
+            f"Kept on purpose (helm.sh/resource-policy: keep, reused by a reinstall): "
+            f"{', '.join(kept)}"
+        )
+    if settings.hard_clean and not pvcs and not others:
+        log_info("Hard clean complete.")
+        return
+    if settings.hard_clean:
+        log_warn(f"Hard clean finished with leftovers: {', '.join(pvcs + others)}")
+    elif others:
+        log_warn(f"Still in '{namespace}' with the release's label: {', '.join(others)}")
+    if pvcs:
+        log_warn(
+            "  A pod still mounting a PVC keeps it Terminating (pvc-protection); orphaned "
+            f"Strimzi Kafka resources are the usual cause. See {FAQ_URL}{STRIMZI_LEFTOVERS_ANCHOR}"
+        )
+    if others:
+        kubectl_prefix = " ".join(kubectl_cmd(settings))
+        log_warn(
+            "  helm no longer tracks these (typically left by a failed upgrade). "
+            f"Delete them with: {kubectl_prefix} delete -n {namespace} {' '.join(others)}"
+        )
 
 
 def remaining_pvcs(settings: Settings) -> List[str]:
@@ -705,7 +771,8 @@ def confirm_hard_clean_without_release(settings: Settings) -> None:
             "run interactively to confirm."
         )
     log_warn(f"--hard-clean will delete every PVC in '{namespace}', which has no release.")
-    sys.stderr.write(f"Type the namespace name to continue anyway [{namespace}]: ")
+    # No brackets: "[mlrun]" reads as a default, and Enter here cancels.
+    sys.stderr.write(f"Type '{namespace}' to delete its PVCs (anything else cancels): ")
     sys.stderr.flush()
     try:
         typed = input().strip()
@@ -762,5 +829,5 @@ def do_uninstall(settings: Settings) -> None:
 
     remove_installer_resources(settings)
 
-    if settings.hard_clean:
-        do_hard_clean(settings)
+    pvcs = do_hard_clean(settings) if settings.hard_clean else []
+    report_uninstall_leftovers(settings, pvcs)

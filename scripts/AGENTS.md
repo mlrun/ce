@@ -667,6 +667,21 @@ From a full lab run (uninstall, install, upgrade):
   `seaweedfs.s3.enabled`, but `values.yaml` enables S3 through `seaweedfs.allInOne.s3.enabled`
   and never sets the former, so the access table never listed the S3 endpoint. The
   condition now accepts either.
+- **Uninstall and `--hard-clean` were silent about non-PVC leftovers.** A failed upgrade's
+  `<release>-mlrun-migrations-<revision>` Job outlived both: helm deletes only what the last
+  successful revision rendered. `report_uninstall_leftovers` (after every non-dry uninstall)
+  runs one `kubectl get` over built-in namespaced kinds (`RELEASE_LEFTOVER_KINDS`, no CRDs,
+  no PVCs) with `-l app.kubernetes.io/instance=<release>`, the label the chart's and the
+  subcharts' common labels set. Owned objects (their owner's cascade is still running) and
+  ones already being deleted are skipped; `helm.sh/resource-policy: keep` objects (the
+  SeaweedFS credential Secrets) are listed as kept on purpose. The rest join the hard
+  clean's "finished with leftovers" line, or a warning on a plain uninstall, with the
+  `kubectl delete` command. Reported, never deleted; exit 0.
+- **The FAQ said "run the hard clean again"** after the Strimzi cleanup, which
+  `--non-interactive` refuses once the release is gone. It now says to check the PVCs and
+  PVs first and re-run interactively, typing the namespace.
+- **The hard-clean namespace prompt showed `[mlrun]`**, which reads as a default, while
+  Enter cancels. It now reads "Type 'mlrun' to delete its PVCs (anything else cancels)".
 
 ## Testing
 

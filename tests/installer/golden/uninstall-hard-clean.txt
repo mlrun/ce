@@ -12,3 +12,4 @@ exit: 0
 ["kubectl", "get", "pvc", "--namespace", "mlrun", "--no-headers", "-o", "custom-columns=:metadata.name,:metadata.deletionTimestamp"]
 ["kubectl", "get", "pv", "--no-headers", "-o", "custom-columns=:metadata.name,:spec.claimRef.namespace,:status.phase"]
 ["kubectl", "delete", "pv", "pv-released", "--timeout", "60s"]
+["kubectl", "get", "jobs,cronjobs,pods,deployments,statefulsets,daemonsets,replicasets,services,configmaps,secrets,serviceaccounts,roles,rolebindings,ingresses", "--namespace", "mlrun", "-l", "app.kubernetes.io/instance=mlrun-ce", "-o", "jsonpath={range .items[*]}{.kind}/{.metadata.name}|{.metadata.annotations.helm\\.sh/resource-policy}|{.metadata.deletionTimestamp}|{.metadata.ownerReferences[0].kind}{\"\\n\"}{end}"]
