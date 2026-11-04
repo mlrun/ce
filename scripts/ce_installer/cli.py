@@ -34,6 +34,7 @@ from .cluster import (
 )
 from .config import check_required_non_interactive, load_config
 from .console import (
+    Cancelled,
     InstallerError,
     close_debug_log,
     debug_log_path,
@@ -597,7 +598,7 @@ def install(
         apply_version_floors(settings)
         execute(settings)
     except InstallerError as exc:
-        point_at_debug_log()
+        point_at_debug_log(exc)
         raise typer.Exit(exc.code) from None
     except typer.Exit:
         raise
@@ -622,9 +623,10 @@ def debug_log_header() -> List[str]:
     ]
 
 
-def point_at_debug_log() -> None:
+def point_at_debug_log(exc: Optional[InstallerError] = None) -> None:
+    """A cancel is the user's answer, not a failure: there is nothing in the log to read."""
     path = debug_log_path()
-    if path:
+    if path and not isinstance(exc, Cancelled):
         err.print(f"Full debug log: {path}", markup=False, highlight=False)
 
 

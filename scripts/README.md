@@ -303,8 +303,11 @@ plus helm's full output. A failed run prints its path:
 Full debug log: /home/me/mlrun-ce-install.log
 ```
 
-The log is readable by you only and never contains the registry password; attach it to a
-bug report as is.
+The log is readable by you only and never contains the registry password. The values of
+rendered `kind: Secret` manifests (`data:`/`stringData:`) are replaced with `<redacted>`
+there; the terminal output is not. Values the chart itself puts in ConfigMaps, pod `env:`
+or its NOTES (the default SeaweedFS S3 keys, for example) are left as they are, so look
+through the log before attaching it if you set your own.
 
 ### Uninstall
 
@@ -319,9 +322,16 @@ created yourself stays. `helm uninstall` runs with the `HELM_TIMEOUT` timeout (d
 `960s`).
 
 Kept: the namespace, the chart's CRDs, and every PersistentVolumeClaim, the registry's
-included, so a reinstall finds its data again. `--hard-clean` also deletes the PVCs in the
-namespace and the released PVs bound to them (data loss). Add `--dry-run` to either to see
-what would be removed. For removing the namespace too, see the
+included, so a reinstall finds its data again. Also kept, by the subcharts rather than the
+installer: SeaweedFS's `seaweedfs-admin-secret`, `seaweedfs-s3-secret` and
+`seaweedfs-sftp-secret` (created by pre-install hooks marked `helm.sh/resource-policy: keep`,
+so a reinstall keeps the same keys), and `spark-operator-webhook-certs`, which the Spark
+operator generates at runtime without the release's labels. `--hard-clean` also deletes the
+PVCs in the namespace and the released PVs bound to them (data loss). A PVC that something
+still mounts stays `Terminating`; the run then ends with "Hard clean finished with
+leftovers", naming them — see the
+[FAQ](docs/faq.md#--hard-clean-didnt-delete-everything--a-kafka-pod-and-its-pvc-are-still-there).
+Add `--dry-run` to either to see what would be removed. For removing the namespace too, see the
 [FAQ](docs/faq.md#deleting-everything-including-the-namespace).
 
 ---

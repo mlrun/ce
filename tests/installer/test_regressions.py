@@ -25,6 +25,7 @@ what regressed rather than which assertion tripped.
 
 import glob
 import importlib.util
+import io
 import json
 import os
 import re
@@ -36,7 +37,18 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from ce_installer import cli, cluster, config, console, helm_ops, registry, shell, ui, validators
+from ce_installer import (
+    cli,
+    cluster,
+    config,
+    console,
+    helm_ops,
+    registry,
+    secret_data,
+    shell,
+    ui,
+    validators,
+)
 from ce_installer import settings as cli_settings
 from ce_installer.config import check_required_non_interactive
 from ce_installer.console import InstallerError
@@ -2191,3 +2203,313 @@ def test_a_raised_helm_floor_blocks_a_helm_the_chart_renders_on(monkeypatch, set
 
     assert ok is False
     assert "fromToml" not in " ".join(logs["info"]), "3.19 has it; the reason would mislead"
+
+
+def capture_by_level(monkeypatch, module):
+    """Like the capture_logs fixture, but keeps info, warn and error apart."""
+    logs = {"info": [], "warn": [], "error": []}
+    for level, messages in logs.items():
+        if hasattr(module, f"log_{level}"):
+            monkeypatch.setattr(module, f"log_{level}", messages.append)
+    return logs
+
+
+# ------------------------------------------------------------------------------------------
+# A non-interactive re-run could not reuse the installer's own pull secret
+# ------------------------------------------------------------------------------------------
+
+
+def _non_interactive_without_credentials(monkeypatch, settings):
+    monkeypatch.setenv("REGISTRY_URL", "index.docker.io/someone")
+    settings.non_interactive = True
+    settings.local_registry = False
+    config.check_required_non_interactive(settings)
+
+
+def test_missing_credentials_alone_wait_for_the_secret_lookup(monkeypatch, settings):
+    _non_interactive_without_credentials(monkeypatch, settings)
+
+    # No raise: whether they are needed depends on a secret only the cluster knows about.
+    assert any("REGISTRY_PASSWORD" in item for item in settings.missing_registry_credentials)
+
+
+def test_other_missing_configuration_still_fails_up_front(settings):
+    settings.non_interactive = True
+    settings.local_registry = False
+
+    with pytest.raises(InstallerError):
+        config.check_required_non_interactive(settings)
+
+
+def test_a_non_interactive_rerun_reuses_the_installers_secret(monkeypatch, settings):
+    _non_interactive_without_credentials(monkeypatch, settings)
+    monkeypatch.setattr(registry, "registry_secret_owner", lambda s: registry.SECRET_OURS)
+    monkeypatch.setattr(registry, "collect_registry_credentials", pytest.fail)
+
+    assert registry.prepare_registry_secret(settings) is False
+    assert settings.registry_secret_reused
+
+
+@pytest.mark.parametrize("owner", [registry.SECRET_ABSENT, registry.SECRET_FOREIGN])
+def test_any_other_secret_still_needs_credentials(monkeypatch, settings, owner):
+    _non_interactive_without_credentials(monkeypatch, settings)
+    monkeypatch.setattr(registry, "registry_secret_owner", lambda s: owner)
+
+    with pytest.raises(InstallerError):
+        registry.prepare_registry_secret(settings)
+
+
+def test_supplied_credentials_still_replace_the_installers_secret(monkeypatch, settings):
+    monkeypatch.setenv("REGISTRY_URL", "index.docker.io/someone")
+    monkeypatch.setenv("REGISTRY_USERNAME", "someone")
+    monkeypatch.setenv("REGISTRY_PASSWORD", "new-password")
+    settings.non_interactive = True
+    settings.local_registry = False
+    config.check_required_non_interactive(settings)
+    monkeypatch.setattr(registry, "registry_secret_owner", lambda s: registry.SECRET_OURS)
+    collected = []
+    monkeypatch.setattr(registry, "collect_registry_credentials", collected.append)
+
+    assert registry.prepare_registry_secret(settings) is True
+    assert collected
+
+
+# ------------------------------------------------------------------------------------------
+# The debug log held rendered Secrets
+# ------------------------------------------------------------------------------------------
+
+# Shaped like `helm upgrade --install --dry-run` output: helm's own header, a hook, Secrets
+# with single-line, `|` block and inline values, one with kind after data, and a ConfigMap
+# whose data must survive.
+HELM_DRY_RUN_OUTPUT = """\
+Release "mlrun-ce" does not exist. Installing it now.
+NAME: mlrun-ce
+STATUS: pending-install
+HOOKS:
+---
+# Source: mlrun-ce/charts/seaweedfs/templates/s3/s3-secret.yaml
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: seaweedfs-s3-secret
+  annotations:
+    "helm.sh/resource-policy": keep
+stringData:
+  admin_access_key_id: "hook-access-key"
+  seaweedfs_s3_config: |
+    {
+      "identities": [{"name": "anvAdmin", "credentials": [{"secretKey": "json-secret"}]}]
+    }
+MANIFEST:
+---
+# Source: mlrun-ce/templates/config/storage-secret.yaml
+apiVersion: v1
+data:
+  AWS_ACCESS_KEY_ID: YWNjZXNzLWtleQ==
+  AWS_SECRET_ACCESS_KEY: c2VjcmV0LWtleQ==
+kind: Secret
+metadata:
+  name: storage-credentials
+---
+# Source: mlrun-ce/charts/grafana/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana
+data: {admin-password: Z3JhZmFuYS1wYXNz}
+---
+# Source: mlrun-ce/templates/config/mlrun-env-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mlrun-common-env
+data:
+  MLRUN_HTTPDB__DSN: "mysql+pymysql://root@mlrun-db:3306/mlrun"
+  S3_ENDPOINT_URL: http://seaweedfs-s3:8333
+
+NOTES:
+Happy MLOPSing!!! :]
+"""
+
+SECRET_VALUES = (
+    "hook-access-key", "json-secret", "YWNjZXNzLWtleQ==", "c2VjcmV0LWtleQ==",
+    "Z3JhZmFuYS1wYXNz",
+)  # fmt: skip
+
+
+def test_rendered_secret_values_are_redacted(monkeypatch):
+    redacted = secret_data.redact_secret_data(HELM_DRY_RUN_OUTPUT)
+
+    for value in SECRET_VALUES:
+        assert value not in redacted
+    assert "  AWS_SECRET_ACCESS_KEY: <redacted>" in redacted, "keep the key, drop the value"
+    assert "  seaweedfs_s3_config: <redacted>" in redacted
+    assert '"identities"' not in redacted, "a | block goes with its key"
+    assert "data: <redacted>" in redacted
+
+
+def test_a_configmap_and_the_rest_of_the_output_are_left_alone():
+    redacted = secret_data.redact_secret_data(HELM_DRY_RUN_OUTPUT)
+
+    assert "  S3_ENDPOINT_URL: http://seaweedfs-s3:8333" in redacted
+    assert "MLRUN_HTTPDB__DSN" in redacted
+    assert "name: seaweedfs-s3-secret" in redacted and "Happy MLOPSing" in redacted
+    assert '"helm.sh/resource-policy": keep' in redacted, "metadata is not data"
+
+
+def test_the_streamed_helm_output_reaches_the_terminal_whole_and_the_log_redacted(monkeypatch):
+    logged = []
+    monkeypatch.setattr(shell, "log_debug", logged.append)
+    terminal = io.StringIO()
+
+    shell._tee(io.StringIO(HELM_DRY_RUN_OUTPUT), terminal)
+
+    assert terminal.getvalue() == HELM_DRY_RUN_OUTPUT
+    log = "".join(logged)
+    assert not any(value in log for value in SECRET_VALUES)
+    assert "S3_ENDPOINT_URL" in log and "Happy MLOPSing" in log, "nothing lost at the end"
+
+
+def test_captured_command_output_is_redacted_too(monkeypatch):
+    logged = []
+    monkeypatch.setattr(shell, "log_debug", logged.append)
+
+    shell._log_command(["helm", "template"], 0, 0.1, HELM_DRY_RUN_OUTPUT, "")
+
+    assert not any(value in logged[0] for value in SECRET_VALUES)
+
+
+# ------------------------------------------------------------------------------------------
+# --hard-clean said "complete" with PVCs left
+# ------------------------------------------------------------------------------------------
+
+
+def test_a_hard_clean_names_the_pvcs_it_could_not_remove(monkeypatch, settings, recorder):
+    kube_rec = recorder(
+        answers={
+            "deletionTimestamp": Result(0, "data-kafka-0   2026-11-04T12:00:00Z\n"),
+            "get pvc": Result(0, "data-kafka-0\n"),
+        }
+    )
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    logs = capture_by_level(monkeypatch, helm_ops)
+
+    helm_ops.do_hard_clean(settings)
+
+    warning = " ".join(logs["warn"])
+    assert "finished with leftovers: data-kafka-0 (Terminating)" in warning
+    assert helm_ops.STRIMZI_LEFTOVERS_ANCHOR in warning
+    assert "Hard clean complete." not in logs["info"]
+
+
+def test_a_clean_hard_clean_still_says_complete(monkeypatch, settings, recorder):
+    kube_rec = recorder(
+        answers={"deletionTimestamp": Result(0, ""), "get pvc": Result(0, "data-0\n")}
+    )
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    logs = capture_by_level(monkeypatch, helm_ops)
+
+    helm_ops.do_hard_clean(settings)
+
+    assert "Hard clean complete." in logs["info"]
+    assert not any("leftovers" in message for message in logs["warn"])
+
+
+def test_the_faq_anchor_for_leftovers_exists():
+    faq = (Path(__file__).resolve().parents[2] / "scripts" / "docs" / "faq.md").read_text()
+    heading = next(line for line in faq.splitlines() if line.startswith("### `--hard-clean` didn"))
+    slug = re.sub(r"[^\w\- ]", "", heading[4:].lower()).replace(" ", "-")
+    assert "#" + slug == helm_ops.STRIMZI_LEFTOVERS_ANCHOR
+
+
+# ------------------------------------------------------------------------------------------
+# "Registry auth: skipped" blamed -f-only mode whatever the reason
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "setup, reason",
+    [
+        ({"skip_registry_secret": True}, "--skip-secret, using the existing secret"),
+        ({"registry_secret_reused": True}, "reusing the installer's secret"),
+        ({"values_file": "v.yaml"}, "-f-only mode"),
+        ({}, "already exists and is used as it stands"),
+    ],
+)
+def test_the_registry_auth_skip_names_its_reason(monkeypatch, settings, setup, reason):
+    settings.local_registry = False
+    for field_name, value in setup.items():
+        setattr(settings, field_name, value)
+    logs = capture_by_level(monkeypatch, validators)
+
+    assert validators.validate_registry_auth(settings) is True
+    assert reason in " ".join(logs["info"])
+
+
+# ------------------------------------------------------------------------------------------
+# "n" at "Proceed?" was reported as an error
+# ------------------------------------------------------------------------------------------
+
+
+def test_no_at_proceed_is_a_cancel_not_an_error(monkeypatch, settings):
+    monkeypatch.setattr(ui, "effective_context", lambda s: "ctx")
+    monkeypatch.setattr(ui, "api_server", lambda s: "")
+    monkeypatch.setattr(ui, "confirm", lambda s, q: False)
+    settings.non_interactive = False
+    logs = capture_by_level(monkeypatch, console)
+
+    with pytest.raises(console.Cancelled) as excinfo:
+        ui.confirm_target(settings)
+
+    assert excinfo.value.code == 1
+    assert "Cancelled; nothing on the cluster was changed." in logs["info"]
+    assert logs["error"] == []
+
+
+def test_a_cancelled_run_exits_1_without_pointing_at_the_debug_log(monkeypatch, capsys):
+    def cancelled(settings):
+        raise console.Cancelled("Cancelled; nothing on the cluster was changed.")
+
+    monkeypatch.setattr(cli, "execute", cancelled)
+
+    assert cli.main(["--non-interactive"]) == 1
+    assert "Full debug log" not in capsys.readouterr().err
+
+
+def test_a_failure_still_points_at_the_debug_log(monkeypatch, capsys):
+    def failed(settings):
+        raise InstallerError("boom")
+
+    monkeypatch.setattr(cli, "execute", failed)
+
+    assert cli.main(["--non-interactive"]) == 1
+    assert "Full debug log" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------------------------------
+# The chart's NOTES had no SeaweedFS S3 row
+# ------------------------------------------------------------------------------------------
+
+CHART = Path(__file__).resolve().parents[2] / "charts" / "mlrun-ce"
+
+
+def test_the_notes_s3_row_follows_the_all_in_one_s3_switch():
+    values = yaml.safe_load((CHART / "values.yaml").read_text())["seaweedfs"]
+    notes = (CHART / "templates" / "NOTES.txt").read_text()
+
+    # The default enables S3 only through allInOne; the row's condition has to look there.
+    assert values["allInOne"]["s3"]["enabled"] and "enabled" not in values.get("s3", {})
+    assert 'dig "allInOne" "s3" "enabled"' in notes
+
+
+def test_the_access_table_lists_the_s3_endpoint(monkeypatch, settings):
+    notes = (
+        "SeaweedFS S3 API is available at:\n203.0.113.51:30094\n\n"
+        "SeaweedFS Admin UI is available at:\n203.0.113.51:30093\n"
+        "-  S3 credentials: seaweed / seaweed123\n"
+    )
+
+    table = render_table(monkeypatch, settings, notes)
+
+    assert table["SeaweedFS S3 API"][0] == "203.0.113.51:30094"

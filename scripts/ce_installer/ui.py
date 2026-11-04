@@ -23,7 +23,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .cluster import api_server, effective_context
-from .console import die, log_info, out
+from .console import cancel, log_info, out
 from .settings import Settings, confirm
 from .shell import helm, kubectl
 
@@ -123,7 +123,7 @@ def confirm_target(settings: Settings) -> None:
     if settings.dry_run or settings.non_interactive:
         return
     if not confirm(settings, "Proceed?"):
-        raise die("Cancelled; nothing on the cluster was changed.")
+        raise cancel("Cancelled; nothing on the cluster was changed.")
 
 
 def print_notes_table(settings: Settings) -> None:

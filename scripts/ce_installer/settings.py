@@ -20,7 +20,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from .console import die, log_debug
 
@@ -166,6 +166,9 @@ class Settings:
     registry_password_value: str = ""
     registry_server_value: str = ""
     registry_email_value: str = ""
+    # Non-interactive credentials not supplied, which only the installer's own secret excuses.
+    missing_registry_credentials: List[str] = field(default_factory=list)
+    registry_secret_reused: bool = False
 
     # Defaults sourced from ce-config.yaml, used as prompt fallbacks.
     config_registry_url: str = ""

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import List
 
 from .cluster import resolve_local_registry_url
+from .config import report_missing_configuration
 from .console import InstallerError, add_secret, die, log_error, log_info, log_warn
 from .settings import DEFAULT_DOCKER_SERVER, Settings, confirm, env_str, prompt_or_env
 from .shell import kubectl
@@ -421,6 +422,17 @@ def prepare_registry_secret(settings: Settings) -> bool:
         return False
 
     owner = registry_secret_owner(settings)
+    missing = settings.missing_registry_credentials
+    if owner == SECRET_OURS and missing:
+        log_info(
+            f"Reusing secret '{name}' from a previous install: no registry credentials were "
+            "supplied to replace it."
+        )
+        settings.registry_secret_reused = True
+        return False
+    if missing:
+        report_missing_configuration(missing)
+
     if owner == SECRET_FOREIGN:
         log_warn(f"Secret '{name}' already exists and was not created by this installer.")
         log_warn("  Using it unchanged; no registry credentials are asked for or written.")
@@ -445,6 +457,7 @@ def prepare_registry_secret(settings: Settings) -> bool:
         )
     ):
         log_info(f"Reusing secret '{name}' (same as --skip-secret).")
+        settings.registry_secret_reused = True
         return False
 
     collect_registry_credentials(settings)

@@ -68,7 +68,9 @@ rewritten on every run and holds every command the installer ran with its exit c
 timing and output, helm's full output, and the traceback if the installer itself crashed.
 A failed run prints its path. It is created readable by you only, never records what was
 piped to a command's stdin (that is where the pull secret travels), and masks the registry
-password anywhere else it might appear.
+password anywhere else it might appear. The values under `data:`/`stringData:` of every
+rendered `kind: Secret` are replaced with `<redacted>`; values the chart writes into
+ConfigMaps, pod `env:` or its NOTES are not, so check for your own before sharing it.
 
 ### Can I install two `mlrun-ce` releases on one cluster?
 
@@ -85,7 +87,8 @@ of patching that template.
 `KafkaNodePool`/`StrimziPodSet` custom resources and their broker pod behind: once the
 `strimzi-kafka-operator` Deployment is gone, nothing reconciles those CRs, so the broker
 pod keeps running and its PVC's `kubernetes.io/pvc-protection` finalizer blocks
-`--hard-clean`'s PVC deletion indefinitely.
+`--hard-clean`'s PVC deletion indefinitely. The run then ends with "Hard clean finished with
+leftovers" and names the PVCs still there (exit 0: the release itself is gone).
 
 Fix is manual: delete the `strimzipodset` and pod directly (releases the finalizer), then
 the `kafka`/`kafkanodepool` CRs:
@@ -97,7 +100,13 @@ kubectl delete kafka,kafkanodepool --all -n mlrun
 ```
 
 Not something `do_hard_clean` can anticipate from `install.py` alone — it's a
-chart/Strimzi ordering issue.
+chart/Strimzi ordering issue. Then run the hard clean again.
+
+Some Secrets outlive a hard clean by design: SeaweedFS's `seaweedfs-admin-secret`,
+`seaweedfs-s3-secret` and `seaweedfs-sftp-secret` (pre-install hooks marked
+`helm.sh/resource-policy: keep`) and the Spark operator's runtime-generated
+`spark-operator-webhook-certs`, which carries no release label. The installer leaves them;
+deleting the namespace removes them (see below).
 
 ### What address does the installer suggest for `EXTERNAL_HOST_ADDRESS`, and why?
 

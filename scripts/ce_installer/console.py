@@ -37,6 +37,12 @@ class InstallerError(Exception):
         self.code = code
 
 
+class Cancelled(InstallerError):
+    """The user said no. Exit 1 like click's Abort: a wrapper running `install && next`
+    must not carry on, 130 belongs to Ctrl-C and 2 to a usage error. Not a failure, so it
+    is reported at info level and without the debug log's path."""
+
+
 # --------------------------------------------------------------------------------------
 # Debug log
 #
@@ -129,3 +135,8 @@ def die(message: str, code: int = 1) -> InstallerError:
     """Report an error and build the exception to raise, so call sites read as `raise die(...)`."""
     log_error(message)
     return InstallerError(message, code)
+
+
+def cancel(message: str) -> Cancelled:
+    log_info(message)
+    return Cancelled(message)

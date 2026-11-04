@@ -191,22 +191,29 @@ def check_required_non_interactive(settings: Settings) -> None:
     ):
         missing.append("installer.registry.url (or REGISTRY_URL)")
 
+    credentials: List[str] = []
     if not settings.skip_registry_secret and not settings.local_registry:
         if not env_str("REGISTRY_USERNAME") and not settings.config_registry_username:
-            missing.append("installer.registry.secret.username (or REGISTRY_USERNAME)")
+            credentials.append("installer.registry.secret.username (or REGISTRY_USERNAME)")
         password_file = settings.registry_password_file
         if not env_str("REGISTRY_PASSWORD") and not (
             password_file and Path(password_file).is_file()
         ):
-            missing.append(
+            credentials.append(
                 "REGISTRY_PASSWORD or REGISTRY_PASSWORD_FILE "
                 "(env/file only — never set via ce-config.yaml)"
             )
 
     if missing:
-        log_error(
-            "Missing required configuration (non-interactive mode, no prompt to fall back on):"
-        )
-        for item in missing:
-            log_error(f"  - {item}")
-        raise InstallerError(code=1)
+        report_missing_configuration(missing + credentials)
+    # Missing credentials alone wait for prepare_registry_secret: a re-run reuses the
+    # installer's own pull secret without them, and only the cluster can say whether it
+    # exists.
+    settings.missing_registry_credentials = credentials
+
+
+def report_missing_configuration(missing: List[str]) -> None:
+    log_error("Missing required configuration (non-interactive mode, no prompt to fall back on):")
+    for item in missing:
+        log_error(f"  - {item}")
+    raise InstallerError(code=1)

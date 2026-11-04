@@ -211,7 +211,16 @@ def validate_registry_auth(settings: Settings) -> bool:
         )
         return True
     if not settings.registry_username_value or not settings.registry_password_value:
-        log_info("  Registry auth: skipped (no registry credentials resolved, e.g. -f-only mode)")
+        name = settings.registry_secret_name
+        if settings.skip_registry_secret:
+            reason = f"--skip-secret, using the existing secret '{name}'"
+        elif settings.registry_secret_reused:
+            reason = f"reusing the installer's secret '{name}' from a previous install"
+        elif settings.values_file and not settings.config_file:
+            reason = "-f-only mode, the values file names the pull secret"
+        else:
+            reason = f"secret '{name}' already exists and is used as it stands"
+        log_info(f"  Registry auth: skipped ({reason})")
         return True
     if not docker_available():
         log_info(

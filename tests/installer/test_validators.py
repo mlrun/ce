@@ -289,6 +289,7 @@ def test_registry_auth_skipped_when_no_credentials_were_resolved(
     monkeypatch, settings, capture_logs
 ):
     settings.local_registry = False
+    settings.values_file = "values.yaml"
     logs = capture_logs(validators)
     forbid_docker_probe(monkeypatch)
     recorder = Recorder()
@@ -296,7 +297,7 @@ def test_registry_auth_skipped_when_no_credentials_were_resolved(
 
     # -f-only mode never resolves credentials; there is nothing to check, not a failure.
     assert validators.validate_registry_auth(settings) is True
-    assert "skipped (no registry credentials resolved" in log_text(logs)
+    assert "skipped (-f-only mode" in log_text(logs)
     assert recorder.calls == []
 
 

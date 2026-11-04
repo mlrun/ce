@@ -39,7 +39,8 @@ launcher: PEP 723 metadata, the `_bootstrap()` uv re-exec, and a call to `main()
 
 | Module | Holds |
 |---|---|
-| `console.py` | rich consoles, `log_info/warn/error`, `InstallerError`, `die` |
+| `secret_data.py` | redacting rendered Secrets' `data`/`stringData` before they reach the debug log |
+| `console.py` | rich consoles, `log_info/warn/error`, `InstallerError`, `die`, `Cancelled`/`cancel` |
 | `settings.py` | built-in defaults, `env_str`/`env_true`, the `Settings` dataclass, `prompt_or_env`, version floors |
 | `shell.py` | `run`/`stream`, the KUBE_CONTEXT-aware `kubectl`/`helm` wrappers, `check_requirements` |
 | `config.py` | the `ce-config.yaml` `installer:` block |
@@ -104,11 +105,14 @@ failure raised inside the command silently exits 0.
    the secret must be written. Skipped when `-f VALUES_FILE` is given **and** `--config` is
    absent (pure `-f`-only mode keeps its self-contained behaviour). `--skip-secret` verifies
    instead; a secret without the installer's label is used as is with no prompts; an
-   interactive re-run over the installer's own secret offers to reuse it
+   interactive re-run over the installer's own secret offers to reuse it, and a
+   non-interactive one given no credentials reuses it. Missing non-interactive credentials
+   are reported here rather than up front, after the secret's owner is known
 6. `gather_install_params` — resolves `REGISTRY_URL` (same `-f`-only skip condition as above)
 7. `run_validators` — the warning-only checks, skippable via `--skip-validators`; includes `validate_ingress_controller`, which warns (never blocks) if `--enable-ingress`'s IngressClass isn't found, and the registry login, which runs here because it needs the credentials step 5 resolved
 8. `confirm_target` — prints context, API server, namespace, release, chart, registry and
-   address; asks `Proceed? [Y/n]` only in interactive, non-dry runs. **Everything above
+   address; asks `Proceed? [Y/n]` only in interactive, non-dry runs. A "no" raises
+   `Cancelled`: info level, no debug-log path, exit 1. **Everything above
    reads or asks; everything below writes.** Keep it that way: a step that mutates the
    cluster goes after this line, a step that can refuse goes before it
 9. `ensure_namespace` → `deploy_local_registry` → `apply_registry_secret`, each only logging
@@ -626,6 +630,43 @@ From a real install on a Helm 4.1 cluster:
   namespace and pull secret existed. The floor is now 3.17, the block names the reason, and
   Helm below 4.1 (the MLRun CE docs' requirement) warns. The stub's default Helm moved from
   3.14.2 to 3.17.0 with it.
+
+From a full lab run (uninstall, install, upgrade):
+
+- **A non-interactive re-run could not reuse the installer's own pull secret.**
+  `check_required_non_interactive` demanded `REGISTRY_USERNAME`/`REGISTRY_PASSWORD` before
+  anything read the cluster, and reuse was only offered at a prompt. Missing credentials
+  alone are now parked in `settings.missing_registry_credentials`; `prepare_registry_secret`
+  reuses the secret when it carries the installer's label and otherwise reports them
+  exactly as before. A foreign or absent secret still needs credentials, `--skip-secret` or
+  `--local-registry`; the rest of the required configuration still fails up front.
+- **The debug log held rendered Secrets.** `stream` teed helm's whole dry-run output into
+  it, `data:`/`stringData:` of about ten chart Secrets included, while the README said to
+  attach the log as is. `secret_data.SecretDataRedactor` holds each `---` document until it
+  ends and, when it is a `kind: Secret`, replaces every value under a top-level `data:` or
+  `stringData:` with `<redacted>` (multi-line `|` values dropped with their key's value).
+  Applied in `_tee`, `_log_command` and the progress UI's captured output; the terminal
+  output is unchanged. ConfigMaps and other kinds are left alone, so values the chart puts
+  there (the default SeaweedFS S3 keys) still appear.
+- **`--hard-clean` said "complete" with PVCs left.** A PVC held by `pvc-protection` (an
+  orphaned Strimzi broker pod) outlived the 60s wait, and the result was ignored.
+  `remaining_pvcs` lists what is still there, marked Terminating, and the run ends with
+  "Hard clean finished with leftovers" and the FAQ link. Exit 0 all the same: the release
+  is gone, the leftovers are held by something outside the installer's reach, and a
+  scripted teardown should not stop there.
+- **"Registry auth: skipped (no registry credentials resolved, e.g. -f-only mode)"** was
+  printed for `--skip-secret` and for a reused secret too. It now names the actual reason.
+- **"n" at "Proceed?" was reported as an error** (`[ERROR]`, the debug-log path). It
+  raises `Cancelled` (via `console.cancel`), logged at info and without the log path, as
+  does a mismatched namespace at the hard-clean confirmation. Exit 1, like click's `Abort`,
+  apt and terraform: 0 would let `install && next-step` carry on as if installed, 130 is
+  Ctrl-C's and 2 is a usage error.
+- **The deploy skill suggested `helm list -n mlrun -a`**, which Helm 4 rejects. It now uses
+  status flags both majors accept.
+- **The chart's NOTES had no SeaweedFS S3 row.** `templates/NOTES.txt` checked
+  `seaweedfs.s3.enabled`, but `values.yaml` enables S3 through `seaweedfs.allInOne.s3.enabled`
+  and never sets the former, so the access table never listed the S3 endpoint. The
+  condition now accepts either.
 
 ## Testing
 

@@ -25,8 +25,19 @@ from typing import List
 
 import yaml
 
-from .console import InstallerError, die, err, log_debug, log_error, log_info, log_warn, out
+from .console import (
+    InstallerError,
+    cancel,
+    die,
+    err,
+    log_debug,
+    log_error,
+    log_info,
+    log_warn,
+    out,
+)
 from .registry import MANAGED_BY_LABEL, hosts_file_ip
+from .secret_data import redact_secret_data
 from .settings import Settings
 from .shell import check_requirements, helm, helm_cmd, kubectl, kubectl_cmd, stream
 from .ui import print_notes_table, run_deployment_progress_ui
@@ -384,7 +395,7 @@ def _install_with_progress_ui(settings: Settings, cmd: List[str]) -> None:
                 proc.wait()
                 raise InstallerError(code=130) from None
         helm_output = log_path.read_text() if log_path.is_file() else ""
-        log_debug("--- helm output (progress UI) ---\n" + helm_output)
+        log_debug("--- helm output (progress UI) ---\n" + redact_secret_data(helm_output))
         if helm_exit != 0:
             log_error("Helm upgrade/install failed. Output below:")
             err.print(helm_output.rstrip("\n"))
@@ -514,6 +525,7 @@ def do_hard_clean(settings: Settings) -> None:
             "--timeout",
             "60s",
         )
+    leftovers = [] if settings.dry_run or not pvcs else remaining_pvcs(settings)
 
     log_warn(
         f"Hard clean: deleting released/failed PVs bound to namespace '{settings.namespace}'..."
@@ -553,7 +565,42 @@ def do_hard_clean(settings: Settings) -> None:
         if not graceful.ok:
             kubectl(settings, "delete", "pv", pv, "--force", "--grace-period=0", "--wait=false")
 
-    log_info("Hard clean complete.")
+    if not leftovers:
+        log_info("Hard clean complete.")
+        return
+    # Exit 0 all the same: the release and everything else is gone, and what holds these is
+    # outside the installer's reach (a pod or custom resource that outlived the release).
+    log_warn(f"Hard clean finished with leftovers: {', '.join(leftovers)}")
+    log_warn(
+        "  A pod still mounting a PVC keeps it Terminating (pvc-protection); orphaned Strimzi "
+        f"Kafka resources are the usual cause. See {FAQ_URL}{STRIMZI_LEFTOVERS_ANCHOR}"
+    )
+
+
+STRIMZI_LEFTOVERS_ANCHOR = (
+    "#--hard-clean-didnt-delete-everything--a-kafka-pod-and-its-pvc-are-still-there"
+)
+
+
+def remaining_pvcs(settings: Settings) -> List[str]:
+    """PVCs still in the namespace, each marked when it is stuck terminating."""
+    result = kubectl(
+        settings,
+        "get",
+        "pvc",
+        "--namespace",
+        settings.namespace,
+        "--no-headers",
+        "-o",
+        "custom-columns=:metadata.name,:metadata.deletionTimestamp",
+    )
+    leftovers = []
+    for line in result.out.splitlines() if result.ok else []:
+        fields = line.split()
+        if fields:
+            terminating = len(fields) > 1 and fields[1] != "<none>"
+            leftovers.append(f"{fields[0]} (Terminating)" if terminating else fields[0])
+    return leftovers
 
 
 INSTALLER_RESOURCE_KINDS = "deployment,service,ingress,secret"
@@ -665,7 +712,7 @@ def confirm_hard_clean_without_release(settings: Settings) -> None:
     except EOFError:
         typed = ""
     if typed != namespace:
-        raise die("Hard clean cancelled.")
+        raise cancel("Hard clean cancelled; nothing on the cluster was changed.")
 
 
 def do_uninstall(settings: Settings) -> None:

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import IO, List, Optional, Sequence
 
 from .console import InstallerError, debug_log_path, die, err, log_debug, log_error, log_info
+from .secret_data import SecretDataRedactor, redact_secret_data
 from .settings import Settings
 
 
@@ -86,7 +87,7 @@ def _log_command(cmd: Sequence[str], code: int, seconds: float, out: str, error:
     for label, text in (("stdout", out), ("stderr", error)):
         if text.strip():
             lines.append(f"  --- {label} ---")
-            lines.append(_clip(text.rstrip("\n")))
+            lines.append(_clip(redact_secret_data(text).rstrip("\n")))
     log_debug("\n".join(lines))
 
 
@@ -138,10 +139,14 @@ def run(
 
 
 def _tee(source: IO[str], sink: IO[str]) -> None:
+    redactor = SecretDataRedactor()
     for line in source:
         sink.write(line)
         sink.flush()
-        log_debug(line)
+        for safe in redactor.feed(line):
+            log_debug(safe)
+    for safe in redactor.flush():
+        log_debug(safe)
 
 
 def stream(cmd: Sequence[str]) -> int:
