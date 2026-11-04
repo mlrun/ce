@@ -94,14 +94,33 @@ failure raised inside the command silently exits 0.
    namespace; not a validator, so `--skip-validators` cannot bypass it); then
    `run_blocking_validators` (Helm version, default StorageClass) unless `--skip-validators`.
    They run here, before anything below mutates the cluster, so a failure leaves nothing
-   behind
-3. `ensure_namespace` — creates `NAMESPACE`; in `--dry-run` only logs what it would do (no cluster mutation)
-4. `resolve_external_host` — only if `LOCAL_REGISTRY` or `ENABLE_INGRESS`
-5. `deploy_local_registry` — only if `--local-registry`
-6. `create_registry_secret` — skipped via `--skip-secret`, or when `-f VALUES_FILE` is given **and** `--config` is absent (pure `-f`-only mode keeps its old self-contained behavior; `-f` + `--config` together still creates the secret). In `--dry-run` only logs, doesn't touch the cluster
-7. `gather_install_params` — resolves `REGISTRY_URL` (same `-f`-only skip condition as above)
-8. `run_validators` — the warning-only checks, skippable via `--skip-validators`; includes `validate_ingress_controller`, which warns (never blocks) if `--enable-ingress`'s IngressClass isn't found, and the registry login, which runs here because it needs the credentials step 6 resolved
-9. `helm_install` → `resolve_chart_source` (published repo vs `--chart-path`) → `write_installer_values` → `helm upgrade --install` with the user's `-f` then the installer's values file, and the equivalent plain helm commands printed
+   behind. `refuse_values_file_collision` (an `-f` that is `GENERATED_VALUES_FILE`) runs
+   even earlier, with the other path checks
+3. `resolve_chart_source` — published repo vs `--chart-path`; for the published repo,
+   `verify_chart_version_published` stops on a pinned version the repo lacks
+4. `resolve_external_host` — only if `LOCAL_REGISTRY` or `ENABLE_INGRESS`; then
+   `prepare_local_registry` (URL + foreign-object refusal) if `--local-registry`
+5. `prepare_registry_secret` — every secret decision and credential prompt; returns whether
+   the secret must be written. Skipped when `-f VALUES_FILE` is given **and** `--config` is
+   absent (pure `-f`-only mode keeps its self-contained behaviour). `--skip-secret` verifies
+   instead; a secret without the installer's label is used as is with no prompts; an
+   interactive re-run over the installer's own secret offers to reuse it
+6. `gather_install_params` — resolves `REGISTRY_URL` (same `-f`-only skip condition as above)
+7. `run_validators` — the warning-only checks, skippable via `--skip-validators`; includes `validate_ingress_controller`, which warns (never blocks) if `--enable-ingress`'s IngressClass isn't found, and the registry login, which runs here because it needs the credentials step 5 resolved
+8. `confirm_target` — prints context, API server, namespace, release, chart, registry and
+   address; asks `Proceed? [Y/n]` only in interactive, non-dry runs. **Everything above
+   reads or asks; everything below writes.** Keep it that way: a step that mutates the
+   cluster goes after this line, a step that can refuse goes before it
+9. `ensure_namespace` → `deploy_local_registry` → `apply_registry_secret`, each only logging
+   under `--dry-run`
+10. `helm_install` → `write_installer_values` → `helm upgrade --install` with the user's `-f` then the installer's values file, and the equivalent plain helm commands printed; on failure `print_failure_hints`
+
+Every run opens the debug log (`INSTALL_LOG_FILE`) before `execute()`. `_emit` mirrors
+every `log_*` line into it, `shell.run` records each command (redacted argv, exit code,
+duration, stdout/stderr capped at 20 KB; never `input_data`, which carries the pull
+secret), and `shell.stream` tees helm into it. `console.add_secret` masks the registry
+password in anything written there. `install()` prints the path on any `InstallerError`
+and writes the traceback of an unexpected exception there instead of to the terminal.
 
 `build_set_flags` is still the one place values are composed: `set_flags_to_values` folds
 its output into the dict written to `mlrun-ce-values.yaml`, and the chart-key test resolves
@@ -309,11 +328,13 @@ node image is the safest choice.
   Only transient model-monitoring stream data is lost. Setting `kafka.clusterId: ""`
   restores the pre-19fc711 random-ID behaviour if keeping the existing volume matters more.
 
-- `--dry-run` uses `helm --dry-run=server`, which validates against the live API
-  server. If the target cluster lacks the Prometheus Operator CRDs, the
-  `kube-prometheus-stack` subchart's `PrometheusRule`/`ServiceMonitor` resources
-  fail server-side validation. This is a Helm limitation (charts with CRDs
-  can't fully dry-run without those CRDs present), not an installer bug.
+- `--dry-run` uses `helm --dry-run=server`, which lets helm read the cluster's API
+  discovery but sends nothing to the API server (no admission webhooks, no server-side
+  validation). On a cluster without the Prometheus Operator CRDs, the
+  `kube-prometheus-stack` subchart's `Prometheus`/`PrometheusRule` objects fail with
+  `no matches for kind ... ensure CRDs are installed first` — so the default install's
+  dry run fails on every fresh cluster (confirmed on docker-desktop, helm 4.1). A Helm
+  limitation, not an installer bug; `--disable-system-monitoring` dry-runs the rest.
 - **Two `mlrun-ce` releases can't coexist on one cluster**, even in different
   namespaces with different release/secret names and NodePort overrides via `-f`.
   Confirmed live: the chart's `workflow-controller` `PriorityClass` is
@@ -543,6 +564,40 @@ node image is the safest choice.
 - **Ingress hosts under a bare IP resolved nowhere, and nothing said so.** The run now
   prints the `/etc/hosts` line. `hosts_file_ip` also fixes the local-registry hint, which
   printed a hostname where `/etc/hosts` needs an IP.
+
+From the external review of PR #315:
+
+- **The documented install tag had no installer in it.** README pinned
+  `mlrun-ce-0.12.1-rc.6`, a release cut before `scripts/` existed, so `uvx --from
+  git+…@<tag>#subdirectory=scripts` failed outright. Pinned to the version this branch
+  releases, with a note to take the newest tag if it is not out yet, and Installer CI now
+  fails when `mlrun-ce-<Chart.yaml version>` is already tagged upstream: chart-releaser
+  cuts no tag for a version that exists, so the pinned command would point at a tree
+  without the change.
+- **An unpublished chart version failed at the very end.** `pin_chart_version` passes the
+  installer's own version, which a branch or fresh tag is ahead of the Helm repo by. helm
+  then failed after the namespace, registry and secret existed. `resolve_chart_source` now
+  runs before anything is created and `verify_chart_version_published` refuses, naming
+  `--chart-path ./charts/mlrun-ce` and `--ce-version <newest>`. `--ce-version`'s help said
+  "default: latest", which stopped being true when the pin went in.
+- **`-f mlrun-ce-values.yaml` was overwritten before helm read it.** It is the default
+  `GENERATED_VALUES_FILE`, rewritten on every run. `refuse_values_file_collision` stops in
+  `execute()` and again in `write_installer_values`.
+- **The external-host guess followed what was installed, not what was targeted.** An
+  installed minikube supplied its IP for a kind cluster, and `KUBE_CONTEXT=docker-desktop`
+  got Docker Desktop's unreachable VM node IP. `suggest_external_host` now keys on the
+  effective context: minikube by name or provider extension (`minikube ip -p <ctx>`),
+  docker-desktop by name either way, node IP only for other explicit contexts.
+- **Nothing named the cluster before writing to it, and the namespace came before the
+  prompts.** A kubeconfig left on the wrong context installed there, and a Ctrl-C at the
+  password prompt left an empty namespace. Every prompt and read now precedes
+  `confirm_target`, which names the target and asks before the first write.
+- **A re-run asked for the registry password again**, and a secret the user owned was
+  still prompted for and then ignored. `prepare_registry_secret` offers reuse of the
+  installer's own secret and asks nothing for a foreign one.
+- **A failed install said only "Helm installation failed".** `print_failure_hints` names
+  the pod and event commands, `HELM_TIMEOUT`, that a re-run upgrades in place, and the FAQ;
+  a failed dry run explains the missing-CRD error instead. The debug log carries the rest.
 
 ## Testing
 

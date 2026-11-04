@@ -296,8 +296,10 @@ def dry_run_flag(settings: Settings) -> str:
     start. The chart's own floor is 3.6, so the documented `--dry-run` was unusable on any
     supported helm older than 3.13.
 
-    The client-side fallback renders without talking to the API server, so it cannot catch
-    what a server dry run would — hence the warning rather than a silent downgrade.
+    Neither mode sends anything to the API server. Server mode lets helm read the cluster
+    (API versions, CRDs, lookup(), existing resources); the fallback renders without
+    connecting at all, so it cannot catch what that reading would — hence the warning
+    rather than a silent downgrade.
     """
     parsed = parse_major_minor(helm(settings, "version", "--short").out.strip())
     if parsed is None or parsed >= (3, 13):
@@ -306,7 +308,10 @@ def dry_run_flag(settings: Settings) -> str:
         f"Helm {parsed[0]}.{parsed[1]} has no server-side dry run (added in 3.13); "
         "falling back to a client-side one."
     )
-    log_warn("  Admission webhooks and server-side validation will not be exercised.")
+    log_warn(
+        "  The render will not be checked against the cluster's API versions, CRDs or "
+        "existing resources."
+    )
     return "--dry-run"
 
 

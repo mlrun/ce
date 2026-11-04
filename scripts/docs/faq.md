@@ -16,18 +16,51 @@ With `-f`/`--values`, there's no equivalent check today — the secret your valu
 references must already exist, or the install will similarly time out once pods try to
 pull images using a nonexistent `imagePullSecrets` entry.
 
-### `--dry-run` fails on `PrometheusRule`/`ServiceMonitor` validation
+### `--dry-run` fails with `no matches for kind "PrometheusRule"`
 
-`--dry-run` uses `helm --dry-run=server`, which validates against the live API server. If
-the target cluster lacks the Prometheus Operator CRDs, the `kube-prometheus-stack`
-subchart's `PrometheusRule`/`ServiceMonitor` resources fail server-side validation. This
-is a Helm limitation (charts with CRDs can't fully dry-run without those CRDs present),
-not an `install.py` bug.
+```
+Error: unable to build kubernetes objects from release manifest: [resource mapping not found
+for name: "monitoring-prometheus" namespace: "mlrun" from "": no matches for kind
+"Prometheus" in version "monitoring.coreos.com/v1"
+ensure CRDs are installed first, ...
+```
+
+`--dry-run` uses `helm --dry-run=server`, which lets helm read the cluster's API discovery
+to map every rendered object to a resource type. Nothing is sent to the API server, so this
+is not server-side validation: helm simply cannot map a kind the cluster does not know yet.
+On a fresh cluster the Prometheus Operator CRDs do not exist until the chart's own
+`kube-prometheus-stack` installs them, so the default install's dry run fails here. It is a
+Helm limitation (a chart that ships CRDs and objects of those kinds cannot server-dry-run
+before its first install), not an `install.py` bug, and a real install is unaffected.
+
+To dry-run the rest, leave the monitoring stack out: `--dry-run --disable-system-monitoring`.
+A dry run against a cluster where the chart is already installed has the CRDs and passes.
 
 On Helm older than 3.13, where `--dry-run` is a boolean flag and `--dry-run=server` does
 not parse, the installer falls back to a client-side dry run and warns that it has. That
-renders without talking to the API server, so this failure mode doesn't arise — and
-neither does the validation it would have caught.
+renders without connecting to the cluster, so this failure doesn't arise, and nothing
+cluster-specific (API versions, `lookup()`, existing resources) is checked either.
+
+### "Chart mlrun-ce X is not published"
+
+By default the installer installs the chart version it ships with, which is how an
+installer and a chart from the same release are kept together. An installer taken from a
+branch, or from a tag whose chart has not reached the Helm repo yet, names a version the
+repo does not have. The run checks this before creating anything and stops with both ways
+out:
+
+- `--chart-path ./charts/mlrun-ce` from a clone of this repo installs the chart that came
+  with the installer.
+- `--ce-version <newest>` installs the newest published chart, which the message names.
+
+### Where is the log of a failed run?
+
+In `mlrun-ce-install.log` in the directory you ran from (`INSTALL_LOG_FILE` moves it). It is
+rewritten on every run and holds every command the installer ran with its exit code,
+timing and output, helm's full output, and the traceback if the installer itself crashed.
+A failed run prints its path. It is created readable by you only, never records what was
+piped to a command's stdin (that is where the pull secret travels), and masks the registry
+password anywhere else it might appear.
 
 ### Can I install two `mlrun-ce` releases on one cluster?
 
@@ -60,27 +93,24 @@ chart/Strimzi ordering issue.
 
 ### What address does the installer suggest for `EXTERNAL_HOST_ADDRESS`, and why?
 
-`resolve_external_host()` picks a suggested default in this order (always just a
-default — override with `EXTERNAL_HOST_ADDRESS`/`installer.externalHostAddress` any time
-it's wrong for your cluster):
+The suggestion is keyed on the context the run targets: `KUBE_CONTEXT` if set, otherwise
+your kubeconfig's current context. It is always just a default: override it with
+`EXTERNAL_HOST_ADDRESS` / `installer.externalHostAddress` whenever it is wrong for your
+cluster. In order:
 
-1. **`KUBE_CONTEXT` is set** → the target cluster's node internal IP (via `kubectl get
-   node`). The minikube/docker-desktop heuristics below are statements about the *local
-   machine's own* ambient environment and are meaningless once a specific — possibly
-   remote — context is explicitly selected; `kubectl config current-context` also can't
-   be made `--context`-aware (it always reports the kubeconfig's ambient current-context
-   regardless of `--context`), so this case is handled separately. This is the right
-   default for e.g. a lab cluster reachable directly on the corporate network via a
-   named context — even if `kubectl`/`helm` reach the API server itself through an SSH
-   tunnel (only the API server port is tunneled in that setup; NodePort services aren't,
-   so `localhost` would resolve to nothing there).
-2. **minikube is installed and has an IP** → that IP.
-3. **Current context matches `docker-desktop`** → `host.docker.internal` (resolves to the
-   host from both pods and your terminal on Docker Desktop).
-4. **None of the above** (e.g. kind, k3d, or another local cluster type) → `localhost`.
-   These tools typically NodePort-map to `localhost` rather than an internal
-   Docker-network IP, so it's a better generic guess than a node-IP lookup that's often
-   unreachable from the host.
+1. **A minikube context** (named `minikube`, or any profile minikube tagged with its
+   `minikube.sigs.k8s.io` provider extension) → `minikube ip -p <context>`. Having minikube
+   installed is not enough: a kind cluster on a machine that also has minikube gets the
+   kind answer.
+2. **`docker-desktop`** → `host.docker.internal`, which resolves to the host from both pods
+   and your terminal. This holds when Docker Desktop is selected through `KUBE_CONTEXT`
+   too: its node IP is inside Docker Desktop's VM and unreachable from the host.
+3. **Any other context named by `KUBE_CONTEXT`** → the first node's internal IP. An
+   explicitly chosen context is usually a remote cluster, e.g. a lab reachable on the
+   corporate network, where NodePorts are on the nodes and `localhost` reaches nothing
+   (even when kubectl itself goes through an SSH tunnel, which only carries the API port).
+4. **Anything else** (kind, k3d, other local clusters) → `localhost`, where those tools
+   map their NodePorts.
 
 ### `--local-registry` without ingress: builds succeed, then function pods can't pull
 

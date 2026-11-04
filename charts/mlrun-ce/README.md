@@ -29,7 +29,7 @@ The Open source MLRun ce chart includes the following stack:
 
 ## Installing the Chart
 
-> **Scripted alternative:** [`scripts/install.py`](../../scripts/README.md) wraps everything
+> **Scripted alternative:** [`scripts/install.py`](https://github.com/mlrun/ce/blob/development/scripts/README.md) wraps everything
 > below — namespace creation, the registry secret, pre-install validation and the `helm
 > install` itself — behind one command, and can read its settings from a `ce-config.yaml`
 > for repeatable installs. It installs the published chart by default, and needs only

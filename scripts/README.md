@@ -162,13 +162,50 @@ available from the git tag rather than from inside the `.tgz`.
 
 Run the script with no flags. You will be prompted for:
 
-1. Docker registry username, password, server URL, and email
-2. External host address (auto-detected — see [FAQ](docs/faq.md) for the fallback chain)
+1. Docker registry username, password, server URL, and email (see
+   [Choosing a registry](#choosing-a-registry))
+2. External host address (suggested from your kubectl context — see
+   [FAQ](docs/faq.md#what-address-does-the-installer-suggest-for-external_host_address-and-why))
 3. Docker registry URL for images
 
 ```bash
 ./scripts/install.py
 ```
+
+Nothing is created on the cluster while you answer. Once the questions are done the
+installer prints the target and asks before its first write:
+
+```
+[INFO] About to install:
+[INFO]   Cluster:   docker-desktop (https://127.0.0.1:6443)
+[INFO]   Namespace: mlrun
+[INFO]   Release:   mlrun-ce
+[INFO]   Chart:     mlrun-ce/mlrun-ce 0.12.1
+[INFO]   Registry:  index.docker.io/myuser (pull secret 'registry-credentials')
+[INFO]   Address:   host.docker.internal
+Proceed? [Y/n]:
+```
+
+Check the cluster line: it is whatever your kubeconfig's current context (or `KUBE_CONTEXT`)
+points at. Answering `n`, or pressing Ctrl-C at any prompt, leaves the cluster untouched.
+The summary is printed but not asked under `--non-interactive` and `--dry-run`.
+
+### Choosing a registry
+
+MLRun builds a container image for each function you deploy, pushes it to a registry, and
+the cluster then pulls it from there. So the installer needs a registry you can push to, and
+it stores the credentials as a pull secret (`registry-credentials`) in the namespace.
+
+- **Docker Hub** is the simplest: your username, an
+  [access token](https://docs.docker.com/security/for-developers/access-tokens/) as the
+  password, and `index.docker.io/<username>` as the registry URL.
+- **Any other registry** (GHCR, ECR, Harbor, …) works the same way: set the server URL to
+  the registry's host and the registry URL to the repository prefix images go under.
+- **`--local-registry`** runs a `registry:2` inside the cluster instead, with no account
+  at all. Good for a laptop, see [Configuration](docs/configuration.md) for its caveats.
+- **A secret you already have**: create it yourself and pass `--skip-secret`. A secret of
+  that name the installer did not create is never modified, and no credentials are asked
+  for it.
 
 ### Non-interactive / CI install
 
@@ -217,21 +254,73 @@ optionally add `--ce-version`) to go back to installing a published release.
 
 ### Dry run
 
-Renders the Helm chart and validates it against the cluster API server without creating any resources. Useful to confirm a configuration is valid before a real install.
+Runs every check and prompt, prints the plan, and renders the chart with
+`helm upgrade --install --dry-run=server`, without creating anything.
 
 ```bash
 ./scripts/install.py --dry-run
 ```
 
+`--dry-run=server` lets helm *read* the cluster: which API versions and CRDs exist, what
+`lookup()` returns, which resources would collide. It sends nothing to the API server, so
+admission webhooks and the server's own validation are not exercised. On a cluster that does
+not have the chart's CRDs yet, the default install's dry run fails with `no matches for kind
+"PrometheusRule"` — see the [FAQ](docs/faq.md#--dry-run-fails-with-no-matches-for-kind-prometheusrule).
+Helm older than 3.13 has no server mode and falls back to a client-side render.
+
 Pre-install validators still run in `--dry-run` — see [Configuration](docs/configuration.md#pre-install-validators).
+
+### Upgrading or re-running
+
+Run the same command again. The installer always runs `helm upgrade --install`, so a second
+run upgrades the existing release in place: change a flag, pick up a newer chart with
+`--ce-version`, or retry an install that timed out.
+
+- An interactive re-run offers to reuse the pull secret the first run created, so you are
+  not asked for the password again. Credentials passed through the environment replace it.
+- The installer's resolved values are rewritten to `mlrun-ce-values.yaml` (see
+  `GENERATED_VALUES_FILE`) on every run. If you upgrade with plain helm instead, pass that
+  file with `-f`, or helm resets those values to the chart defaults.
+- A release with the same chart under a different name (`my-mlrun` from the chart README,
+  say) is refused rather than installed next to it: set `RELEASE_NAME` to that name to
+  upgrade it.
+
+### When an install fails
+
+Every run writes a debug log, `mlrun-ce-install.log` in the current directory (see
+`INSTALL_LOG_FILE`), with each command the installer ran, its exit code, timing and output,
+plus helm's full output. A failed run prints its path:
+
+```
+[ERROR] Helm installation failed (exit code 1).
+[INFO] To see what did not come up:
+[INFO]   kubectl get pods -n mlrun
+[INFO]   kubectl get events -n mlrun --sort-by=.lastTimestamp
+[INFO] A timeout (HELM_TIMEOUT=960s) is often a slow first image pull; running the same command again upgrades the release in place.
+[INFO] Common failures and their fixes: https://github.com/mlrun/ce/blob/development/scripts/docs/faq.md
+Full debug log: /home/me/mlrun-ce-install.log
+```
+
+The log is readable by you only and never contains the registry password; attach it to a
+bug report as is.
 
 ### Uninstall
 
 ```bash
-./scripts/install.py --uninstall
+./scripts/install.py uninstall
 ```
 
-This runs `helm uninstall` with a timeout controlled by `HELM_TIMEOUT` (default `960s`). The namespace and CRDs are **not** deleted. For deleting persistent data too, see the [FAQ](docs/faq.md#deleting-everything-including-the-namespace).
+Removes the helm release, then what the installer created outside the chart: the in-cluster
+registry's Deployment, Service and Ingress (`--local-registry`), and the pull secret. Those
+are selected by the installer's `app.kubernetes.io/managed-by` label, so a pull secret you
+created yourself stays. `helm uninstall` runs with the `HELM_TIMEOUT` timeout (default
+`960s`).
+
+Kept: the namespace, the chart's CRDs, and every PersistentVolumeClaim, the registry's
+included, so a reinstall finds its data again. `--hard-clean` also deletes the PVCs in the
+namespace and the released PVs bound to them (data loss). Add `--dry-run` to either to see
+what would be removed. For removing the namespace too, see the
+[FAQ](docs/faq.md#deleting-everything-including-the-namespace).
 
 ---
 
@@ -245,16 +334,25 @@ This runs `helm uninstall` with a timeout controlled by `HELM_TIMEOUT` (default 
 
 ## After Installation
 
-Once complete, the script prints an access table with URLs and credentials for each service:
+Once complete, the script prints a table of what the release serves, read from the chart's
+NOTES. With the default NodePort install and `localhost` as the external address:
 
 ```
-==============================================
-  MLRun CE - Access URLs
-==============================================
-SERVICE            | URL                      | CREDENTIALS
--------------------+--------------------------+------------------
-MLRun UI           | http://localhost:80      |
-Grafana            | http://localhost:3000     | admin / prom-operator
-...
-==============================================
+                     MLRun CE - Access URLs
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SERVICE            ┃ URL             ┃ CREDENTIALS          ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━┩
+│ Jupyter UI         │ localhost:30040 │                      │
+│ Nuclio UI          │ localhost:30050 │                      │
+│ MLRun UI           │ localhost:30060 │                      │
+│ MLRun API          │ localhost:30070 │                      │
+│ SeaweedFS S3 API   │ localhost:30094 │                      │
+│ SeaweedFS Admin UI │ localhost:30093 │ seaweed / seaweed123 │
+│ Grafana UI         │ localhost:30010 │                      │
+│ Prometheus UI      │ localhost:30020 │                      │
+│ TimescaleDB        │ localhost:30110 │ postgres             │
+└────────────────────┴─────────────────┴──────────────────────┘
 ```
+
+The addresses carry no scheme; open them as `http://`. Disabled components drop out of the
+table, and with `--enable-ingress` each UI shows its ingress host instead of a port.

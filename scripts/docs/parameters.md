@@ -70,7 +70,9 @@ Options:
   --skip-dependency-update       With --chart-path: do not fetch chart dependencies at all. Use when
                                  charts/ is already vendored and the host cannot reach the upstream
                                  Helm repos
-  --ce-version VERSION           Pin the MLRun CE Helm chart version (default: the installer's own; ignored with --chart-path)
+  --ce-version VERSION           Install this published mlrun-ce chart version (default: the chart
+                                 version this installer ships with, which must be published;
+                                 ignored with --chart-path)
   --dry-run                      Show what would happen without changing anything. Renders the chart
                                  via helm --dry-run=server, and on 'uninstall' reports what would be
                                  removed. Below Helm 3.13, which has no server-side dry run, it falls
@@ -98,7 +100,7 @@ Options:
 | `REGISTRY_SERVER`      | `https://index.docker.io/v1/`     | Docker server URL                                        |
 | `REGISTRY_EMAIL`       | —                                 | Docker registry email                                    |
 | `REGISTRY_URL`         | —                                 | Registry URL for images (e.g. `index.docker.io/myuser`) |
-| `EXTERNAL_HOST_ADDRESS`| —                                 | Host address the cluster is reachable at (see [FAQ](faq.md) for the autodetect fallback chain) |
+| `EXTERNAL_HOST_ADDRESS`| —                                 | Host address the cluster is reachable at (see [FAQ](faq.md#what-address-does-the-installer-suggest-for-external_host_address-and-why) for how the suggestion is chosen) |
 | `SKIP_REGISTRY_SECRET` | `false`                           | Set to `true` to skip secret creation                    |
 | `SKIP_VALIDATORS`      | `false`                           | Set to `true` to skip the pre-install validators         |
 | `HELM_TIMEOUT`         | `960s`                            | Timeout for helm's `--wait` on install/upgrade, and for `uninstall`. Raise it on slow networks — a cold pull of the 4.2Gi jupyter image alone can take ~6 minutes |
@@ -121,7 +123,8 @@ Options:
 | `LOCAL_REGISTRY`       | `false`                           | Set to `true` to deploy a local `registry:2.8.3` registry |
 | `CHART_PATH`           | —                                 | Path to a local chart directory, e.g. `./charts/mlrun-ce` |
 | `CE_VERSION`           | the installer's own               | Pin the chart version (ignored when `CHART_PATH` is set)|
-| `GENERATED_VALUES_FILE` | `mlrun-ce-values.yaml`           | Where the installer writes the values it resolved, passed to helm as the last `--values` |
+| `GENERATED_VALUES_FILE` | `mlrun-ce-values.yaml`           | Where the installer writes the values it resolved, passed to helm as the last `--values`. Rewritten on every run, so `-f` naming the same file is refused |
+| `INSTALL_LOG_FILE`     | `mlrun-ce-install.log`            | The run's debug log: every command with exit code, timing and output, plus helm's. Rewritten on every run, mode `0600`, never holds the registry password; its path is printed when a run fails |
 | `DRY_RUN`              | `false`                           | Set to `true` to render the chart without deploying     |
 | `NON_INTERACTIVE`      | `false`                           | Set to `true` to suppress all prompts                   |
 | `CI`                   | —                                 | Set to `true` to auto-enable non-interactive mode       |
