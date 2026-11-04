@@ -22,6 +22,9 @@ nuclio:
 mlrun:
   enabled: false
 
+mlrunMigrations:
+  enabled: false
+
 jupyterNotebook:
   enabled: false
   serviceAccount:

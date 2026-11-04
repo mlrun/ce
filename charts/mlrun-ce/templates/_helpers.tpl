@@ -379,6 +379,74 @@ Mlrun API selector labels
 app.kubernetes.io/component: {{ .Values.mlrun.api.name | quote }}
 {{- end -}}
 
+{{/*
+Mlrun chart name, delegates to the mlrun chart helper (honors mlrun.nameOverride).
+Like the helpers below, only usable when mlrun.enabled, since disabled subchart templates aren't loaded.
+*/}}
+{{- define "mlrun-ce.mlrun.name" -}}
+{{- include "mlrun.name" (dict "Values" .Values.mlrun "Chart" (dict "Name" "mlrun") "Release" .Release) -}}
+{{- end -}}
+
+{{/*
+Mlrun API chief name, delegates to the mlrun chart helper
+*/}}
+{{- define "mlrun-ce.mlrun.api.chief.fullname" -}}
+{{- include "mlrun.api.chief.fullname" (dict "Values" .Values.mlrun "Chart" (dict "Name" "mlrun") "Release" .Release) -}}
+{{- end -}}
+
+{{/*
+Mlrun API chief container name, as set by the mlrun chart
+*/}}
+{{- define "mlrun-ce.mlrun.api.containerName" -}}
+{{- printf "%s-%s" (include "mlrun-ce.mlrun.name" .) .Values.mlrun.api.name -}}
+{{- end -}}
+
+{{/*
+Mlrun API chief pods label selector, mirrors mlrun.api.chief.selectorLabels from the mlrun chart
+*/}}
+{{- define "mlrun-ce.mlrun.api.chief.selector" -}}
+{{- printf "app.kubernetes.io/name=%s,app.kubernetes.io/instance=%s,app.kubernetes.io/component=%s,app.kubernetes.io/sub-component=chief" (include "mlrun-ce.mlrun.name" .) .Release.Name .Values.mlrun.api.name -}}
+{{- end -}}
+
+{{/*
+Mlrun API image, as deployed by the mlrun chart
+*/}}
+{{- define "mlrun-ce.mlrun.api.image" -}}
+{{- printf "%s:%s" .Values.mlrun.api.image.repository (.Values.mlrun.api.image.tag | toString) -}}
+{{- end -}}
+
+{{/*
+Mlrun migrations Job name: <release>-mlrun-migrations-<revision>, prefix truncated to fit the 63 chars limit
+*/}}
+{{- define "mlrun-ce.mlrunMigrations.jobName" -}}
+{{- $suffix := printf "-%d" (int .Release.Revision) -}}
+{{- printf "%s-mlrun-migrations" .Release.Name | trunc (int (sub 63 (len $suffix))) | trimSuffix "-" -}}
+{{- $suffix -}}
+{{- end -}}
+
+{{/*
+Mlrun migrations ServiceAccount / Role / RoleBinding name
+*/}}
+{{- define "mlrun-ce.mlrunMigrations.rbacName" -}}
+{{- printf "%s-migration" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Mlrun migrations labels
+*/}}
+{{- define "mlrun-ce.mlrunMigrations.labels" -}}
+{{ include "mlrun-ce.common.labels" . }}
+{{ include "mlrun-ce.mlrunMigrations.selectorLabels" . }}
+{{- end -}}
+
+{{/*
+Mlrun migrations selector labels
+*/}}
+{{- define "mlrun-ce.mlrunMigrations.selectorLabels" -}}
+{{ include "mlrun-ce.common.selectorLabels" . }}
+app.kubernetes.io/component: mlrun-migrations
+{{- end -}}
+
 
 {{/*
 Common labels
