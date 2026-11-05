@@ -72,7 +72,7 @@ helm template mlrun charts/mlrun-ce -f charts/mlrun-ce/values.yaml \
 ```
 
 The `run-tests` skill covers the installer suites. The PR checklist also asks for a run on a
-real cluster (the `deploy` skill); nothing in PR CI installs to one.
+real cluster (see `scripts/README.md`); nothing in PR CI installs to one.
 
 ## Opening the PR
 
@@ -183,4 +183,4 @@ make helm-lint
 - `CONTRIBUTING.md`: the workflow this skill summarises
 - `AGENTS.md`: chart architecture, adding a component
 - `scripts/README.md`: what the installer does, from the user's side
-- Related skills: `bump`, `pr`, `run-tests`, `deploy`
+- Related skills: `bump`, `pr`, `run-tests`
