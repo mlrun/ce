@@ -41,7 +41,7 @@ Read the current version from `charts/mlrun-ce/Chart.yaml` and increment:
 - `minor` — `0.11.3` → `0.12.0`
 - `rc` — `0.11.0-rc.34` → `0.11.0-rc.35` (or append `-rc.1` if no suffix)
 
-Always show the old → new version before writing and confirm with the user.
+Always show the old → new version before writing and confirm with the user. Then update the pinned `mlrun-ce-<version>` install tags in `README.md`, `scripts/README.md` and the header of `scripts/install.py` to match; `test_the_documented_install_tag_matches_the_chart_version` fails otherwise.
 
 **Generate PR description** (`/pr` in Claude Code)
 Run `git diff upstream/development...HEAD`, `git log upstream/development..HEAD --oneline`, and `git diff upstream/development...HEAD --name-only`, then fill in `.github/pull_request_template.md` based on the changes. Check `[x]` on checklist items confirmable from the diff; leave `[ ]` on items requiring human action. Flag missing version bumps, unsynced values files, and breaking changes.

@@ -1,0 +1,668 @@
+# MLRun CE Installer
+
+`mlrun-ce-installer` installs the MLRun CE Helm chart on a Kubernetes cluster. It checks the
+cluster, creates the namespace and the registry pull secret, runs `helm upgrade --install`,
+and prints where each service is reachable.
+
+It installs the **published** chart from `https://mlrun.github.io/ce`. To install the chart
+in a clone of this repo instead, pass `--chart-path ./charts/mlrun-ce`
+([Installing this repo's chart](#installing-this-repos-chart)).
+
+- [Requirements](#requirements)
+- [Local install on Docker Desktop](#local-install-on-docker-desktop)
+- [Getting the installer](#getting-the-installer)
+- [Commands](#commands)
+- [Installing](#installing)
+- [Configuration](#configuration)
+- [Upgrading](#upgrading)
+- [Uninstalling](#uninstalling)
+- [Troubleshooting](#troubleshooting)
+- [Reference](#reference)
+
+---
+
+## Requirements
+
+| Tool | Notes |
+|---|---|
+| [uv](https://docs.astral.sh/uv/) | `curl -LsSf https://astral.sh/uv/install.sh \| sh`. Supplies the Python interpreter and the installer's dependencies; nothing to `pip install` |
+| [helm](https://helm.sh/docs/intro/install/) | 3.17 or newer (older Helm cannot render the chart). 4.1 is recommended; below it the installer warns |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/) | Pointing at the target cluster |
+
+The cluster needs a default StorageClass. The installer warns when the nodes have less
+than 8Gi allocatable memory or ephemeral storage in total, or when another Service already
+holds one of the chart's NodePorts (30010, 30020, 30040, 30050, 30060, 30070, 30093, 30094,
+30100, 30110).
+
+A local install needs Docker, because the local cluster runs on it: Docker Desktop's
+Kubernetes, kind and minikube's default driver all do, and so does pushing your own images to
+a `--local-registry`. The installer itself only uses the `docker` CLI for a best-effort
+registry login check, which reports `skipped` without it, so against a remote cluster or from
+inside a pod you don't need Docker.
+
+---
+
+## Local install on Docker Desktop
+
+1. Turn on Kubernetes under **Settings → Kubernetes**, and give Docker at least 10 GB of
+   memory under **Settings → Resources**. An idle install uses about 5.5 GB; at 8 GB the
+   [pre-install checks](#pre-install-checks) warn and about 2.5 GB is left for functions.
+2. `kubectl config use-context docker-desktop`
+3. Have a Docker Hub username and access token ready ([Choosing a registry](#choosing-a-registry)).
+   `--local-registry` needs the extra steps under [Local registry](#local-registry), so
+   Docker Hub is the simpler path.
+4. Run `./scripts/install.py` from a clone, or the `uvx` command under
+   [Without a clone](#without-a-clone), with `EXTERNAL_HOST_ADDRESS=localhost` exported (or
+   answer `localhost` at the address prompt). The suggested `host.docker.internal` resolves
+   inside the cluster but may not on your machine.
+5. If the access table's addresses don't open (Docker Desktop's kind-based cluster does not
+   publish NodePorts to the host), forward each service you use to its NodePort number,
+   then open `http://localhost:<port>`:
+
+   ```bash
+   kubectl -n mlrun port-forward svc/mlrun-ui 30060:80 &
+   kubectl -n mlrun port-forward svc/mlrun-jupyter 30040:8888 &
+   kubectl -n mlrun port-forward svc/nuclio-dashboard 30050:8070 &
+   ```
+
+   The API is `svc/mlrun-api 30070:8080` and Grafana `svc/grafana 30010:80`.
+
+---
+
+## Getting the installer
+
+### Without a clone
+
+Pin a release tag from [the releases page](https://github.com/mlrun/ce/releases):
+
+```bash
+CE_TAG=mlrun-ce-0.12.1-rc.8
+uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
+  mlrun-ce-installer install
+```
+
+The installer has no version of its own: the one from tag `mlrun-ce-X` reports version `X`
+and installs chart `X` unless told otherwise. If the tag above is not on the releases page
+yet, use the newest one listed. Tags older than the installer have no `scripts/` directory,
+and `uvx` fails on them. `development` in place of a tag gets the newest installer, but it
+changes with every merge.
+
+This path needs access to GitHub and PyPI, and resolves typer, click, rich and pyyaml within
+the ranges in `scripts/pyproject.toml`. A clone uses the exact versions pinned in
+`scripts/install.py.lock`.
+
+### As a command
+
+```bash
+uv tool install "git+https://github.com/mlrun/ce@mlrun-ce-0.12.1-rc.8#subdirectory=scripts"
+mlrun-ce-installer version
+```
+
+`uv tool upgrade mlrun-ce-installer` updates it; `uv tool uninstall mlrun-ce-installer`
+removes it.
+
+### From a clone
+
+```bash
+./scripts/install.py
+```
+
+`python3 scripts/install.py` also works: without the dependencies it re-runs itself under
+uv. To get the `mlrun-ce-installer` command, run `make installer-link` (links into
+`~/.local/bin`; set `INSTALLER_BIN_DIR` for another directory). The link points at your
+working tree, so edits take effect immediately. `make installer-unlink` removes it.
+
+---
+
+## Commands
+
+```bash
+mlrun-ce-installer install [options]     # the default when no command is given
+mlrun-ce-installer uninstall [options]
+mlrun-ce-installer version
+mlrun-ce-installer help
+```
+
+Flags without a command mean `install`. `uninstall` is the same as the `--uninstall` flag.
+Any other word is rejected, so a typo such as `unistall` cannot start an install. Color is
+off when stdout is not a terminal or `NO_COLOR` is set.
+
+The examples below use `./scripts/install.py`; `mlrun-ce-installer` takes the same
+arguments.
+
+---
+
+## Installing
+
+### Interactive
+
+```bash
+./scripts/install.py
+```
+
+You are asked for the registry username, password, server URL and email
+([Choosing a registry](#choosing-a-registry)), the
+[external host address](#external-host-address), and the registry URL images are pushed to.
+Nothing on the cluster changes while you answer. Then the installer shows the target and
+asks before its first write:
+
+```
+[INFO] About to install:
+[INFO]   Cluster:   docker-desktop (https://127.0.0.1:6443)
+[INFO]   Namespace: mlrun
+[INFO]   Release:   mlrun-ce
+[INFO]   Chart:     mlrun-ce/mlrun-ce 0.12.1
+[INFO]   Registry:  index.docker.io/myuser (pull secret 'registry-credentials')
+[INFO]   Address:   host.docker.internal
+Proceed? [Y/n]:
+```
+
+Check the cluster line: it is your kubeconfig's current context, or `KUBE_CONTEXT`.
+Answering `n` or pressing Ctrl-C leaves the cluster untouched (exit 1).
+
+### Non-interactive (CI)
+
+`--non-interactive`, or `CI=true`, never prompts and skips the confirmation. A missing
+required value exits 1 before anything is changed.
+
+```bash
+export CI=true
+export REGISTRY_USERNAME=myuser
+export REGISTRY_PASSWORD_FILE=/run/secrets/registry-password   # or REGISTRY_PASSWORD
+export REGISTRY_SERVER=https://index.docker.io/v1/
+export REGISTRY_EMAIL=me@example.com
+export REGISTRY_URL=index.docker.io/myuser
+export EXTERNAL_HOST_ADDRESS=localhost
+./scripts/install.py
+```
+
+Prefer `REGISTRY_PASSWORD_FILE` in CI: the password is read into memory only and never
+reaches the environment of the helm and kubectl processes. The pull secret is passed to
+`kubectl apply` on stdin, so the password is never a command-line argument either way.
+
+### From a config file
+
+A `ce-config.yaml` holds the stable settings (registry, chart source, components) so every
+run is the same:
+
+```bash
+cp scripts/ce-config.yaml.example ce-config.yaml   # then edit it
+./scripts/install.py --config ce-config.yaml
+```
+
+Interactively, values from the file become the prompts' defaults. With `CI=true` they are
+used directly. The password is never read from the file. See
+[The config file](#the-config-file).
+
+### From a values file
+
+```bash
+./scripts/install.py -f my-values.yaml
+```
+
+Used alone, `-f` is passed to helm as is, no pull secret is created, and no registry or
+address questions are asked. The file must set `global.registry.*` itself, and the secret
+it names must already exist, or pods fail to pull images when helm waits for them. Combined with `--config`, the secret
+and the registry settings are handled as usual. See [Precedence](#precedence).
+
+### Choosing a registry
+
+MLRun builds an image for each function you deploy, pushes it to a registry, and the
+cluster pulls it from there. The installer stores the registry credentials as a pull
+secret, `registry-credentials` (`REGISTRY_SECRET_NAME`).
+
+- **Docker Hub**: your username, an
+  [access token](https://docs.docker.com/security/for-developers/access-tokens/) as the
+  password, and `index.docker.io/<username>` as the registry URL.
+- **Another registry** (GHCR, ECR, Harbor, …): its host as the server URL and the
+  repository prefix as the registry URL.
+- **No registry account**: `--local-registry` runs one in the cluster
+  ([Local registry](#local-registry)).
+- **A secret you created yourself**: pass `--skip-secret`. The installer checks that it
+  exists and asks for no credentials. A secret with that name that the installer did not
+  create is never modified, and `uninstall` leaves it in place.
+
+### Targeting another cluster
+
+```bash
+KUBE_CONTEXT=my-cluster ./scripts/install.py
+```
+
+`KUBE_CONTEXT` (or `installer.kubeContext`) selects the kubeconfig context for every
+`kubectl` and `helm` call. The installer never connects over SSH itself. For a cluster
+reachable only over SSH, open a tunnel and point a context at it:
+
+```bash
+ssh -f -N -L 16443:<cluster-api-ip>:6443 user@jump-host
+kubectl config set-cluster my-cluster --server=https://localhost:16443 \
+  --certificate-authority=<ca.crt> --embed-certs=true
+kubectl config set-credentials my-cluster --client-certificate=<client.crt> \
+  --client-key=<client.key> --embed-certs=true
+kubectl config set-context my-cluster --cluster=my-cluster --user=my-cluster
+```
+
+This needs `localhost` in the API server certificate's SANs (kubeadm and rke2 include it).
+The tunnel carries only the API port, so set `EXTERNAL_HOST_ADDRESS` to an address that
+reaches the nodes.
+
+### Installing this repo's chart
+
+To test a branch or a PR, check it out and point the installer at the chart:
+
+```bash
+./scripts/install.py --chart-path ./charts/mlrun-ce --dry-run
+./scripts/install.py --chart-path ./charts/mlrun-ce
+```
+
+The chart version is the one in `charts/mlrun-ce/Chart.yaml`; `--ce-version` is ignored.
+Chart dependencies are fetched with `helm dependency build`, which follows
+`requirements.lock`. The fetch is skipped when `charts/` already holds every locked
+dependency, so an air-gapped host works once they are vendored. `--skip-dependency-update`
+skips it unconditionally.
+
+### Dry run
+
+```bash
+./scripts/install.py --dry-run
+```
+
+Runs every check and prompt, prints the plan and renders the chart with
+`helm upgrade --install --dry-run=server`. Nothing is created. Helm reads the cluster (API
+versions, CRDs, existing resources) but sends nothing to it, so admission webhooks are not
+exercised. A first install on a cluster without the Prometheus Operator CRDs is rendered
+without the monitoring stack ([why](#--dry-run-fails-with-no-matches-for-kind)).
+
+### Pre-install checks
+
+These run before anything is created, dry runs included.
+
+- **Blocking**: Helm older than `MIN_HELM_VERSION` (3.17), and no default StorageClass. Both
+  are checked before either fails, so one run reports both.
+- **Warnings**: Helm older than 4.1; the Kubernetes version (only compared when
+  `MIN_K8S_VERSION` is set; there is no floor otherwise); registry login with the resolved
+  credentials, using a throwaway docker config (skipped without docker, with
+  `--local-registry`, in a dry run, and when no credentials were given); no IngressClass
+  matching `--enable-ingress`; a chart NodePort held by a Service this release does not
+  own; less than 8Gi allocatable memory or ephemeral storage.
+
+`--skip-validators` skips all of them. Two refusals are not validators and always apply: an
+`-f` file that is the installer's own `GENERATED_VALUES_FILE`, and another MLRun CE release
+in the namespace ([Upgrading](#upgrading)).
+
+### After installation
+
+The run ends with a table of what the release serves, read from the chart's NOTES:
+
+```
+                          MLRun CE - Access URLs
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SERVICE            ┃ URL                        ┃ CREDENTIALS          ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━┩
+│ Jupyter UI         │ host.docker.internal:30040 │                      │
+│ Nuclio UI          │ host.docker.internal:30050 │                      │
+│ MLRun UI           │ host.docker.internal:30060 │                      │
+│ MLRun API          │ host.docker.internal:30070 │                      │
+│ SeaweedFS S3 API   │ host.docker.internal:30094 │                      │
+│ SeaweedFS Admin UI │ host.docker.internal:30093 │ seaweed / seaweed123 │
+│ Grafana UI         │ host.docker.internal:30010 │                      │
+│ Prometheus UI      │ host.docker.internal:30020 │                      │
+│ TimescaleDB        │ host.docker.internal:30110 │ postgres             │
+└────────────────────┴────────────────────────────┴──────────────────────┘
+```
+
+Each address is the [external host address](#external-host-address) and the service's
+NodePort; on Docker Desktop see [Local install on Docker Desktop](#local-install-on-docker-desktop).
+Open the addresses with `http://`. Disabled components are left out, and with
+`--enable-ingress` each UI shows its ingress host.
+
+---
+
+## Configuration
+
+### Precedence
+
+Highest first:
+
+**flag > environment variable > `ce-config.yaml` > `-f` values file > chart defaults**
+
+Everything the installer resolves is written to `mlrun-ce-values.yaml`
+(`GENERATED_VALUES_FILE`) and passed to helm as the last `--values`, after your `-f`, so it
+wins for the keys it sets. Ingress hosts and classes are the exception: one set in your `-f`
+file is kept. Chart values the installer does not manage (resources, replicas, …) come only
+from your `-f` file.
+
+### The config file
+
+`--config FILE` (or `CONFIG_FILE`) reads the `installer:` block of a YAML file; anything else
+in the file is ignored. [`ce-config.yaml.example`](ce-config.yaml.example) lists every key,
+with the flag or variable each one stands for.
+
+- **Required in non-interactive runs**, unless the matching variable is set:
+  `registry.url` (not with `--local-registry`) and `registry.secret.username` (not with
+  `--skip-secret` or `--local-registry`). Missing fields are reported together.
+- **The password** is never read from the file. A `password` key is ignored with a
+  warning. Use `REGISTRY_PASSWORD`, `REGISTRY_PASSWORD_FILE` or the prompt.
+- **`chartSource.kind`** accepts only `repo` (default) or `path`. With `path`,
+  `chartPath` is required.
+- **`components.*`** set to `false` disables a component, like the matching `--disable-*`
+  flag. The file cannot re-enable one disabled by a flag.
+- **`otel.*`** set to `true` enables a piece, like the matching `--enable-otel-*` flag. Any
+  `--enable-otel*` flag on the command line makes the file's `otel` block ignored.
+
+### Optional components
+
+```bash
+./scripts/install.py --disable-system-monitoring --disable-spark --disable-mpi \
+  --disable-model-monitoring
+```
+
+They turn off, respectively, Prometheus and Grafana, the Spark operator, the MPI operator,
+and model monitoring's Kafka and TimescaleDB.
+
+### Ingress
+
+```bash
+./scripts/install.py --enable-ingress           # IngressClass "nginx"
+./scripts/install.py --enable-ingress traefik   # another class
+```
+
+Turns on the chart's Ingresses. The installer does not install an ingress controller: one
+providing the class must already run in the cluster, otherwise the checks warn and the
+Ingresses do nothing until one exists. Each gets a host under the
+[external host address](#external-host-address): `mlrun.<host>`, `mlrun-api.<host>`,
+`jupyter.<host>` and `nuclio.<host>`. These names must resolve to the controller, through
+wildcard DNS for a domain, or a name such as `203.0.113.10.nip.io` for a bare IP. With a
+bare IP the installer prints the `/etc/hosts` line to add. A host or class you set in an
+`-f` file is kept.
+
+### Local registry
+
+```bash
+./scripts/install.py --local-registry
+./scripts/install.py --local-registry --enable-ingress
+```
+
+Runs `registry:2.8.3` in the namespace, with images on a 10Gi PVC (`local-registry`, default
+StorageClass), and points MLRun at it over plain HTTP. No registry account or pull secret
+credentials are needed.
+
+Without ingress the registry is `local-registry.<namespace>.svc.cluster.local:5000`. Builds
+push there, but most nodes cannot resolve that name, so function pods then fail to pull.
+Add `--enable-ingress` for a name the nodes can resolve, or use a regular registry instead.
+
+With ingress it is `registry.<host>`. Pods resolve that name only once CoreDNS has an entry
+for it. The installer prints the entry and the commands to add it, and does not edit
+CoreDNS itself:
+
+```
+[WARN] Pods cannot resolve registry.host.docker.internal until CoreDNS knows about it.
+[WARN]   Add this to the hosts{} block of the CoreDNS Corefile:
+[WARN]       10.96.0.10 registry.host.docker.internal
+[WARN]   Then: kubectl -n kube-system edit configmap coredns
+[WARN]         kubectl -n kube-system rollout restart deployment/coredns
+```
+
+The IP is your ingress controller Service's ClusterIP, looked up in `ingress-nginx`, then
+in the release namespace. For a controller elsewhere, name it:
+`INGRESS_CONTROLLER_SERVICE=kube-system/traefik`.
+
+To push from your own machine on Docker Desktop, add the registry host to
+`insecure-registries` under **Settings → Docker Engine**, then **Apply & Restart**:
+
+```json
+{ "insecure-registries": ["registry.host.docker.internal"] }
+```
+
+### OpenTelemetry
+
+```bash
+./scripts/install.py --enable-otel collector   # operator + collector: a metrics pipeline
+./scripts/install.py --enable-otel             # full: all four pieces
+```
+
+The four pieces are also flags of their own, applied left to right with `--enable-otel`:
+`--enable-otel-operator` (the operator: CRDs, webhook, manager), `--enable-otel-collector`
+(a Collector exporting to Prometheus), `--enable-otel-instrumentation` (the Instrumentation
+resource) and `--enable-otel-namespace-label`, which auto-instruments every Python pod in
+the namespace once instrumentation is on. `--enable-otel off` turns all four off.
+
+### External host address
+
+The address you reach the cluster's NodePorts at, and the base of the ingress hosts. The
+installer suggests one from the targeted context (`KUBE_CONTEXT`, or the current context):
+
+1. A minikube context: `minikube ip -p <context>`.
+2. `docker-desktop`: `host.docker.internal`, which pods resolve but the Mac may not
+   ([Local install on Docker Desktop](#local-install-on-docker-desktop)).
+3. Any other context named by `KUBE_CONTEXT`: the first node's internal IP.
+4. Anything else (kind, k3d, …): `localhost`.
+
+Set `EXTERNAL_HOST_ADDRESS` (or `installer.externalHostAddress`) when the suggestion is wrong.
+
+---
+
+## Upgrading
+
+Run the same command again: the installer always runs `helm upgrade --install`, so a re-run
+upgrades the release in place. Use it to change a setting, move to another chart with
+`--ce-version`, or retry an install that timed out.
+
+- A re-run offers to reuse the pull secret the first run created, so the password is not
+  needed again. Credentials passed in the environment replace it.
+- Keep `mlrun-ce-values.yaml` if you upgrade with plain helm. The run prints the
+  equivalent helm commands; a `helm upgrade` without that file (and without
+  `--reuse-values`) resets those values to the chart defaults.
+- An MLRun CE release under another name in the namespace (`my-mlrun` from the chart
+  README, say) is refused rather than installed beside it. Set `RELEASE_NAME` to that name
+  to upgrade it.
+- Kafka can crash-loop after upgrading a release whose Kafka volume predates the pinned
+  `kafka.clusterId`, with `Invalid cluster.id in: .../meta.properties`. Delete the Kafka
+  PVC (`data-kafka-stream-kafka-stream-pool-<n>`) and its pod; Strimzi recreates them. Only
+  model-monitoring stream data is lost.
+
+---
+
+## Uninstalling
+
+```bash
+./scripts/install.py uninstall                 # keeps data
+./scripts/install.py uninstall --hard-clean    # deletes data
+./scripts/install.py uninstall --dry-run       # shows what would be removed
+```
+
+`uninstall` removes the helm release, then the objects the installer created outside the
+chart: the pull secret and the local registry's Deployment, Service and Ingress. It finds
+those by the `app.kubernetes.io/managed-by=mlrun-ce-installer` label, so a secret you
+created yourself stays. It uses `HELM_TIMEOUT` (default `960s`).
+
+**Kept:** the namespace, the chart's CRDs and every PVC (the registry's included), so a
+reinstall finds its data. SeaweedFS's `seaweedfs-admin-secret`, `seaweedfs-s3-secret` and
+`seaweedfs-sftp-secret` are kept on purpose so a reinstall reuses the keys, and the Spark
+operator's `spark-operator-webhook-certs` has no release label.
+
+**`--hard-clean`** also deletes every PVC in the namespace and the PVs bound to them. This
+is irreversible. With no release in the namespace it asks you to type the namespace name,
+and refuses under `--non-interactive`.
+
+Either way the run ends by listing anything still labelled with the release that helm no
+longer tracks (a migrations Job from a failed upgrade, for example), with the
+`kubectl delete` command for it. It deletes none of them. To remove everything that is
+left, delete the namespace: `kubectl delete namespace mlrun`.
+
+---
+
+## Troubleshooting
+
+### The debug log
+
+Every run writes `mlrun-ce-install.log` in the current directory (`INSTALL_LOG_FILE`): each
+command with its exit code, timing and output, helm's full output, and the traceback if the
+installer crashed. A failed run prints its path. The file is readable by you only and never
+contains the registry password. Values under `data:`/`stringData:` of rendered Secrets are
+replaced with `<redacted>`, but values the chart puts in ConfigMaps, pod `env:` or its NOTES
+are not, so check for your own before sharing the log.
+
+### An install failed or timed out
+
+```
+[ERROR] Helm installation failed (exit code 1).
+[INFO] To see what did not come up:
+[INFO]   kubectl get pods -n mlrun
+[INFO]   kubectl get events -n mlrun --sort-by=.lastTimestamp
+[INFO] A timeout (HELM_TIMEOUT=960s) is often a slow first image pull; running the same command again upgrades the release in place.
+[INFO] Common failures and their fixes: https://github.com/mlrun/ce/blob/development/scripts/README.md#troubleshooting
+Full debug log: /home/me/mlrun-ce-install.log
+```
+
+A cold pull of the Jupyter image alone can take several minutes. Raise `HELM_TIMEOUT` on a
+slow network, or run the same command again. If a pod cannot pull images, check the pull
+secret: with `-f` alone the secret your file names must exist.
+
+### `--dry-run` fails with `no matches for kind`
+
+```
+Error: unable to build kubernetes objects from release manifest: [resource mapping not found
+for name: "monitoring-prometheus" namespace: "mlrun" from "": no matches for kind
+"Prometheus" in version "monitoring.coreos.com/v1"
+ensure CRDs are installed first, ...
+```
+
+A server dry run cannot render objects whose CRDs the chart itself installs, because they do
+not exist before the first install. A real install is unaffected. The installer leaves the
+monitoring stack out of a first install's dry run for this reason. If the error names
+another kind (the OpenTelemetry operator's, with `--enable-otel`), dry-run without that
+component, or after the first install.
+
+### "Chart mlrun-ce X is not published"
+
+The installer installs its own chart version by default, and an installer from a branch, or
+from a tag whose chart has not reached the Helm repo yet, names a version the repo lacks.
+The run stops before changing anything. Install the chart from a clone with
+`--chart-path ./charts/mlrun-ce`, or pass `--ce-version` with the newest published version,
+which the message names.
+
+### "No such option" (exit 2)
+
+A flag is misspelled. This is an error, not a warning: a misspelled `--dry-run` would
+otherwise run a real install, and a misspelled `--skip-secret` would replace your pull
+secret. Nothing has touched the cluster. An
+option value cannot start with a dash: in `--enable-ingress -f values.yaml`, `-f` is the
+next option, not the ingress class.
+
+### Ingress URLs do not resolve
+
+Either no ingress controller provides the class (the checks warned about it), or the hosts
+do not resolve to the controller. See [Ingress](#ingress). Once a controller is running, the
+existing Ingresses start working without a reinstall.
+
+### `--local-registry` refuses to take over existing objects
+
+An object named `local-registry` (PVC, Deployment, Service or Ingress) exists in the
+namespace without the installer's label. Taking it over would let the next `uninstall`
+delete something that is not the installer's. Delete it, install into another namespace, or
+use that registry through `REGISTRY_URL` instead of `--local-registry`.
+
+### A hard clean left a Kafka pod and its PVC
+
+The run ends with "Hard clean finished with leftovers" and names a Kafka PVC as
+`Terminating`. Strimzi's Kafka resources are created by helm hooks, which `helm uninstall`
+does not delete, so the broker pod outlives the operator and keeps its PVC. Delete them:
+
+```bash
+kubectl delete strimzipodset --all -n mlrun
+kubectl delete pod -l strimzi.io/cluster -n mlrun --force --grace-period=0
+kubectl delete kafka,kafkanodepool --all -n mlrun
+```
+
+The PVC then goes on its own. Check what is left:
+
+```bash
+kubectl get pvc -n mlrun
+kubectl get pv | grep mlrun/
+```
+
+If a PVC or a `Released` PV remains, run `./scripts/install.py uninstall --hard-clean`
+again **interactively** and type the namespace when asked. Under `--non-interactive` it
+[refuses](#--hard-clean-refused-release-is-not-in-namespace), since the release is gone.
+
+### `--hard-clean` refused: release is not in namespace
+
+A hard clean deletes every PVC in the namespace, so with no release there to confirm it is
+the right one, it asks you to type the namespace name, and refuses under
+`--non-interactive`. Check `NAMESPACE` and `KUBE_CONTEXT`, or run interactively.
+
+### Known issues
+
+- **Helm 4 prints `Conflict: cannot merge map onto non-map for registry. Skipping.`** It
+  is harmless; the registry values still reach MLRun and Nuclio.
+- **The OpenTelemetry collector shows `0/1` right after a successful install.** The
+  operator creates it after helm has finished waiting; it becomes ready a minute or so
+  later.
+- **`mlrun-api-chief` restarts once or twice on a fresh install** while `mlrun-db` starts
+  (`Can't connect to MySQL server on 'mlrun-db'`). It recovers by itself.
+- **One MLRun CE release per cluster.** The chart's `workflow-controller` PriorityClass is
+  cluster-scoped, so a second release fails even in another namespace.
+
+---
+
+## Reference
+
+### Flags
+
+Each flag's environment variable is set to `true` (exactly) for the same effect.
+
+| Flag | Variable | Effect |
+|---|---|---|
+| `-h`, `--help` | | Show help |
+| `-v`, `--version` | | Print the installer version (the chart version it ships with) |
+| `--uninstall` | `UNINSTALL` | Same as the `uninstall` command |
+| `--hard-clean` | `HARD_CLEAN` | With `uninstall`: also delete the namespace's PVCs and PVs |
+| `--dry-run` | `DRY_RUN` | Change nothing: render the chart with `--dry-run=server`, or list what `uninstall` would remove |
+| `--non-interactive` | `NON_INTERACTIVE`, `CI` | Never prompt; exit 1 on a missing required value |
+| `--config FILE` | `CONFIG_FILE` | Read defaults from a `ce-config.yaml` |
+| `-f`, `--values FILE` | | Base values file; see [From a values file](#from-a-values-file) |
+| `--chart-path DIR` | `CHART_PATH` | Install a local chart directory instead of the published chart |
+| `--skip-dependency-update` | `SKIP_DEPENDENCY_UPDATE` | With `--chart-path`: do not fetch chart dependencies |
+| `--ce-version VERSION` | `CE_VERSION` | Install this published chart version (default: the installer's own) |
+| `--skip-secret` | `SKIP_REGISTRY_SECRET` | Use an existing pull secret instead of creating one |
+| `--skip-validators` | `SKIP_VALIDATORS` | Skip the [pre-install checks](#pre-install-checks) |
+| `--local-registry` | `LOCAL_REGISTRY` | Run a registry in the cluster |
+| `--enable-ingress [CLASS]` | `ENABLE_INGRESS`, `INGRESS_CLASS` | Turn on the chart's Ingresses (class `nginx` by default) |
+| `--enable-otel [MODE]` | | `off`, `collector` or `full` (the default) |
+| `--enable-otel-operator` | `ENABLE_OTEL_OPERATOR` | Install the OpenTelemetry operator |
+| `--enable-otel-collector` | `ENABLE_OTEL_COLLECTOR` | Deploy the OpenTelemetry Collector |
+| `--enable-otel-instrumentation` | `ENABLE_OTEL_INSTRUMENTATION` | Create the Instrumentation resource |
+| `--enable-otel-namespace-label` | `ENABLE_OTEL_NAMESPACE_LABEL` | Auto-instrument every Python pod in the namespace |
+| `--disable-system-monitoring` | `DISABLE_SYSTEM_MONITORING` | Leave out Prometheus and Grafana |
+| `--disable-spark` | `DISABLE_SPARK` | Leave out the Spark operator |
+| `--disable-mpi` | `DISABLE_MPI` | Leave out the MPI operator |
+| `--disable-model-monitoring` | `DISABLE_MODEL_MONITORING` | Leave out Kafka and TimescaleDB |
+| `--show-progress` | `SHOW_PROGRESS` | Show a live table of rollouts while helm runs (terminals only) |
+
+### Environment variables
+
+These have no flag. An empty value counts as unset.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `NAMESPACE` | `mlrun` | Target namespace |
+| `RELEASE_NAME` | `mlrun-ce` | Helm release name |
+| `KUBE_CONTEXT` | current context | kubeconfig context for kubectl and helm |
+| `REGISTRY_USERNAME` | | Registry username |
+| `REGISTRY_PASSWORD` | | Registry password |
+| `REGISTRY_PASSWORD_FILE` | | File holding only the password; `REGISTRY_PASSWORD` wins if both are set |
+| `REGISTRY_SERVER` | `https://index.docker.io/v1/` | Registry server for the pull secret |
+| `REGISTRY_EMAIL` | | Registry email (optional) |
+| `REGISTRY_URL` | | Where images are pushed, e.g. `index.docker.io/myuser` |
+| `REGISTRY_SECRET_NAME` | `registry-credentials` | Pull secret name |
+| `EXTERNAL_HOST_ADDRESS` | suggested | See [External host address](#external-host-address) |
+| `INGRESS_CONTROLLER_SERVICE` | | `namespace/name` of the ingress controller Service, for the local registry's CoreDNS entry |
+| `MLRUN_VERSION` | chart's | MLRun API and UI image tag |
+| `NUCLIO_VERSION` | chart's | Nuclio controller and dashboard image tag |
+| `HELM_REPO_URL` | `https://mlrun.github.io/ce` | Chart repository |
+| `HELM_TIMEOUT` | `960s` | helm's wait timeout for install, upgrade and uninstall |
+| `MIN_HELM_VERSION` | `3.17` | Block below this Helm version |
+| `MIN_K8S_VERSION` | | Warn below this Kubernetes version |
+| `PROGRESS_INTERVAL_SEC` | `10` | Refresh interval of `--show-progress` |
+| `GENERATED_VALUES_FILE` | `mlrun-ce-values.yaml` | Where the installer writes its values; rewritten every run |
+| `INSTALL_LOG_FILE` | `mlrun-ce-install.log` | The [debug log](#the-debug-log); rewritten every run |

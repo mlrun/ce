@@ -1,0 +1,12 @@
+# Fixture for the -f/--values golden cases.
+#
+# Used alone, -f is self-contained: the installer adds no --set flags of its own and skips
+# creating the pull secret, so this file has to carry everything itself. Combined with
+# --config it becomes the base layer, and helm applies --set after --values, so the
+# config's values win over the same keys here — which is exactly what the combined case
+# is recorded to prove.
+global:
+  registry:
+    url: registry.from.values/team
+    secretName: registry-credentials
+  externalHostAddress: host.from.values
