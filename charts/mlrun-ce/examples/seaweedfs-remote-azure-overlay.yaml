@@ -1,0 +1,25 @@
+# Copy this file, replace the placeholders below, and use it with your main install settings.
+#
+# What this does:
+# - Saves your MLRun and pipeline artifacts run files to Azure Blob Storage (one container you choose).
+# - Pipeline files are copied from the SeaweedFS cluster to Azure automatically in the background.
+#
+# Before you install:
+# 1. In the Azure portal, create a storage container for your data.
+# 2. Fill in your account name, key, and container name below.
+
+storage:
+  mode: azure-blob
+  azure:
+    accountName: <ACCOUNT_NAME>
+    accountKey: <ACCOUNT_KEY>
+    connectionString: ""
+    containerName: <YOUR_CONTAINER_NAME>
+
+seaweedfs:
+  allInOne:
+    data:
+      type: emptyDir
+  remote:
+    enabled: true
+    provider: azure

@@ -6,35 +6,36 @@ This Helm charts bundles open source software stack for advanced ML operations
 
 The Open source MLRun ce chart includes the following stack:
 
-* Nuclio - https://github.com/nuclio/nuclio
-* MLRun - https://github.com/mlrun/mlrun
-* Jupyter - https://github.com/jupyter/notebook (+MLRun integrated)
-* MPI Operator - https://github.com/kubeflow/mpi-operator
-* SeaweedFS - https://github.com/seaweedfs/seaweedfs (S3-compatible storage)
-* Spark Operator - https://github.com/GoogleCloudPlatform/spark-on-k8s-operator
-* Pipelines - https://github.com/kubeflow/pipelines
-* Prometheus stack - https://github.com/prometheus-community/helm-charts
-* OpenTelemetry Operator - https://github.com/open-telemetry/opentelemetry-operator (observability)
+- Nuclio - [https://github.com/nuclio/nuclio](https://github.com/nuclio/nuclio)
+- MLRun - [https://github.com/mlrun/mlrun](https://github.com/mlrun/mlrun)
+- Jupyter - [https://github.com/jupyter/notebook](https://github.com/jupyter/notebook) (+MLRun integrated)
+- MPI Operator - [https://github.com/kubeflow/mpi-operator](https://github.com/kubeflow/mpi-operator)
+- SeaweedFS - [https://github.com/seaweedfs/seaweedfs](https://github.com/seaweedfs/seaweedfs) (S3-compatible storage)
+- Spark Operator - [https://github.com/GoogleCloudPlatform/spark-on-k8s-operator](https://github.com/GoogleCloudPlatform/spark-on-k8s-operator)
+- Pipelines - [https://github.com/kubeflow/pipelines](https://github.com/kubeflow/pipelines)
+- Prometheus stack - [https://github.com/prometheus-community/helm-charts](https://github.com/prometheus-community/helm-charts)
+- OpenTelemetry Operator - [https://github.com/open-telemetry/opentelemetry-operator](https://github.com/open-telemetry/opentelemetry-operator) (observability)
 
 ## Prerequisites
 
 - Helm >=3.6 installed from [here](https://helm.sh/docs/intro/install/)
-
 - Preprovisioned Kubernetes StorageClass
-  
-> In case your Kubernetes flavor is not shipped with a default StorageClass, you may use [local-path by Rancher](https://github.com/rancher/local-path-provisioner)
-> 1. Install it via [this link](https://github.com/rancher/local-path-provisioner#installation)  
-> 2. Set as default by executing `kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'`
 
+> In case your Kubernetes flavor is not shipped with a default StorageClass, you may use [local-path by Rancher](https://github.com/rancher/local-path-provisioner)
+>
+> 1. Install it via [this link](https://github.com/rancher/local-path-provisioner#installation)
+> 2. Set as default by executing `kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'`
 
 ## Installing the Chart
 
 Create a namespace for the deployed components:
+
 ```bash
 kubectl create namespace mlrun
 ```
 
 Add the mlrun ce helm chart repo
+
 ```bash
 helm repo add mlrun https://mlrun.github.io/ce
 ```
@@ -103,6 +104,7 @@ the ce inside a minikube cluster, add `--set global.externalHostAddress=$(miniku
 ## Advanced Chart Configuration
 
 ### Installing a different MLRun Version (for testing)
+
 Although not guarantied to work with every Chart version, you can install a different version of MLRun by setting the 
 following values: 
 
@@ -142,14 +144,15 @@ The top-level `telemetry` block exposes OpenTelemetry producer-side config that 
 
 All four knobs default to `""`, which means "fall back to MLRun's own default". Override only the values you want to change.
 
-| Value | Chart default | Effective default at mlrun-api |
-|---|---|---|
-| `telemetry.enabled` | `""` (inherits collector state) | `false` when collector is off, `true` when on |
-| `telemetry.otlpEndpoint` | `""` (derives in-cluster) | `otel-collector.<release-ns>.svc.cluster.local:<grpcPort>` |
-| `telemetry.insecure` | `""` | `true` (MLRun default — plaintext gRPC, correct for in-cluster) |
-| `telemetry.headersSecretName` | `""` | `""` (no auth headers) |
+| Value                         | Chart default                   | Effective default at mlrun-api                                  |
+| ----------------------------- | ------------------------------- | --------------------------------------------------------------- |
+| `telemetry.enabled`           | `""` (inherits collector state) | `false` when collector is off, `true` when on                   |
+| `telemetry.otlpEndpoint`      | `""` (derives in-cluster)       | `otel-collector.<release-ns>.svc.cluster.local:<grpcPort>`      |
+| `telemetry.insecure`          | `""`                            | `true` (MLRun default — plaintext gRPC, correct for in-cluster) |
+| `telemetry.headersSecretName` | `""`                            | `""` (no auth headers)                                          |
 
 Resolution rules:
+
 - `telemetry.otlpEndpoint` blank + collector on → in-cluster endpoint above.
 - `telemetry.enabled=true` with no in-cluster collector AND no `otlpEndpoint` → forced to `false` (safety: no listener means spans would silently drop).
 - A user-supplied `otlpEndpoint` always wins over the in-cluster derivation.
@@ -167,6 +170,73 @@ helm --namespace mlrun upgrade my-mlrun \
 > 💡 **Using a SaaS or HTTPS endpoint?** Most cloud observability providers (Grafana Cloud, Honeycomb, Datadog, etc.) require TLS. Add `--set telemetry.insecure=false` so mlrun-api negotiates HTTPS instead of plaintext — without it, the connection fails silently in the background and your dashboard stays empty (mlrun-api itself keeps working normally).
 >
 > SaaS providers usually also require auth headers (Bearer token, `X-Scope-OrgID`, etc.). Create a K8s Secret with one key per header, then point the chart at it with `--set telemetry.headersSecretName=my-otlp-headers`.
+
+### KFP Pipeline Artifact Storage
+
+Kubeflow Pipelines (KFP) stores run artifacts (datasets, models, metrics files) in an object store. In MLRun CE, **KFP always uses the in-cluster SeaweedFS S3 gateway** on `storage.local.bucket` (default: `mlrun`), the same in-cluster bucket as MLRun when `storage.mode: local`. To persist artifacts to AWS S3 or Azure Blob, enable `seaweedfs.remote` and set `storage.mode` to `s3` or `azure-blob`: MLRun writes to the **customer bucket/container** (`storage.s3.bucket` / `storage.azure.containerName`); KFP still uses in-cluster `storage.local.bucket`, and the gateway syncs that bucket to the same cloud target.
+
+`storage.mode: local` cannot be combined with `seaweedfs.remote`.
+
+#### External AWS S3 or Azure Blob (SeaweedFS remote gateway)
+
+Enable `seaweedfs.remote` with matching `provider` and `storage.mode`. KFP reads/writes the in-cluster bucket (default `mlrun`); the gateway syncs it to your cloud bucket/container where MLRun also stores artifacts.
+
+The chart deploys:
+
+- A **config Job** (Helm post-install/upgrade hook, weight 9) that runs `remote.configure` and `remote.mount` on `/buckets/<storage.local.bucket>` (default `mlrun`). `s3-bucket-init` (hook weight 8) creates that in-cluster bucket before this job when remote is enabled. By default the mount uses `-nonempty` so upgrades succeed when the bucket already has data
+- A **gateway Deployment** that syncs the in-cluster KFP bucket to `storage.s3.bucket` or `storage.azure.containerName`. It passes `-include=<in-cluster bucket name>` (default `mlrun`)
+
+Example overlays (copy, customize placeholders, and pass as `-f` values files):
+
+| Overlay                                        | Purpose                |
+| ---------------------------------------------- | ---------------------- |
+| `examples/seaweedfs-remote-s3-overlay.yaml`    | Sync to AWS S3         |
+| `examples/seaweedfs-remote-azure-overlay.yaml` | Sync to Azure Blob     |
+
+**AWS S3 example** (customize placeholders in the overlay first):
+
+```bash
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
+  -f <your-environment-values>.yaml \
+  -f charts/mlrun-ce/examples/seaweedfs-remote-s3-overlay.yaml
+```
+
+**Azure Blob example** (customize placeholders in the overlay — `accountName`/`accountKey`/`containerName`, or `connectionString`):
+
+```bash
+helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce \
+  -f <your-environment-values>.yaml \
+  -f charts/mlrun-ce/examples/seaweedfs-remote-azure-overlay.yaml
+```
+
+Key values under `seaweedfs.remote`:
+
+| Value                 | Description                                                                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`             | Enable remote gateway sync (default: `false`)                                                                                                |
+| `provider`            | `s3` or `azure`                                                                                                                              |
+| `name`                | Remote name for SeaweedFS — letters and numbers only (default: `cloudstorage`)                                                               |
+| `bucket`              | Cloud AWS bucket or Azure container — **must match** `storage.s3.bucket` or `storage.azure.containerName` (defaults from MLRun settings if empty) |
+| `s3.endpoint`         | Regional S3 endpoint (required when `provider: s3`)                                                                                          |
+| `s3.forcePathStyle`   | Path-style S3 URLs (default: `false` for AWS; set `true` for MinIO and other path-style endpoints)                                             |
+| `mount.nonempty`      | Pass `-nonempty` to `remote.mount` so helm upgrades work when the local bucket already has data (default: `true`; harmless on empty buckets) |
+| `mount.mountExisting` | Must stay `true` when remote is enabled; `false` fails at render (remote always mounts into the filer) |
+| `gateway.podSecurityContext` | Optional pod `securityContext` for the remote-gateway Deployment (unset = none) |
+| `configJob.podSecurityContext` | Optional pod `securityContext` for the remote-config hook Job (unset = none) |
+
+> **Note:** Cloud credentials use the same **`storage-credentials`** Secret as MLRun/Jupyter; with Azure remote, that Secret also includes SeaweedFS key names (`AZURE_STORAGE_ACCOUNT` / `AZURE_STORAGE_ACCESS_KEY`) alongside MLRun's names.
+
+#### `helm uninstall` and reinstall (same cloud overlay)
+
+The chart does **not** delete your AWS S3 bucket or Azure container. MLRun and synced KFP data written to cloud storage **remain there** after `helm uninstall`.
+
+On a fresh **`helm install`** or **`helm upgrade`** with the same remote overlay, the **remote-config** hook unmounts an existing filer mount at `/buckets/<storage.local.bucket>` if present (filer metadata only — cloud objects are not deleted), then runs `remote.configure` and `remote.mount` (with `-nonempty` by default). After a new filer (e.g. post-`helm uninstall`), remount attaches that path to your cloud bucket or container again; data that was already in Azure or S3 remains there.
+
+**MLRun** with `storage.mode: s3` or `azure-blob` also keeps reading and writing the same customer bucket or container; reinstall does not remove those objects.
+
+**KFP UI / run history** is stored in pipelines MySQL, not in blob storage alone. If `helm uninstall` removed the release database, a new install starts with an empty run list even when old artifact blobs still exist in Azure or S3. The overlays use `emptyDir` for SeaweedFS lab installs so in-cluster volume state is not preserved across uninstall; cloud storage is the durable copy.
+
+See also: [Kubeflow Pipelines object store configuration](https://www.kubeflow.org/docs/components/pipelines/operator-guides/configure-object-store/).
 
 ### Working with ECR
 
@@ -220,7 +290,6 @@ EOF
 
 > **Note:** This is needed to allow [Kaniko](https://github.com/GoogleContainerTools/kaniko), which is used by both Nuclio and MLRun, creating the image repository prior to pushing the function image.
 > Otherwise, [Kaniko](https://github.com/GoogleContainerTools/kaniko) will fail to push the image to ECR because the image name is determined during the build process.
->
 
 Creating the ECR Token secret:
 
@@ -252,16 +321,18 @@ helm --namespace mlrun \
 ## Usage
 
 Your applications are now available in your local browser:
-- Jupyter Notebook - http://nodeipaddress:30040
-- Nuclio - http://nodeipaddress:30050
-- MLRun UI - http://nodeipaddress:30060
-- MLRun API (external) - http://nodeipaddress:30070
-- SeaweedFS Admin UI (user/policy management) - http://nodeipaddress:30093
-- Pipeline UI - http://nodeipaddress:30100
-- Grafana UI - http://nodeipaddress:30010
-- Prometheus UI - http://nodeipaddress:30020
+
+- Jupyter Notebook - [http://nodeipaddress:30040](http://nodeipaddress:30040)
+- Nuclio - [http://nodeipaddress:30050](http://nodeipaddress:30050)
+- MLRun UI - [http://nodeipaddress:30060](http://nodeipaddress:30060)
+- MLRun API (external) - [http://nodeipaddress:30070](http://nodeipaddress:30070)
+- SeaweedFS Admin UI (user/policy management) - [http://nodeipaddress:30093](http://nodeipaddress:30093)
+- Pipeline UI - [http://nodeipaddress:30100](http://nodeipaddress:30100)
+- Grafana UI - [http://nodeipaddress:30010](http://nodeipaddress:30010)
+- Prometheus UI - [http://nodeipaddress:30020](http://nodeipaddress:30020)
 
 **With Ingress enabled**, the UI is available at:
+
 - `https://seaweedfs-admin.<namespace>.<cluster>.lab.iguazeng.com`
 
 > **Note:**
@@ -272,13 +343,13 @@ Your applications are now available in your local browser:
 
 ## Start Working
 
-- Open Jupyter Notebook on [**jupyter-notebook UI**](http://localhost:30040) and run the code in 
-[**examples/mlrun_basics.ipynb**](https://github.com/mlrun/mlrun/blob/master/examples/mlrun_basics.ipynb) notebook.
+- Open Jupyter Notebook on **[jupyter-notebook UI](http://localhost:30040)** and run the code in 
+**[examples/mlrun_basics.ipynb](https://github.com/mlrun/mlrun/blob/master/examples/mlrun_basics.ipynb)** notebook.
 
 > **Note:**
+>
 > - You can change the ports by providing values to the helm install command.
 > - You can add and configure a k8s ingress-controller for better security and control over external access.
-
 
 ## Upgrading the Chart
 
@@ -295,6 +366,7 @@ helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce
 When upgrading, the chart will use the same configuration as the previous release. However,
 once newer versions of MLRun replace older versions, you will need to trigger database migrations post upgrade before being able to use MLRun.
 To do so, you can from within the deployed jupyter run the following:
+
 ```python
 import mlrun
 mlrun.get_run_db().trigger_migrations()
@@ -303,15 +375,18 @@ mlrun.get_run_db().trigger_migrations()
 Alternatively, let the chart trigger them for you by enabling `mlrunMigrations`.
 On `helm upgrade` only, the chart creates a `<release>-mlrun-migrations-<revision>` Job. It waits until the MLRun API chief
 has rolled out and runs the new `mlrun.api.image`, then sends the migrations request and waits for it to finish:
+
 ```bash
 helm --namespace mlrun get values my-mlrun > previous-values.yaml
 helm --namespace mlrun upgrade my-mlrun mlrun/mlrun-ce -f previous-values.yaml \
   --set mlrunMigrations.enabled=true
 ```
+
 Pass your previous values with `-f` rather than `--reuse-values`: `--reuse-values` doesn't load the new chart defaults,
 so `mlrunMigrations` settings other than `enabled` would be missing when upgrading from a chart version without them.
 The Job isn't a Helm hook, so `helm upgrade` (also with `--wait`, unless `--wait-for-jobs` is set) doesn't wait for the migrations.
 Check the result with:
+
 ```bash
 kubectl --namespace mlrun get jobs -l app.kubernetes.io/component=mlrun-migrations
 kubectl --namespace mlrun logs job/my-mlrun-mlrun-migrations-<revision>
@@ -336,6 +411,7 @@ Because pods stuck in terminating state seem to be a never-ending plague in k8s,
 And don't forget to clean the remaining PVCs and PVs
 
 Handing stuck-at-terminating pods:
+
 ```bash
 kubectl --namespace mlrun delete pod --force --grace-period=0 <pod-name>
 ```
@@ -343,7 +419,7 @@ kubectl --namespace mlrun delete pod --force --grace-period=0 <pod-name>
 Reclaim dangling persistency resources:
 
 | WARNING: This will result in data loss! |
-| --- |
+| --------------------------------------- |
 
 ```bash
 # To list PVCs
@@ -366,13 +442,13 @@ $ kubectl --namespace mlrun delete pvc <pv-name>
 $ rm -rf my-mlrun-mlrun-ce-mlrun
 ```
 
-
 ### Using Kubeflow Pipelines
 
 MLRun enables you to run your functions while saving outputs and artifacts in a way that is visible to Kubeflow Pipelines.
 If you wish to use this capability you will need to install Kubeflow on your cluster.
-Refer to the [**Kubeflow documentation**](https://www.kubeflow.org/docs/started/getting-started/) for more information.
+Refer to the **[Kubeflow documentation](https://www.kubeflow.org/docs/started/getting-started/)** for more information.
 
+For where pipeline artifacts are stored (in-cluster SeaweedFS vs external AWS S3 / Azure Blob), see [KFP Pipeline Artifact Storage](#kfp-pipeline-artifact-storage).
 
 ## Version Matrix
 
@@ -380,6 +456,6 @@ This table shows the versions of the main components in the MLRun CE chart:
 
 | MLRun CE   | MLRun  | Nuclio  | Jupyter | MPI Operator | SeaweedFS | Spark Operator | Pipelines | Kube-Prometheus-Stack | OpenTelemetry Operator |
 |------------|--------|---------|---------|--------------|-----------|----------------|-----------|-----------------------|------------------------|
-| **0.12.1** | 1.12.1 | 1.16.12 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |
-| **0.12.0** | 1.12.0 | 1.16.10 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |
+| **0.12.1** | 1.12.1 | 1.16.12 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.16.0    | 72.1.1                | 0.78.1                 |
+| **0.12.0** | 1.12.0 | 1.16.10 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.16.0    | 72.1.1                | 0.78.1                 |
 | **0.11.0** | 1.11.0 | 1.15.27 | 4.5.0   | 0.2.3        | 4.17.0    | 2.1.0          | 2.15.0    | 72.1.1                | 0.78.1                 |

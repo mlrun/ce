@@ -1,3 +1,4 @@
+{{- $remoteEnabled := eq (include "mlrun-ce.seaweedfs.remote.enabled" .) "true" }}
 {{- if .Values.seaweedfs.enabled }}
 apiVersion: batch/v1
 kind: Job
@@ -8,7 +9,8 @@ metadata:
     app.kubernetes.io/component: s3-bucket-init
   annotations:
     helm.sh/hook: post-install,post-upgrade
-    helm.sh/hook-weight: "10"
+    # Before seaweedfs-remote-config (weight 9) when remote sync is enabled.
+    helm.sh/hook-weight: {{ if $remoteEnabled }}"8"{{ else }}"10"{{ end }}
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   ttlSecondsAfterFinished: 300
@@ -42,8 +44,12 @@ spec:
           value: {{ include "mlrun-ce.seaweedfs.s3.secretKey" . | quote }}
         - name: AWS_ENDPOINT_URL
           value: {{ include "mlrun-ce.s3.service.url" . | quote }}
-        - name: BUCKET_NAME
-          value: {{ include "mlrun-ce.seaweedfs.s3.bucket" . | quote }}
+        - name: PIPELINES_BUCKET
+          value: {{ include "mlrun-ce.pipelines.s3.bucket" . | quote }}
+        - name: MLRUN_LOCAL_BUCKET
+          value: {{ .Values.storage.local.bucket | quote }}
+        - name: STORAGE_MODE
+          value: {{ .Values.storage.mode | quote }}
         # Region is required by the AWS CLI even though SeaweedFS ignores it.
         # Without it, botocore attempts IMDS region discovery and crashes (CEML-721).
         - name: AWS_DEFAULT_REGION
@@ -53,6 +59,17 @@ spec:
           value: "true"
         command:
         - /bin/sh
-        - -c
-        - "aws s3 mb s3://$BUCKET_NAME 2>&1 || aws s3 ls s3://$BUCKET_NAME 2>&1 || { echo \"ERROR: Failed to create or verify bucket $BUCKET_NAME\"; exit 1; }"
+        - -ec
+        - |
+          ensure_bucket() {
+            _name="$1"
+            aws s3 mb "s3://${_name}" 2>&1 || aws s3 ls "s3://${_name}" 2>&1 || {
+              echo "ERROR: Failed to create or verify bucket ${_name}"
+              exit 1
+            }
+          }
+          ensure_bucket "${PIPELINES_BUCKET}"
+          if [ "${STORAGE_MODE}" = "local" ] && [ "${MLRUN_LOCAL_BUCKET}" != "${PIPELINES_BUCKET}" ]; then
+            ensure_bucket "${MLRUN_LOCAL_BUCKET}"
+          fi
 {{- end }}

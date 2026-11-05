@@ -151,6 +151,18 @@ S3 Service Port - returns the port for pipeline config
 {{- end -}}
 
 {{/*
+External S3 credentials (storage.s3.*).
+Used by MLRun and Jupyter when storage.mode is s3, and by seaweedfs.remote when provider is s3.
+*/}}
+{{- define "mlrun-ce.storage.s3.accessKey" -}}
+{{- .Values.storage.s3.accessKey -}}
+{{- end -}}
+
+{{- define "mlrun-ce.storage.s3.secretKey" -}}
+{{- .Values.storage.s3.secretKey -}}
+{{- end -}}
+
+{{/*
 S3 Access Key - for MLRun and Jupyter.
 In "local" mode uses the internal SeaweedFS credential (storage.local.accessKey).
 In "s3" mode uses the external AWS credential (storage.s3.accessKey).
@@ -159,7 +171,7 @@ In "s3" mode uses the external AWS credential (storage.s3.accessKey).
 {{- if eq .Values.storage.mode "local" -}}
 {{- .Values.storage.local.accessKey -}}
 {{- else -}}
-{{- .Values.storage.s3.accessKey -}}
+{{- include "mlrun-ce.storage.s3.accessKey" . -}}
 {{- end -}}
 {{- end -}}
 
@@ -170,13 +182,21 @@ S3 Secret Key - for MLRun and Jupyter.
 {{- if eq .Values.storage.mode "local" -}}
 {{- .Values.storage.local.secretKey -}}
 {{- else -}}
-{{- .Values.storage.s3.secretKey -}}
+{{- include "mlrun-ce.storage.s3.secretKey" . -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
 S3 Bucket - for MLRun and Jupyter.
 */}}
+{{/*
+Kubernetes Secret for MLRun/Jupyter storage credentials (single name; content follows storage.mode).
+After changing storage.mode, helm upgrade and restart mlrun-api/Jupyter. Remove legacy storage-credentials-* Secrets if present.
+*/}}
+{{- define "mlrun-ce.storage.credentialsSecretName" -}}
+storage-credentials
+{{- end -}}
+
 {{- define "mlrun-ce.s3.bucket" -}}
 {{- if eq .Values.storage.mode "local" -}}
 {{- .Values.storage.local.bucket -}}
@@ -186,72 +206,164 @@ S3 Bucket - for MLRun and Jupyter.
 {{- end -}}
 
 {{/*
-Used by: SeaweedFS IAM config, bucket-init job, and KFP Pipelines.
-Always points at the in-cluster SeaweedFS regardless of storage.mode.
+Cloud bucket (S3) or container (Azure) for MLRun/Jupyter when storage.mode is s3 or azure-blob.
+Empty when storage.mode is local. Used to validate seaweedfs.remote targets the same cloud object as MLRun.
 */}}
-{{- define "mlrun-ce.seaweedfs.s3.accessKey" -}}
+{{- define "mlrun-ce.storage.mlrunCloudBucket" -}}
+{{- if eq .Values.storage.mode "s3" -}}
+{{- coalesce .Values.global.infrastructure.aws.bucketName .Values.storage.s3.bucket "" -}}
+{{- else if eq .Values.storage.mode "azure-blob" -}}
+{{- .Values.storage.azure.containerName -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+KFP in-cluster SeaweedFS bucket (credentials from storage.local.*).
+Always defaults to storage.local.bucket (default name "mlrun"), including with seaweedfs.remote.
+Customer AWS/Azure names live in storage.s3.bucket / storage.azure.containerName (MLRun direct + remote sync target).
+*/}}
+{{- define "mlrun-ce.pipelines.s3.accessKey" -}}
 {{- .Values.storage.local.accessKey -}}
 {{- end -}}
 
-{{/*
-SeaweedFS S3 Secret Key - sourced from storage.local.secretKey.
-*/}}
-{{- define "mlrun-ce.seaweedfs.s3.secretKey" -}}
+{{- define "mlrun-ce.pipelines.s3.secretKey" -}}
 {{- .Values.storage.local.secretKey -}}
 {{- end -}}
 
-{{/*
-SeaweedFS S3 Bucket - sourced from storage.local.bucket.
-*/}}
-{{- define "mlrun-ce.seaweedfs.s3.bucket" -}}
-{{- .Values.storage.local.bucket -}}
-{{- end -}}
-
-{{/*
-Pipelines S3 Access Key - always uses the in-cluster SeaweedFS credentials.
-KFP always uses SeaweedFS regardless of storage.mode.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.accessKey" -}}
-{{- include "mlrun-ce.seaweedfs.s3.accessKey" . -}}
-{{- end -}}
-
-{{/*
-Pipelines S3 Secret Key - always uses the in-cluster SeaweedFS credentials.
-*/}}
-{{- define "mlrun-ce.pipelines.s3.secretKey" -}}
-{{- include "mlrun-ce.seaweedfs.s3.secretKey" . -}}
-{{- end -}}
-
-{{/*
-Pipelines S3 Bucket - always uses the SeaweedFS bucket.
-*/}}
 {{- define "mlrun-ce.pipelines.s3.bucket" -}}
-{{- include "mlrun-ce.seaweedfs.s3.bucket" . -}}
+{{- coalesce .Values.storage.local.bucket "mlrun" -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Host - always in-cluster SeaweedFS.
+SeaweedFS IAM and bucket-init — same credentials/bucket as KFP (storage.local).
 */}}
-{{- define "mlrun-ce.pipelines.s3.host" -}}
-{{- include "mlrun-ce.s3.service.host" . -}}
+{{- define "mlrun-ce.seaweedfs.s3.accessKey" -}}
+{{- include "mlrun-ce.pipelines.s3.accessKey" . -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.s3.secretKey" -}}
+{{- include "mlrun-ce.pipelines.s3.secretKey" . -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.s3.bucket" -}}
+{{- include "mlrun-ce.pipelines.s3.bucket" . -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Port - always SeaweedFS port.
+SeaweedFS cluster addresses (allInOne mode; service name is {fullnameOverride}-all-in-one).
 */}}
-{{- define "mlrun-ce.pipelines.s3.port" -}}
-{{- include "mlrun-ce.s3.service.port" . -}}
+{{- define "mlrun-ce.seaweedfs.allInOne.serviceName" -}}
+{{- printf "%s-all-in-one" (.Values.seaweedfs.fullnameOverride | default "seaweedfs") -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.allInOne.fqdn" -}}
+{{- printf "%s.%s.svc.cluster.local" (include "mlrun-ce.seaweedfs.allInOne.serviceName" .) .Release.Namespace -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.filer.port" -}}
+{{- .Values.seaweedfs.filer.port | default 8888 -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.master.port" -}}
+{{- .Values.seaweedfs.master.port | default 9333 -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.filerAddress" -}}
+{{- include "mlrun-ce.seaweedfs.allInOne.fqdn" . -}}:{{ include "mlrun-ce.seaweedfs.filer.port" . }}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.masterAddress" -}}
+{{- include "mlrun-ce.seaweedfs.allInOne.fqdn" . -}}:{{ include "mlrun-ce.seaweedfs.master.port" . }}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.image" -}}
+{{- $repo := .Values.seaweedfs.global.repository | default .Values.seaweedfs.image.repository | default "chrislusf/seaweedfs" -}}
+{{- $tag := .Values.seaweedfs.image.tag | default "4.17" -}}
+{{- printf "%s:%s" $repo $tag -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.remote.enabled" -}}
+{{- if and .Values.seaweedfs.enabled .Values.seaweedfs.remote.enabled -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
 {{/*
-Pipelines S3 Secure / Insecure - always plain HTTP (in-cluster SeaweedFS).
+SeaweedFS remote gateway selector labels (immutable Deployment selector).
 */}}
-{{- define "mlrun-ce.pipelines.s3.secure" -}}
-false
+{{- define "mlrun-ce.seaweedfs.remote.gateway.selectorLabels" -}}
+{{ include "mlrun-ce.common.selectorLabels" . }}
+app.kubernetes.io/component: seaweedfs-remote-gateway
 {{- end -}}
 
-{{- define "mlrun-ce.pipelines.s3.insecure" -}}
+{{/*
+Bool mount flags — sprig "default true" treats false as empty; preserve explicit false.
+*/}}
+{{- define "mlrun-ce.seaweedfs.remote.mount.nonempty" -}}
+{{- if kindIs "bool" .Values.seaweedfs.remote.mount.nonempty -}}
+{{- .Values.seaweedfs.remote.mount.nonempty -}}
+{{- else -}}
 true
+{{- end -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.remote.localBucket" -}}
+{{- include "mlrun-ce.pipelines.s3.bucket" . -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.remote.remoteBucket" -}}
+{{- coalesce .Values.seaweedfs.remote.bucket (include "mlrun-ce.storage.mlrunCloudBucket" .) -}}
+{{- end -}}
+
+{{- define "mlrun-ce.seaweedfs.remote.gateway.excludeBucketPattern" -}}
+{{- .Values.seaweedfs.remote.gateway.excludeBucketPattern | default "" -}}
+{{- end -}}
+
+{{/*
+Shell snippet: export AZURE_STORAGE_ACCOUNT / AZURE_STORAGE_ACCESS_KEY from AZURE_STORAGE_CONNECTION_STRING when unset.
+Used by seaweedfs-remote-config Job and seaweedfs-remote-gateway Deployment (filer.remote.gateway reads env at sync time).
+*/}}
+{{- define "mlrun-ce.seaweedfs.remote.azureCredentialBootstrap" -}}
+if [ -z "${AZURE_STORAGE_ACCOUNT:-}" ] || [ -z "${AZURE_STORAGE_ACCESS_KEY:-}" ]; then
+  if [ -z "${AZURE_STORAGE_CONNECTION_STRING:-}" ]; then
+    echo "ERROR: set storage.azure.accountName+accountKey or connectionString."
+    exit 1
+  fi
+  if echo "${AZURE_STORAGE_CONNECTION_STRING}" | grep -q 'SharedAccessSignature='; then
+    echo "ERROR: SAS-only connection strings are not supported."
+    exit 1
+  fi
+  _parsed_account=""
+  _parsed_key=""
+  _old_ifs="${IFS}"
+  IFS=';'
+  for _part in ${AZURE_STORAGE_CONNECTION_STRING}; do
+    case "${_part}" in
+      AccountName=*) _parsed_account="${_part#AccountName=}" ;;
+      AccountKey=*) _parsed_key="${_part#AccountKey=}" ;;
+    esac
+  done
+  IFS="${_old_ifs}"
+  if [ -z "${_parsed_account}" ] || [ -z "${_parsed_key}" ]; then
+    echo "ERROR: could not parse AccountName/AccountKey from connectionString."
+    exit 1
+  fi
+  export AZURE_STORAGE_ACCOUNT="${_parsed_account}"
+  export AZURE_STORAGE_ACCESS_KEY="${_parsed_key}"
+fi
+{{- end -}}
+
+{{/*
+Default KFP pipeline root URI scheme/path.
+*/}}
+{{- define "mlrun-ce.pipelines.defaultPipelineRoot" -}}
+{{- $bucket := include "mlrun-ce.pipelines.s3.bucket" . -}}
+minio://{{ $bucket }}/v2/artifacts
+{{- end -}}
+
+{{/*
+True when KFP should wait for the in-cluster SeaweedFS S3 gateway at startup.
+*/}}
+{{- define "mlrun-ce.pipelines.usesLocalSeaweedFS" -}}
+{{- .Values.seaweedfs.enabled -}}
 {{- end -}}
 
 {{/*
@@ -339,7 +451,7 @@ Uses SeaweedFS as the storage backend
   {{- if .Values.mlrun.storageAutoMountParams -}}
     {{ .Values.mlrun.storageAutoMountParams }}
   {{- else if not .Values.global.infrastructure.aws.s3NonAnonymous -}}
-    "secret_name=storage-credentials"
+    {{ printf "secret_name=%s" (include "mlrun-ce.storage.credentialsSecretName" .) }}
   {{- else -}}
     "non_anonymous=True"
   {{- end -}}
