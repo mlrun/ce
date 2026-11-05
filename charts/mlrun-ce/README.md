@@ -224,7 +224,7 @@ Key values under `seaweedfs.remote`:
 | `gateway.podSecurityContext` | Optional pod `securityContext` for the remote-gateway Deployment (unset = none) |
 | `configJob.podSecurityContext` | Optional pod `securityContext` for the remote-config hook Job (unset = none) |
 
-> **Note:** `seaweedfs.remote` requires `seaweedfs.allInOne.enabled=true` (the default CE layout) and `storage.mode: s3` or `azure-blob`. `seaweedfs.remote.bucket` defaults to `storage.s3.bucket` / `storage.azure.containerName` (customer cloud name). KFP’s in-cluster SeaweedFS bucket defaults to `storage.local.bucket` (`mlrun`); pipeline paths under `minio://mlrun/v2/artifacts` sync into that cloud bucket alongside MLRun data. Cloud credentials use the same **`storage-credentials`** Secret as MLRun/Jupyter; with Azure remote, that Secret also includes SeaweedFS key names (`AZURE_STORAGE_ACCOUNT` / `AZURE_STORAGE_ACCESS_KEY`) alongside MLRun’s names.
+> **Note:** Cloud credentials use the same **`storage-credentials`** Secret as MLRun/Jupyter; with Azure remote, that Secret also includes SeaweedFS key names (`AZURE_STORAGE_ACCOUNT` / `AZURE_STORAGE_ACCESS_KEY`) alongside MLRun's names.
 
 #### `helm uninstall` and reinstall (same cloud overlay)
 
