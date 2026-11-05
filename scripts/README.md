@@ -33,8 +33,11 @@ than 8Gi allocatable memory or ephemeral storage in total, or when another Servi
 holds one of the chart's NodePorts (30010, 30020, 30040, 30050, 30060, 30070, 30093, 30094,
 30100, 30110).
 
-`docker` is optional. It is used only for a best-effort registry login check, which reports
-`skipped` without it, so the installer also runs from inside a pod.
+A local install needs Docker, because the local cluster runs on it: Docker Desktop's
+Kubernetes, kind and minikube's default driver all do, and so does pushing your own images to
+a `--local-registry`. The installer itself only uses the `docker` CLI for a best-effort
+registry login check, which reports `skipped` without it, so against a remote cluster or from
+inside a pod you don't need Docker.
 
 ---
 

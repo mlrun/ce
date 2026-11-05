@@ -45,8 +45,8 @@
 # command at all, so every invocation above still means the same thing without one.
 #
 # Non-interactive (CI): set REGISTRY_* and EXTERNAL_HOST_ADDRESS, REGISTRY_URL; see -h.
-# Requirements: uv, helm, kubectl (configured with a cluster). docker is optional — it is
-# only used for the best-effort registry-auth validator.
+# Requirements: uv, helm, kubectl (configured with a cluster). The installer uses docker
+# only for the best-effort registry-auth validator; a local cluster usually runs on it anyway.
 
 import os
 import shutil
