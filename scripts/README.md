@@ -9,6 +9,7 @@ in a clone of this repo instead, pass `--chart-path ./charts/mlrun-ce`
 ([Installing this repo's chart](#installing-this-repos-chart)).
 
 - [Requirements](#requirements)
+- [Local install on Docker Desktop](#local-install-on-docker-desktop)
 - [Getting the installer](#getting-the-installer)
 - [Commands](#commands)
 - [Installing](#installing)
@@ -38,6 +39,37 @@ Kubernetes, kind and minikube's default driver all do, and so does pushing your 
 a `--local-registry`. The installer itself only uses the `docker` CLI for a best-effort
 registry login check, which reports `skipped` without it, so against a remote cluster or from
 inside a pod you don't need Docker.
+
+---
+
+## Local install on Docker Desktop
+
+1. Turn on Kubernetes under **Settings → Kubernetes**, and give Docker at least 10 GB of
+   memory under **Settings → Resources**. An idle install uses about 5.5 GB; at 8 GB the
+   [pre-install checks](#pre-install-checks) warn and about 2.5 GB is left for functions.
+2. `kubectl config use-context docker-desktop`
+3. Have a Docker Hub username and access token ready ([Choosing a registry](#choosing-a-registry)).
+   `--local-registry` needs the extra steps under [Local registry](#local-registry), so
+   Docker Hub is the simpler path.
+4. Run `./scripts/install.py` from a clone, or the `uvx` command under
+   [Without a clone](#without-a-clone), with `EXTERNAL_HOST_ADDRESS=localhost` exported (or
+   answer `localhost` at the address prompt). The suggested `host.docker.internal` resolves
+   inside the cluster, not on the Mac.
+5. Docker Desktop's kind cluster (node `desktop-control-plane`) does not publish NodePorts
+   on the Mac. Forward each service you use to its NodePort number, then open the access
+   table's `http://localhost:<port>`:
+
+   ```bash
+   kubectl -n mlrun port-forward svc/mlrun-ui 30060:80 &
+   kubectl -n mlrun port-forward svc/mlrun-jupyter 30040:8888 &
+   kubectl -n mlrun port-forward svc/nuclio-dashboard 30050:8070 &
+   ```
+
+   The API is `svc/mlrun-api 30070:8080` and Grafana `svc/grafana 30010:80`.
+
+On Apple Silicon this does not install yet: MLRun 1.12.1's `mlrun-api`, `mlrun-ui`,
+`jupyter` and `log-collector` images exist for amd64 only, so their pods fail with
+`no match for platform in manifest` and helm gives up after about 10 minutes.
 
 ---
 
@@ -266,22 +298,24 @@ in the namespace ([Upgrading](#upgrading)).
 The run ends with a table of what the release serves, read from the chart's NOTES:
 
 ```
-                     MLRun CE - Access URLs
-┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┓
-┃ SERVICE            ┃ URL             ┃ CREDENTIALS          ┃
-┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━┩
-│ Jupyter UI         │ localhost:30040 │                      │
-│ Nuclio UI          │ localhost:30050 │                      │
-│ MLRun UI           │ localhost:30060 │                      │
-│ MLRun API          │ localhost:30070 │                      │
-│ SeaweedFS S3 API   │ localhost:30094 │                      │
-│ SeaweedFS Admin UI │ localhost:30093 │ seaweed / seaweed123 │
-│ Grafana UI         │ localhost:30010 │                      │
-│ Prometheus UI      │ localhost:30020 │                      │
-│ TimescaleDB        │ localhost:30110 │ postgres             │
-└────────────────────┴─────────────────┴──────────────────────┘
+                          MLRun CE - Access URLs
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┓
+┃ SERVICE            ┃ URL                        ┃ CREDENTIALS          ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━┩
+│ Jupyter UI         │ host.docker.internal:30040 │                      │
+│ Nuclio UI          │ host.docker.internal:30050 │                      │
+│ MLRun UI           │ host.docker.internal:30060 │                      │
+│ MLRun API          │ host.docker.internal:30070 │                      │
+│ SeaweedFS S3 API   │ host.docker.internal:30094 │                      │
+│ SeaweedFS Admin UI │ host.docker.internal:30093 │ seaweed / seaweed123 │
+│ Grafana UI         │ host.docker.internal:30010 │                      │
+│ Prometheus UI      │ host.docker.internal:30020 │                      │
+│ TimescaleDB        │ host.docker.internal:30110 │ postgres             │
+└────────────────────┴────────────────────────────┴──────────────────────┘
 ```
 
+Each address is the [external host address](#external-host-address) and the service's
+NodePort; on Docker Desktop see [Local install on Docker Desktop](#local-install-on-docker-desktop).
 Open the addresses with `http://`. Disabled components are left out, and with
 `--enable-ingress` each UI shows its ingress host.
 
@@ -402,7 +436,8 @@ The address you reach the cluster's NodePorts at, and the base of the ingress ho
 installer suggests one from the targeted context (`KUBE_CONTEXT`, or the current context):
 
 1. A minikube context: `minikube ip -p <context>`.
-2. `docker-desktop`: `host.docker.internal`.
+2. `docker-desktop`: `host.docker.internal`, which pods resolve but the Mac may not
+   ([Local install on Docker Desktop](#local-install-on-docker-desktop)).
 3. Any other context named by `KUBE_CONTEXT`: the first node's internal IP.
 4. Anything else (kind, k3d, …): `localhost`.
 
