@@ -1,17 +1,13 @@
 # Sample config for scripts/install.py --config ce-config.yaml (or CONFIG_FILE=ce-config.yaml).
 # Only the reserved `installer:` block is read; everything else is ignored.
-# See docs/configuration.md's "Config file (ce-config.yaml)" section for the full field list.
+# See "The config file" in scripts/README.md.
 #
-# Copy this file, edit it, and do NOT commit real registry credentials into it —
-# the password is never read from this file in the first place (REGISTRY_PASSWORD env,
-# REGISTRY_PASSWORD_FILE env, or the interactive prompt, only).
+# The password is never read from this file: use REGISTRY_PASSWORD, REGISTRY_PASSWORD_FILE
+# or the interactive prompt.
 #
-# Precedence (highest wins): CLI flag > env var > this file (resolved to --set) >
-# -f/--values file (raw values) > chart defaults. --config can be combined with
-# -f/--values: helm applies --set after --values, so any field this file sets always
-# wins over the same key in a -f file, with no extra merge logic needed. -f used alone
-# (no --config) keeps its own self-contained behavior (you supply global.registry.*,
-# versions, everything; the installer sets nothing on top, no secret creation).
+# Precedence (highest wins): CLI flag > env var > this file > -f/--values file > chart
+# defaults. The values this file resolves are written to the installer's own values file,
+# which helm reads after any -f file.
 
 installer:
   # kubectl/helm context to use. Blank = current local kubeconfig context (no SSH,
@@ -47,8 +43,8 @@ installer:
     chartVersion: ""
     chartPath: ""
 
-  # Only consulted with --local-registry, which patches CoreDNS so pods can resolve the
-  # registry's ingress host. namespace/name of your ingress controller Service; omitted,
+  # Only consulted with --local-registry, which prints the CoreDNS entry pods need to resolve
+  # the registry's ingress host. namespace/name of your ingress controller Service; omitted,
   # ingress-nginx/ingress-nginx-controller is tried first and the release namespace second.
   # Set it explicitly for Traefik or any non-standard install (same as
   # INGRESS_CONTROLLER_SERVICE).

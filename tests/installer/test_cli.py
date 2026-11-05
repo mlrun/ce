@@ -14,14 +14,16 @@
 """Turning a command line into a run: commands, flags, precedence, and the argv pre-parse.
 
 Ported from the bash suite's command/flag/otel sections. The pre-parse is the part with no
-click equivalent — optional option values, order-sensitive otel folding, and warning rather
-than aborting on an unknown flag — so it carries most of the risk here.
+click equivalent — optional option values and order-sensitive otel folding — so it carries
+most of the risk here.
 """
 
+import re
 from pathlib import Path
 
 import hatch_build
 import pytest
+import typer
 
 from ce_installer import cli, console, registry
 from ce_installer.console import InstallerError
@@ -720,3 +722,45 @@ def test_log_messages_containing_brackets_are_not_parsed_as_markup(capsys):
     # to read them as style tags and drop them.
     console.log_info("jsonpath={range .items[*]}{.metadata.name}{end}")
     assert ".items[*]" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------------------------------
+# Every flag and environment variable is documented in scripts/README.md
+# ------------------------------------------------------------------------------------------
+
+ROOT = Path(__file__).resolve().parents[2]
+README = ROOT / "scripts" / "README.md"
+
+
+def _reference_section():
+    text = README.read_text()
+    return text[text.index("\n## Reference\n") :]
+
+
+def test_every_flag_is_in_the_readme_reference():
+    reference = _reference_section()
+    for param in typer.main.get_command(cli.app).params:
+        for opt in param.opts:
+            assert f"`{opt}" in reference, f"{opt} is not in scripts/README.md's Reference"
+
+
+def test_every_environment_variable_is_in_the_readme_reference():
+    source = "\n".join(p.read_text() for p in (ROOT / "scripts" / "ce_installer").glob("*.py"))
+    names = set(re.findall(r'env_(?:str|true)\(\s*"([A-Z_]+)"', source))
+    names |= set(re.findall(r'prompt_or_env\(\s*settings,\s*"([A-Z_]+)"', source))
+    assert "REGISTRY_SERVER" in names and "NAMESPACE" in names, "the scan found nothing"
+
+    reference = _reference_section()
+    missing = sorted(name for name in names if f"`{name}`" not in reference)
+    assert not missing, f"not in scripts/README.md's Reference: {missing}"
+
+
+def test_every_link_inside_the_readme_lands_on_a_heading():
+    text = README.read_text()
+    anchors = {
+        "#" + re.sub(r"[^\w\- ]", "", line.lstrip("#").strip().lower()).replace(" ", "-")
+        for line in text.splitlines()
+        if re.match(r"#{1,4} ", line)
+    }
+    broken = sorted(set(re.findall(r"\]\((#[^)]+)\)", text)) - anchors)
+    assert not broken, f"scripts/README.md links to missing headings: {broken}"

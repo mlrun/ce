@@ -11,13 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""One named test per entry in scripts/AGENTS.md's "Fixed bugs" section, plus the output
-formatting the differential harness structurally cannot see.
+"""One named test per bug that reached a user, plus the output formatting the golden suite
+structurally cannot see.
 
-The harness in matrix.sh compares the *calls* two implementations make. Everything here is
-about what a single implementation computes or prints, which that comparison would report
-as identical no matter how wrong it was — the access-URL table shipped broken through 28
-green matrix cases.
+The golden suite compares the *calls* the installer makes. Everything here is about what it
+computes or prints, which that comparison reports as unchanged no matter how wrong it is.
 
 Each test name ends in the symptom a user would have reported, so a future failure says
 what regressed rather than which assertion tripped.
@@ -1870,7 +1868,7 @@ def test_a_failed_install_says_where_to_look_next(monkeypatch, settings, capture
     assert "kubectl --context lab get pods -n mlrun" in text
     assert "get events -n mlrun --sort-by=.lastTimestamp" in text
     assert "HELM_TIMEOUT=960s" in text and "upgrades the release in place" in text
-    assert helm_ops.FAQ_URL in text
+    assert helm_ops.README_URL + helm_ops.TROUBLESHOOTING_ANCHOR in text
 
 
 # ------------------------------------------------------------------------------------------
@@ -2418,11 +2416,35 @@ def test_a_clean_hard_clean_still_says_complete(monkeypatch, settings, recorder)
     assert not any("leftovers" in message for message in logs["warn"])
 
 
-def test_the_faq_anchor_for_leftovers_exists():
-    faq = (Path(__file__).resolve().parents[2] / "scripts" / "docs" / "faq.md").read_text()
-    heading = next(line for line in faq.splitlines() if line.startswith("### `--hard-clean` didn"))
-    slug = re.sub(r"[^\w\- ]", "", heading[4:].lower()).replace(" ", "-")
-    assert "#" + slug == helm_ops.STRIMZI_LEFTOVERS_ANCHOR
+README = Path(__file__).resolve().parents[2] / "scripts" / "README.md"
+
+
+def _anchor(heading):
+    """GitHub's anchor for a markdown heading: lowercase, punctuation dropped, spaces to -."""
+    return "#" + re.sub(r"[^\w\- ]", "", heading.lstrip("#").strip().lower()).replace(" ", "-")
+
+
+def _readme_headings():
+    return [line for line in README.read_text().splitlines() if re.match(r"#{2,4} ", line)]
+
+
+def _readme_section(heading_prefix):
+    """The body of the README section whose heading starts with `heading_prefix`."""
+    text = README.read_text()
+    start = text.index(heading_prefix)
+    end = re.search(r"\n#{2,3} ", text[start + 1 :])
+    return text[start : start + 1 + end.start()] if end else text[start:]
+
+
+def test_every_readme_anchor_the_installer_prints_exists():
+    anchors = {_anchor(line) for line in _readme_headings()}
+    for printed in (
+        helm_ops.TROUBLESHOOTING_ANCHOR,
+        helm_ops.DRY_RUN_CRDS_ANCHOR,
+        helm_ops.STRIMZI_LEFTOVERS_ANCHOR,
+    ):
+        assert printed in anchors, f"scripts/README.md has no heading for {printed}"
+    assert helm_ops.README_URL.endswith("/scripts/README.md")
 
 
 # ------------------------------------------------------------------------------------------
@@ -2649,21 +2671,14 @@ def test_typing_the_namespace_back_confirms(monkeypatch, settings):
 
 
 # ------------------------------------------------------------------------------------------
-# The FAQ said "run the hard clean again", which --non-interactive refuses without a release
+# The docs said "run the hard clean again", which --non-interactive refuses without a release
 # ------------------------------------------------------------------------------------------
 
 
-def _faq_slug(heading):
-    return "#" + re.sub(r"[^\w\- ]", "", heading[4:].lower()).replace(" ", "-")
-
-
 def test_the_strimzi_entry_sends_the_rerun_through_the_interactive_confirmation():
-    faq = (Path(__file__).resolve().parents[2] / "scripts" / "docs" / "faq.md").read_text()
-    start = faq.index("### `--hard-clean` didn't delete everything")
-    entry = faq[start : faq.index("\n### ", start + 1)]
+    entry = _readme_section("### A hard clean left a Kafka pod")
 
     assert "kubectl get pvc -n mlrun" in entry
     assert "interactively" in entry and "type the namespace" in entry
-    headings = faq.splitlines()
-    refuses = next(line for line in headings if line.startswith("### `--hard-clean` refuses"))
-    assert f"]({_faq_slug(refuses)})" in entry, "the link must land on the refuses entry"
+    refuses = next(h for h in _readme_headings() if h.startswith("### `--hard-clean` refused"))
+    assert f"]({_anchor(refuses)})" in entry, "the link must land on the refused entry"

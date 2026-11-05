@@ -21,7 +21,7 @@ a different chart than the operator asked for.
 The dependency-resolution tests have no bats counterpart — `--chart-path` preferring
 `helm dependency build`, skipping the fetch when `charts/` already satisfies the lock, and
 obeying `--skip-dependency-update` are deliberate divergences from install.sh (which always
-ran `helm dependency update`), recorded in scripts/AGENTS.md.
+ran `helm dependency update`).
 """
 
 import os

@@ -30,7 +30,6 @@ help: ## Display available commands
 # with no assertions and no teardown. It was written as the body of ci.yaml's `test:` job,
 # which ran it inside a throwaway kind cluster — that job is commented out ("takes too long
 # to pull images"), so the only thing left that can reach this is a developer's laptop.
-# ROADMAP items A1/A2 reclaim the name and split the deploy into `make integration-test`.
 # Use `make installer-test` for the installer suites; they touch no cluster.
 .PHONY: tests
 tests: ## Deploy CE to the current cluster (real install, not a test suite — see comment)
@@ -70,7 +69,7 @@ INSTALLER_PYTEST = uv run --isolated --python $(INSTALLER_PYTHON) --quiet \
 installer-test: installer-test-unit installer-test-golden ## Run every installer test suite
 
 # Patch the helm/kubectl wrappers and check one function at a time: flag parsing, config
-# precedence, validators, and one named test per entry in scripts/AGENTS.md's "Fixed bugs".
+# precedence, validators, and one named test per bug that reached a user.
 .PHONY: installer-test-unit
 installer-test-unit: ## Run the ce_installer unit and regression tests
 	@$(INSTALLER_PYTEST) tests/installer -q --ignore=tests/installer/test_golden_argv.py

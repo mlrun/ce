@@ -4,23 +4,23 @@
 
 | Tool | Minimum version | Purpose |
 |---|---|---|
-| helm | 3.6 | Chart rendering, linting, install |
+| helm | 3.17 | Chart rendering, linting, install |
 | kubectl | 1.24 | Cluster interaction |
 | uv | 0.4 | Runs `scripts/install.py`, and `make installer-lint-python` / `installer-format` via `uvx ruff` |
 
 For Kubernetes storage class setup and cluster prerequisites, see [charts/mlrun-ce/README.md](charts/mlrun-ce/README.md#prerequisites).
 
-`scripts/install.py` enforces the same helm 3.6 floor at install time and imposes no
-Kubernetes floor, so a cluster you can develop against is one you can install against — see
-[scripts/docs/configuration.md](scripts/docs/configuration.md#version-floors).
+Helm 3.17 is the oldest that renders the chart (the SeaweedFS subchart uses `fromToml`);
+`scripts/install.py` refuses an older Helm and warns below 4.1.
 
-The installer is `scripts/install.py` plus the `scripts/ce_installer/` package. Keep
-`make installer-test` green: it runs the unit suites and then replays the installer against
-stub binaries to check it still makes the recorded helm/kubectl calls. If that second suite
-fails, read the diff before re-recording — every changed line is a change in what the
-installer does to somebody's cluster. See [scripts/AGENTS.md](scripts/AGENTS.md) for the
-design notes and [.claude/skills/run-tests](.claude/skills/run-tests/SKILL.md) for the test
-workflow.
+The installer is `scripts/install.py` plus the `scripts/ce_installer/` package, documented
+for users in [scripts/README.md](scripts/README.md). Keep `make installer-test` green: it
+runs the unit suites, then replays the installer against stub binaries to check it still
+makes the recorded helm/kubectl calls. If that second suite fails, read the diff before
+re-recording; every changed line is a change in what the installer does to a cluster. The
+[contributing](.claude/skills/contributing/SKILL.md) and
+[run-tests](.claude/skills/run-tests/SKILL.md) skills cover the installer's conventions and
+tests.
 
 ## First-Time Setup
 

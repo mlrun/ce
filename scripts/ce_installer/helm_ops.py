@@ -43,7 +43,12 @@ from .shell import check_requirements, helm, helm_cmd, kubectl, kubectl_cmd, str
 from .ui import print_notes_table, run_deployment_progress_ui
 from .validators import parse_major_minor
 
-FAQ_URL = "https://github.com/mlrun/ce/blob/development/scripts/docs/faq.md"
+README_URL = "https://github.com/mlrun/ce/blob/development/scripts/README.md"
+# Headings in scripts/README.md; test_every_readme_anchor_the_installer_prints_exists
+# fails if one is renamed.
+TROUBLESHOOTING_ANCHOR = "#troubleshooting"
+DRY_RUN_CRDS_ANCHOR = "#--dry-run-fails-with-no-matches-for-kind"
+STRIMZI_LEFTOVERS_ANCHOR = "#a-hard-clean-left-a-kafka-pod-and-its-pvc"
 
 
 def build_set_flags(settings: Settings) -> List[str]:
@@ -416,7 +421,7 @@ def print_failure_hints(settings: Settings) -> None:
         log_info(
             "'no matches for kind ... ensure CRDs are installed first' means the cluster does "
             "not have CRDs the chart itself installs; a dry run cannot get past that before "
-            f"the first install. See {FAQ_URL}"
+            f"the first install. See {README_URL}{DRY_RUN_CRDS_ANCHOR}"
         )
         return
     kubectl_prefix = " ".join(kubectl_cmd(settings))
@@ -427,7 +432,7 @@ def print_failure_hints(settings: Settings) -> None:
         f"A timeout (HELM_TIMEOUT={settings.helm_timeout}) is often a slow first image pull; "
         "running the same command again upgrades the release in place."
     )
-    log_info(f"Common failures and their fixes: {FAQ_URL}")
+    log_info(f"Common failures and their fixes: {README_URL}{TROUBLESHOOTING_ANCHOR}")
 
 
 def helm_install(settings: Settings) -> None:
@@ -569,10 +574,6 @@ def do_hard_clean(settings: Settings) -> List[str]:
     return leftovers
 
 
-STRIMZI_LEFTOVERS_ANCHOR = (
-    "#--hard-clean-didnt-delete-everything--a-kafka-pod-and-its-pvc-are-still-there"
-)
-
 # Namespaced built-in kinds only, so the one `get` cannot fail on a CRD the cluster lacks.
 # PVCs are left out: a plain uninstall keeps them on purpose and a hard clean lists every
 # PVC itself.
@@ -638,7 +639,8 @@ def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
     if pvcs:
         log_warn(
             "  A pod still mounting a PVC keeps it Terminating (pvc-protection); orphaned "
-            f"Strimzi Kafka resources are the usual cause. See {FAQ_URL}{STRIMZI_LEFTOVERS_ANCHOR}"
+            "Strimzi Kafka resources are the usual cause. "
+            f"See {README_URL}{STRIMZI_LEFTOVERS_ANCHOR}"
         )
     if others:
         kubectl_prefix = " ".join(kubectl_cmd(settings))

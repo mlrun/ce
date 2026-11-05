@@ -432,8 +432,7 @@ def install(
         help="Use this YAML values file as the base for installation. Alone (no --config): "
         "fully self-contained (global.registry.*, versions, everything) — skips secret "
         "creation and prompts. Combined with --config: --config still creates the registry "
-        "secret and resolves its curated fields as --set overrides, which win over the same "
-        "keys in this file (helm applies --set after --values).",
+        "secret, and the values it resolves win over the same keys in this file.",
     ),
     show_progress: bool = typer.Option(
         False,
