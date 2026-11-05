@@ -54,10 +54,10 @@ inside a pod you don't need Docker.
 4. Run `./scripts/install.py` from a clone, or the `uvx` command under
    [Without a clone](#without-a-clone), with `EXTERNAL_HOST_ADDRESS=localhost` exported (or
    answer `localhost` at the address prompt). The suggested `host.docker.internal` resolves
-   inside the cluster, not on the Mac.
-5. Docker Desktop's kind cluster (node `desktop-control-plane`) does not publish NodePorts
-   on the Mac. Forward each service you use to its NodePort number, then open the access
-   table's `http://localhost:<port>`:
+   inside the cluster but may not on your machine.
+5. If the access table's addresses don't open (Docker Desktop's kind-based cluster does not
+   publish NodePorts to the host), forward each service you use to its NodePort number,
+   then open `http://localhost:<port>`:
 
    ```bash
    kubectl -n mlrun port-forward svc/mlrun-ui 30060:80 &
@@ -66,10 +66,6 @@ inside a pod you don't need Docker.
    ```
 
    The API is `svc/mlrun-api 30070:8080` and Grafana `svc/grafana 30010:80`.
-
-On Apple Silicon this does not install yet: MLRun 1.12.1's `mlrun-api`, `mlrun-ui`,
-`jupyter` and `log-collector` images exist for amd64 only, so their pods fail with
-`no match for platform in manifest` and helm gives up after about 10 minutes.
 
 ---
 
