@@ -46,12 +46,12 @@ DEFAULT_DOCKER_SERVER = "https://index.docker.io/v1/"
 # the chart at all. charts/mlrun-ce/README.md states the same. The MLRun CE docs ask for
 # Helm >= 4.1; below that the installer warns rather than refusing a Helm the chart renders on.
 #
-# Kubernetes has no floor by default: the chart declares no kubeVersion in Chart.yaml and
-# the README states no cluster version, so there is nothing to enforce. The check reports
-# what it finds and only warns when MIN_K8S_VERSION is set explicitly. Both are overridable
-# upward for anyone who wants to enforce a stricter environment.
+# Kubernetes never blocks: the chart declares no kubeVersion in Chart.yaml, so nothing it
+# renders needs a particular cluster version. The MLRun CE docs ask for Kubernetes >= 1.34,
+# and below that the installer warns. MIN_K8S_VERSION adds a stricter warning on top.
 DEFAULT_MIN_HELM_VERSION = "3.17"
 RECOMMENDED_HELM_VERSION = "4.1"
+RECOMMENDED_K8S_VERSION = "1.34"
 MLRUN_CE_INSTALL_DOCS_URL = (
     "https://github.com/mlrun/mlrun/blob/development/docs/install-mlrun-ce/kubernetes-install.md"
 )

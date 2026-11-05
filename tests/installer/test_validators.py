@@ -72,19 +72,21 @@ def install_kubectl(monkeypatch, answers=None, default=None):
 
 
 # ------------------------------------------------------------------------------------------
-# Kubernetes version — informational on every path
+# Kubernetes version — advisory on every path
 # ------------------------------------------------------------------------------------------
 
 
-def test_k8s_version_never_blocks_without_an_explicit_floor(monkeypatch, settings, capture_logs):
+def test_k8s_below_the_documented_version_warns_but_never_blocks(
+    monkeypatch, settings, capture_logs
+):
     logs = capture_logs(validators)
     install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.2")})
 
+    # The chart declares no kubeVersion, so a refusal would turn away clusters it renders
+    # on; the MLRun CE docs' 1.34 is a recommendation the user should hear about.
     assert validators.validate_k8s_version(settings) is True
-    # The chart declares no kubeVersion and the README states no cluster version, so there
-    # is nothing to enforce — an invented floor would refuse clusters the chart supports.
     assert "Kubernetes version: 1.30" in log_text(logs)
-    assert "below" not in log_text(logs)
+    assert "The MLRun CE docs require Kubernetes >= 1.34" in log_text(logs)
 
 
 def test_k8s_version_reports_the_detected_version_with_no_floor_mentioned(
@@ -97,6 +99,8 @@ def test_k8s_version_reports_the_detected_version_with_no_floor_mentioned(
     assert "Kubernetes version: 1.34" in log_text(logs)
     # "required" would advertise a floor that does not exist.
     assert "required" not in log_text(logs)
+    # Exactly the documented version: an off-by-one would nag every supported cluster.
+    assert "MLRun CE docs" not in log_text(logs)
 
 
 def test_k8s_version_warns_instead_of_failing_when_undetectable(
@@ -113,14 +117,15 @@ def test_k8s_version_warns_instead_of_failing_when_undetectable(
 def test_min_k8s_version_only_warns_when_the_cluster_is_below_it(
     monkeypatch, settings, capture_logs
 ):
-    settings.min_k8s_version = "1.34"
+    settings.min_k8s_version = "1.36"
     apply_version_floors(settings)
     logs = capture_logs(validators)
-    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.2")})
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.35.2")})
 
     # MIN_K8S_VERSION exists to tighten an environment, not to hand the installer a veto.
     assert validators.validate_k8s_version(settings) is True
-    assert "below the requested minimum (1.34)" in log_text(logs)
+    assert "below the requested minimum (1.36)" in log_text(logs)
+    assert "MLRun CE docs" not in log_text(logs)
 
 
 # ------------------------------------------------------------------------------------------

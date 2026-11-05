@@ -126,8 +126,8 @@ jobs:
         with:
           enable-cache: true
 
-      # No node_image/kubectl_version pin: the installer enforces no Kubernetes floor, so
-      # the action's own default node image (matched to the kind release it bundles) is
+      # No node_image/kubectl_version pin: the installer only warns below Kubernetes 1.34,
+      # so the action's own default node image (matched to the kind release it bundles) is
       # the safest choice.
       - name: Set up Kubernetes cluster
         uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde # v1.10.0

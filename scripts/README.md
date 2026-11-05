@@ -29,7 +29,8 @@ in a clone of this repo instead, pass `--chart-path ./charts/mlrun-ce`
 | [helm](https://helm.sh/docs/intro/install/) | 3.17 or newer (older Helm cannot render the chart). 4.1 is recommended; below it the installer warns |
 | [kubectl](https://kubernetes.io/docs/tasks/tools/) | Pointing at the target cluster |
 
-The cluster needs a default StorageClass. The installer warns when the nodes have less
+The cluster needs a default StorageClass, and the MLRun CE docs ask for Kubernetes 1.34 or
+newer (the installer warns below it). It also warns when the nodes have less
 than 8Gi allocatable memory or ephemeral storage in total, or when another Service already
 holds one of the chart's NodePorts (30010, 30020, 30040, 30050, 30060, 30070, 30093, 30094,
 30100, 30110).
@@ -278,8 +279,8 @@ These run before anything is created, dry runs included.
 
 - **Blocking**: Helm older than `MIN_HELM_VERSION` (3.17), and no default StorageClass. Both
   are checked before either fails, so one run reports both.
-- **Warnings**: Helm older than 4.1; the Kubernetes version (only compared when
-  `MIN_K8S_VERSION` is set; there is no floor otherwise); registry login with the resolved
+- **Warnings**: Helm older than 4.1; Kubernetes older than 1.34, or than `MIN_K8S_VERSION`
+  when set; registry login with the resolved
   credentials, using a throwaway docker config (skipped without docker, with
   `--local-registry`, in a dry run, and when no credentials were given); no IngressClass
   matching `--enable-ingress`; a chart NodePort held by a Service this release does not
@@ -662,7 +663,7 @@ These have no flag. An empty value counts as unset.
 | `HELM_REPO_URL` | `https://mlrun.github.io/ce` | Chart repository |
 | `HELM_TIMEOUT` | `960s` | helm's wait timeout for install, upgrade and uninstall |
 | `MIN_HELM_VERSION` | `3.17` | Block below this Helm version |
-| `MIN_K8S_VERSION` | | Warn below this Kubernetes version |
+| `MIN_K8S_VERSION` | | Also warn below this Kubernetes version (the 1.34 warning always applies) |
 | `PROGRESS_INTERVAL_SEC` | `10` | Refresh interval of `--show-progress` |
 | `GENERATED_VALUES_FILE` | `mlrun-ce-values.yaml` | Where the installer writes its values; rewritten every run |
 | `INSTALL_LOG_FILE` | `mlrun-ce-install.log` | The [debug log](#the-debug-log); rewritten every run |

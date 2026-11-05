@@ -29,6 +29,7 @@ from .settings import (
     DEFAULT_MIN_HELM_VERSION,
     MLRUN_CE_INSTALL_DOCS_URL,
     RECOMMENDED_HELM_VERSION,
+    RECOMMENDED_K8S_VERSION,
     REQUIRED_NODEPORTS,
     Settings,
 )
@@ -77,10 +78,10 @@ CHART_NEEDS_HELM = (
 
 
 def validate_k8s_version(settings: Settings) -> bool:
-    """Informational: reports the cluster's Kubernetes version.
+    """Advisory: reports the cluster's Kubernetes version.
 
-    Never blocks — neither the chart nor its README states a required cluster version.
-    Warns only against an explicitly set MIN_K8S_VERSION.
+    Never blocks — the chart declares no kubeVersion. Warns below the version the MLRun CE
+    docs require, and below an explicitly set MIN_K8S_VERSION.
     """
     # The kubelet version of an arbitrary node is not the cluster's version: kubelets are
     # allowed to trail the control plane by a couple of minor versions, and on a managed
@@ -102,17 +103,20 @@ def validate_k8s_version(settings: Settings) -> bool:
         log_warn(f"  Could not parse Kubernetes version '{raw}'; skipping version check.")
         return True
 
-    major, minor = parsed
+    found = "{}.{}".format(*parsed)
     if settings.min_k8s_major is None:
-        log_info(f"  Kubernetes version: {major}.{minor}")
-        return True
-
-    found = f"{major}.{minor}"
-    floor = f"{settings.min_k8s_major}.{settings.min_k8s_minor}"
-    if (major, minor) < (settings.min_k8s_major, settings.min_k8s_minor):
-        log_warn(f"  Kubernetes version {found} is below the requested minimum ({floor}).")
-        return True
-    log_info(f"  Kubernetes version: {found} (>= {floor} required)")
+        log_info(f"  Kubernetes version: {found}")
+    else:
+        floor = f"{settings.min_k8s_major}.{settings.min_k8s_minor}"
+        if parsed < (settings.min_k8s_major, settings.min_k8s_minor):
+            log_warn(f"  Kubernetes version {found} is below the requested minimum ({floor}).")
+        else:
+            log_info(f"  Kubernetes version: {found} (>= {floor} required)")
+    if parsed < _major_minor(RECOMMENDED_K8S_VERSION):
+        log_warn(
+            f"  The MLRun CE docs require Kubernetes >= {RECOMMENDED_K8S_VERSION}: "
+            f"{MLRUN_CE_INSTALL_DOCS_URL}"
+        )
     return True
 
 
