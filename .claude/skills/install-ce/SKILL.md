@@ -30,17 +30,26 @@ kubectl config current-context; echo "KUBE_CONTEXT=${KUBE_CONTEXT:-<unset>}"
 kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name} {.status.nodeInfo.architecture} {.status.nodeInfo.kubeletVersion}{"\n"}{end}'
 helm list -n mlrun --deployed --failed --pending --superseded --uninstalling   # Helm 4 has no --all
 kubectl get pvc -n mlrun
+test -f scripts/install.py && echo clone || echo "no clone"
 ```
 
 Pass `--context`/`--kube-context` once the user names another cluster. A node named
 `desktop-control-plane` is Docker Desktop in kind mode, `docker-desktop` is its kubeadm
 mode, `kind-*` is plain kind.
 
-## 2. Chart
+## 2. Installer and chart
 
-The published chart is the default. To test this checkout, add `--chart-path
-./charts/mlrun-ce` ([Installing this repo's chart](../../../scripts/README.md#installing-this-repos-chart)).
-Without a clone, use the pinned `uvx` command ([Getting the installer](../../../scripts/README.md#getting-the-installer)).
+Below, `ce` is the installer. Both forms take the same arguments; define it in the same
+command you run it in if your shell keeps no state between calls:
+
+```bash
+ce() { ./scripts/install.py "$@"; }                    # clone
+ce() { uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" mlrun-ce-installer "$@"; }   # no clone
+```
+
+`CE_TAG` is a tag from the releases page ([Getting the installer](../../../scripts/README.md#getting-the-installer)).
+The published chart is the default. In a clone, `--chart-path ./charts/mlrun-ce` tests this
+checkout instead ([Installing this repo's chart](../../../scripts/README.md#installing-this-repos-chart)).
 
 ## 3. Cluster
 
@@ -95,8 +104,8 @@ A re-run reuses the secret the first run created.
 ## 5. Configuration
 
 - One-off: environment variables and flags.
-- Repeatable: copy `scripts/ce-config.yaml.example` to `ce-config.yaml` and fill it in, with no
-  password ([From a config file](../../../scripts/README.md#from-a-config-file)).
+- Repeatable: copy `scripts/ce-config.yaml.example` (in the clone, or from the same tag on
+  GitHub) to `ce-config.yaml` and fill it in, with no password ([From a config file](../../../scripts/README.md#from-a-config-file)).
 - Chart values the installer does not manage (resources, replicas): `-f my-values.yaml`
   ([From a values file](../../../scripts/README.md#from-a-values-file)).
 - Fewer components on a small cluster: [Optional components](../../../scripts/README.md#optional-components).
@@ -107,7 +116,7 @@ From the detect step:
 - no release: continue.
 - `deployed`: the same command upgrades in place ([Upgrading](../../../scripts/README.md#upgrading)).
 - `failed` or `pending-*`: rerunning usually recovers it. If it does not, ask, then
-  `./scripts/install.py uninstall`.
+  `ce uninstall`.
 - PVCs the user wants gone: `uninstall --hard-clean`, after an explicit OK. With no release in
   the namespace it refuses `--non-interactive`, so the user runs it
   ([Uninstalling](../../../scripts/README.md#uninstalling)).
@@ -116,7 +125,7 @@ From the detect step:
 
 ```bash
 KUBE_CONTEXT=<ctx> REGISTRY_PASSWORD_FILE=~/.ce-registry-pw <other variables> \
-  ./scripts/install.py [--chart-path ./charts/mlrun-ce] [--config ce-config.yaml] --non-interactive --dry-run
+  ce [--chart-path ./charts/mlrun-ce] [--config ce-config.yaml] --non-interactive --dry-run
 ```
 
 Read the warnings with the user, then run it again without `--dry-run`. A cold install takes
