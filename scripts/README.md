@@ -77,7 +77,7 @@ inside a pod you don't need Docker.
 Pin a release tag from [the releases page](https://github.com/mlrun/ce/releases):
 
 ```bash
-CE_TAG=mlrun-ce-0.12.1-rc.8
+CE_TAG=mlrun-ce-0.12.1-rc.9
 uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
   mlrun-ce-installer install
 ```
@@ -95,7 +95,7 @@ the ranges in `scripts/pyproject.toml`. A clone uses the exact versions pinned i
 ### As a command
 
 ```bash
-uv tool install "git+https://github.com/mlrun/ce@mlrun-ce-0.12.1-rc.8#subdirectory=scripts"
+uv tool install "git+https://github.com/mlrun/ce@mlrun-ce-0.12.1-rc.9#subdirectory=scripts"
 mlrun-ce-installer version
 ```
 
