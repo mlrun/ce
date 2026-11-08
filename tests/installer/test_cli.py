@@ -755,12 +755,24 @@ def test_every_environment_variable_is_in_the_readme_reference():
     assert not missing, f"not in scripts/README.md's Reference: {missing}"
 
 
-def test_every_link_inside_the_readme_lands_on_a_heading():
-    text = README.read_text()
-    anchors = {
+def readme_anchors():
+    return {
         "#" + re.sub(r"[^\w\- ]", "", line.lstrip("#").strip().lower()).replace(" ", "-")
-        for line in text.splitlines()
+        for line in README.read_text().splitlines()
         if re.match(r"#{1,4} ", line)
     }
-    broken = sorted(set(re.findall(r"\]\((#[^)]+)\)", text)) - anchors)
+
+
+def test_every_link_inside_the_readme_lands_on_a_heading():
+    broken = sorted(set(re.findall(r"\]\((#[^)]+)\)", README.read_text())) - readme_anchors())
     assert not broken, f"scripts/README.md links to missing headings: {broken}"
+
+
+def test_every_readme_link_in_the_install_skill_lands_on_a_heading():
+    # The skill defers to the README for every option, so a renamed heading would leave an
+    # agent following a link to nowhere.
+    skill = (ROOT / ".claude" / "skills" / "install-ce" / "SKILL.md").read_text()
+    linked = set(re.findall(r"scripts/README\.md(#[^)\s]+)", skill))
+    assert linked, "the install-ce skill links to no README section"
+    broken = sorted(linked - readme_anchors())
+    assert not broken, f"install-ce links to missing scripts/README.md headings: {broken}"

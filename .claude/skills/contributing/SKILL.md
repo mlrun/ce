@@ -183,4 +183,4 @@ make helm-lint
 - `CONTRIBUTING.md`: the workflow this skill summarises
 - `AGENTS.md`: chart architecture, adding a component
 - `scripts/README.md`: what the installer does, from the user's side
-- Related skills: `bump`, `pr`, `run-tests`
+- Related skills: `bump`, `pr`, `run-tests`, `install-ce`
