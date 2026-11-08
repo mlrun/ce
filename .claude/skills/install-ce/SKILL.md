@@ -2,7 +2,7 @@
 name: install-ce
 description: >-
   Guide a user step by step through installing MLRun CE with scripts/install.py — local
-  (Docker Desktop, kind, minikube, including Apple Silicon) or a remote cluster (existing
+  (Docker Desktop, kind, minikube) or a remote cluster (existing
   context, kubeconfig file, or reachable only over SSH) — then choose the registry, secret,
   configuration and clean-up, dry-run, install, and debug a failure. Use when a user asks
   to install, deploy, set up, reinstall or upgrade MLRun CE, or asks why an install failed.
@@ -56,7 +56,6 @@ checkout instead ([Installing this repo's chart](../../../scripts/README.md#inst
 **Local.** Docker Desktop: Kubernetes on, at least 10 GB of memory, and
 `EXTERNAL_HOST_ADDRESS=localhost` ([Local install on Docker Desktop](../../../scripts/README.md#local-install-on-docker-desktop)).
 minikube and kind: the suggested address is usually right ([External host address](../../../scripts/README.md#external-host-address)).
-An `arm64` node goes through [Apple Silicon](#apple-silicon) before installing.
 
 **Remote.** Ask how the API is reached:
 - a context that already works: `KUBE_CONTEXT=<name>`;
@@ -157,37 +156,9 @@ Then match the symptom:
 | A pre-install check blocked | The message names it: StorageClass or Helm version |
 | `not published` / `No such option` | [Troubleshooting](../../../scripts/README.md#troubleshooting) |
 | Dry run: `no matches for kind` | [Why](../../../scripts/README.md#--dry-run-fails-with-no-matches-for-kind); a real install is fine |
-| `no match for platform in manifest` | [Apple Silicon](#apple-silicon) |
 | `ErrImagePull` with 401/403 | The pull secret: credentials, `REGISTRY_SERVER` |
 | Timeout or `ProgressDeadlineExceeded` | Usually a slow pull: rerun, it upgrades in place ([An install failed or timed out](../../../scripts/README.md#an-install-failed-or-timed-out)) |
 | `mlrun-api-chief` restarts with `Can't connect to MySQL` | Normal on a first start; wait |
 | Hard clean ends with leftovers | [A hard clean left a Kafka pod and its PVC](../../../scripts/README.md#a-hard-clean-left-a-kafka-pod-and-its-pvc) |
 
 Fix the cause, then go back to the dry run. Rule 3 still applies.
-
-## Apple Silicon
-
-MLRun's own images (`mlrun-api`, `mlrun-ui`, `jupyter`, `log-collector`) are published for
-amd64 only, so an `arm64` node refuses them with `no match for platform in manifest`. Load
-them before installing; they then run under emulation, slowly. A host `docker pull` alone
-does not help on a kind node: the node has its own image store, and the tag points at an
-index with no arm64 entry. Pull the amd64 image by digest inside the node and tag it, which
-the chart's `imagePullPolicy: IfNotPresent` then uses:
-
-```bash
-NODE=desktop-control-plane                 # the kind node: its container has the node's name
-CHART=./charts/mlrun-ce                    # or: mlrun-ce --repo https://mlrun.github.io/ce --version <v>
-for img in $(helm template mlrun-ce $CHART 2>/dev/null | grep -o 'quay.io/mlrun/[^"'"'"' ]*' | sort -u); do
-  idx=$(docker manifest inspect "$img" 2>/dev/null) || continue
-  echo "$idx" | jq -e '.manifests[]? | select(.platform.architecture=="arm64")' >/dev/null && continue
-  d=$(echo "$idx" | jq -r '.manifests[]? | select(.platform.architecture=="amd64") | .digest')
-  [ -n "$d" ] || continue
-  docker exec "$NODE" crictl pull "${img%:*}@$d"
-  docker exec "$NODE" ctr -n k8s.io images tag --force "${img%:*}@$d" "$img"
-done
-```
-
-In Docker Desktop's kubeadm mode (node `docker-desktop`) the Docker engine is the node's
-runtime, so `docker pull --platform linux/amd64 <image>` for each image should be enough.
-Not verified yet. If `docker` answers "Sign in to continue using Docker Desktop", the user
-has to sign in first. `MLRUN_VERSION` changes the tags, so rerun the loop after changing it.
