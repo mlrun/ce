@@ -29,12 +29,14 @@ spec:
       {{- end }}
       containers:
       - args:
-        # MLMD workloads (metadata-grpc-deployment and metadata-writer) depend on the
-        # mysql_native_password authentication plugin. In MySQL 8.4 the
-        # --default-authentication-plugin server option was removed and the
-        # mysql_native_password plugin is disabled by default, so it must be enabled
-        # explicitly with --mysql-native-password=ON.
+        # MLMD workloads depend on mysql_native_password. MySQL 8.0 uses
+        # --default-authentication-plugin; 8.4+ replaced it with --mysql-native-password.
+        {{- $mysqlTag := .Values.pipelines.images.mysql.tag | toString }}
+        {{- if hasPrefix "8.0" $mysqlTag }}
+        - --default-authentication-plugin=mysql_native_password
+        {{- else }}
         - --mysql-native-password=ON
+        {{- end }}
         - --disable-log-bin
         - --datadir
         - /var/lib/mysql
