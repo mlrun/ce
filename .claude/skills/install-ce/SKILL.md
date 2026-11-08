@@ -55,14 +55,15 @@ An `arm64` node goes through [Apple Silicon](#apple-silicon) before installing.
 - only over SSH: ask for the jump host, the API server's IP and port, and the CA, client
   certificate and key (or a kubeconfig to take them from), then run the tunnel recipe in
   [Targeting another cluster](../../../scripts/README.md#targeting-another-cluster). Stop it
-  afterwards with `pkill -f "ssh -f -N -L 16443"`.
+  afterwards with `pkill -f -- "-L 16443:"`.
 
 Check with `kubectl --context <ctx> get nodes -o wide`. Then ask how users will reach the UIs:
 - NodePorts: `EXTERNAL_HOST_ADDRESS=<a node IP they can reach>` from that output. Firewalls
   often block 30000-32767.
 - an ingress controller already in the cluster: `--enable-ingress <class>`, with a nip.io name
   for a bare IP ([Ingress](../../../scripts/README.md#ingress));
-- neither: port-forward after the install, through the SSH host if needed.
+- neither (common for lab clusters behind a jump host): `kubectl port-forward` after the
+  install. It goes through the API server, so it works over the SSH tunnel too.
 
 Cluster checks:
 - `kubectl get storageclass` must show a `(default)`. The installer blocks without one;
