@@ -20,6 +20,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 from .console import die, log_debug
@@ -163,6 +164,10 @@ class Settings:
     # Non-interactive credentials not supplied, which only the installer's own secret excuses.
     missing_registry_credentials: List[str] = field(default_factory=list)
     registry_secret_reused: bool = False
+    # Upgrade only: what `helm get values` returns for the current release.
+    previous_values: Optional[dict] = None
+    # Upgrade only: how many values this run changes on the current release.
+    value_changes: int = 0
 
     # Defaults sourced from ce-config.yaml, used as prompt fallbacks.
     config_registry_url: str = ""
@@ -244,6 +249,21 @@ def confirm(settings: Settings, question: str, default_yes: bool = True) -> bool
     if not answer:
         return default_yes
     return answer in ("y", "yes")
+
+
+def _beside_generated_values(settings: Settings, label: str) -> Path:
+    generated = Path(settings.generated_values_file).resolve()
+    return generated.with_name(f"{generated.stem}.{label}{generated.suffix}")
+
+
+def previous_values_file(settings: Settings) -> Path:
+    """Where an upgrade saves the values the current release was installed with."""
+    return _beside_generated_values(settings, "previous")
+
+
+def value_changes_file(settings: Settings) -> Path:
+    """Where an upgrade writes the values it changes on the current release."""
+    return _beside_generated_values(settings, "changes")
 
 
 def parse_floor(raw: str, name: str) -> Tuple[int, int]:

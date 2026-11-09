@@ -23,8 +23,8 @@ from rich.table import Table
 from rich.text import Text
 
 from .cluster import api_server, effective_context
-from .console import cancel, log_info, out
-from .settings import Settings, confirm
+from .console import cancel, log_info, log_warn, out
+from .settings import Settings, confirm, value_changes_file
 from .shell import helm, kubectl
 
 
@@ -119,6 +119,11 @@ def confirm_target(settings: Settings) -> None:
     log_info(f"  Registry:  {registry}")
     if settings.external_host_address:
         log_info(f"  Address:   {settings.external_host_address}")
+    if settings.value_changes:
+        log_warn(
+            f"  Changes:   {settings.value_changes} value(s) differ from the current release; "
+            f"see {value_changes_file(settings)}"
+        )
 
     if settings.dry_run or settings.non_interactive:
         return

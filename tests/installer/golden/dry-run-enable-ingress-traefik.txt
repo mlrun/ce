@@ -10,6 +10,7 @@ exit: 0
 ["helm", "repo", "update"]
 ["helm", "search", "repo", "mlrun-ce/mlrun-ce", "--devel", "-o", "json", "--version", "<installer chart version>"]
 ["kubectl", "get", "secret", "registry-credentials", "--namespace", "mlrun", "-o", "jsonpath=exists:{.metadata.labels.app\\.kubernetes\\.io/managed-by}"]
+["helm", "get", "values", "mlrun-ce", "--namespace", "mlrun", "-o", "json"]
 ["kubectl", "version", "-o", "json"]
 ["kubectl", "get", "ingressclass", "traefik"]
 ["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.annotations.meta\\.helm\\.sh/release-name}{\" \"}{range .spec.ports[*]}{.nodePort}{\" \"}{end}{\"\\n\"}{end}"]

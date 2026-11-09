@@ -274,6 +274,10 @@ versions, CRDs, existing resources) but sends nothing to it, so admission webhoo
 exercised. A first install on a cluster without the Prometheus Operator CRDs is rendered
 without the monitoring stack ([why](#--dry-run-fails-with-no-matches-for-kind)).
 
+The run ends by listing the files to review: the [debug log](#the-debug-log) with the
+rendered manifests (Secret values redacted), `mlrun-ce-values.yaml`, and on an upgrade the
+release's current values and the values the upgrade changes ([Upgrading](#upgrading)).
+
 ### Pre-install checks
 
 These run before anything is created, dry runs included.
@@ -451,6 +455,11 @@ upgrades the release in place. Use it to change a setting, move to another chart
 
 - A re-run offers to reuse the pull secret the first run created, so the password is not
   needed again. Credentials passed in the environment replace it.
+- Before upgrading, the installer saves the release's current values to
+  `mlrun-ce-values.previous.yaml` (readable by you only; it may hold secrets you set). Every
+  value the upgrade changes or resets to the chart default is printed as a warning and
+  written to `mlrun-ce-values.changes.yaml`, with secret-like values redacted. To keep a
+  value, pass it again.
 - Keep `mlrun-ce-values.yaml` if you upgrade with plain helm. The run prints the
   equivalent helm commands; a `helm upgrade` without that file (and without
   `--reuse-values`) resets those values to the chart defaults.
@@ -665,5 +674,5 @@ These have no flag. An empty value counts as unset.
 | `HELM_TIMEOUT` | `960s` | helm's wait timeout for install, upgrade and uninstall |
 | `MIN_K8S_VERSION` | | Also warn below this Kubernetes version (the 1.34 warning always applies) |
 | `PROGRESS_INTERVAL_SEC` | `10` | Refresh interval of `--show-progress` |
-| `GENERATED_VALUES_FILE` | `mlrun-ce-values.yaml` | Where the installer writes its values; rewritten every run |
+| `GENERATED_VALUES_FILE` | `mlrun-ce-values.yaml` | Where the installer writes its values; rewritten every run. An upgrade's `.previous.yaml` and `.changes.yaml` go beside it |
 | `INSTALL_LOG_FILE` | `mlrun-ce-install.log` | The [debug log](#the-debug-log); rewritten every run |

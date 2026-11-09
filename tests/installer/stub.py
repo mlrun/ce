@@ -163,6 +163,10 @@ def handle_helm(args):
         return 0, json.dumps([{"name": "mlrun-ce/mlrun-ce", "version": version}])
     if verb == "get" and len(args) > 1 and args[1] == "notes":
         return 0, os.environ.get("STUB_NOTES", "")
+    if verb == "get" and len(args) > 1 and args[1] == "values":
+        if os.environ.get("STUB_RELEASE_EXISTS") != "1":
+            return 1, "Error: release: not found"
+        return 0, os.environ.get("STUB_RELEASE_VALUES", "null")
     if verb in ("repo", "dependency", "upgrade", "uninstall"):
         return int(os.environ.get("STUB_HELM_EXIT", "0")), ""
     return 0, ""

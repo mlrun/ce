@@ -58,6 +58,7 @@ from .registry import (
     prepare_local_registry,
     prepare_registry_secret,
 )
+from .release_values import load_previous_values, report_value_changes
 from .settings import (
     COMMANDS,
     DEFAULT_INGRESS_CLASS,
@@ -353,10 +354,12 @@ def execute(settings: Settings) -> None:
         write_secret = prepare_registry_secret(settings)
         gather_install_params(settings)
 
+    load_previous_values(settings)
     if settings.skip_validators:
         log_info("Skipping pre-install validators (--skip-validators or SKIP_VALIDATORS)")
     else:
         run_validators(settings)
+    report_value_changes(settings)
 
     confirm_target(settings)
 

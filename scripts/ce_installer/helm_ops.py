@@ -28,6 +28,7 @@ import yaml
 from .console import (
     InstallerError,
     cancel,
+    debug_log_path,
     die,
     err,
     log_debug,
@@ -38,7 +39,7 @@ from .console import (
 )
 from .registry import MANAGED_BY_LABEL, hosts_file_ip
 from .secret_data import redact_secret_data
-from .settings import Settings
+from .settings import Settings, previous_values_file, value_changes_file
 from .shell import check_requirements, helm, helm_cmd, kubectl, kubectl_cmd, stream
 from .ui import print_notes_table, run_deployment_progress_ui
 
@@ -126,7 +127,6 @@ def build_set_flags(settings: Settings) -> List[str]:
         flags += ["--set", "nuclio.dashboard.build.insecurePullRegistry=true"]
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePushRegistry=true"]
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePullRegistry=true"]
-
     return flags
 
 
@@ -278,6 +278,23 @@ def report_ingress_hosts(settings: Settings) -> None:
         return
     log_warn("The Ingress hosts resolve only once DNS or /etc/hosts knows them. Add:")
     log_warn(f"  {ip}  {' '.join(hosts)}")
+
+
+def report_dry_run_files(settings: Settings) -> None:
+    """Where the dry run left what it produced, to review without the terminal scrollback."""
+    generated = str(Path(settings.generated_values_file).resolve())
+    files = [
+        ("The rendered manifests (Secret values redacted) and every command", debug_log_path()),
+        ("The values this run passes to helm", generated),
+    ]
+    if settings.previous_values is not None:
+        files.append(("The current release's values", str(previous_values_file(settings))))
+    if settings.value_changes:
+        files.append(("The values this upgrade changes", str(value_changes_file(settings))))
+    log_info("Review the dry run in these files:")
+    for label, path in files:
+        if path and Path(path).is_file():
+            log_info(f"  {label}: {path}")
 
 
 def plain_helm_equivalent(settings: Settings, cmd: List[str]) -> List[str]:
@@ -445,6 +462,7 @@ def helm_install(settings: Settings) -> None:
     report_ingress_hosts(settings)
     if settings.dry_run:
         log_info("Dry-run complete (no resources deployed).")
+        report_dry_run_files(settings)
         return
 
     log_info("Installation complete.")
