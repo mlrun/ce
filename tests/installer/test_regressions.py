@@ -1557,6 +1557,7 @@ def test_the_release_check_survives_skip_validators(monkeypatch, settings):
     [
         ("192.168.49.2", "192.168.49.2"),
         ("host.docker.internal", "127.0.0.1"),
+        ("localhost", "127.0.0.1"),
         ("192.168.49.2.nip.io", ""),
         ("mlrun.corp.example", "<ingress controller IP>"),
     ],

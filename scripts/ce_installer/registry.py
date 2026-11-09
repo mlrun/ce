@@ -222,13 +222,14 @@ def hosts_file_ip(external_host: str) -> str:
     """The address an /etc/hosts line for `<sub>.<external_host>` should carry, or "" when
     the names already resolve on their own.
 
-    /etc/hosts takes an IP, never a name. host.docker.internal is localhost on Docker
-    Desktop. A wildcard-DNS name needs no line. Any other name is a domain only its DNS
-    can answer for, so the line is written against a placeholder for the user to fill in.
+    /etc/hosts takes an IP, never a name. localhost, and host.docker.internal on Docker
+    Desktop, are 127.0.0.1. A wildcard-DNS name needs no line. Any other name is a domain
+    only its DNS can answer for, so the line is written against a placeholder for the user
+    to fill in.
     """
     if external_host.endswith(WILDCARD_DNS_SUFFIXES):
         return ""
-    if external_host == "host.docker.internal":
+    if external_host in ("localhost", "host.docker.internal"):
         return "127.0.0.1"
     try:
         ipaddress.ip_address(external_host)
