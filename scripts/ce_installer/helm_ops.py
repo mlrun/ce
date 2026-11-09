@@ -118,6 +118,12 @@ def build_set_flags(settings: Settings) -> List[str]:
         # keys. bash set `mlrun.api.kaniko.insecureRegistry`, which no chart has ever read;
         # helm accepts an unknown --set path silently, so the flag looked present and did
         # nothing for as long as it existed.
+        #
+        # nuclio charts up to 0.22 read only `kaniko.*`; 0.23 moved the keys to `build.*`
+        # and still honours `kaniko.*` as a deprecated alias. --ce-version can install
+        # either, so both are set.
+        flags += ["--set", "nuclio.dashboard.build.insecurePushRegistry=true"]
+        flags += ["--set", "nuclio.dashboard.build.insecurePullRegistry=true"]
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePushRegistry=true"]
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePullRegistry=true"]
 

@@ -543,8 +543,9 @@ def test_kaniko_is_told_the_local_registry_is_insecure_in_either_mode(settings, 
     settings.enable_ingress = with_ingress
 
     flags = helm_ops.build_set_flags(settings)
-    assert "nuclio.dashboard.kaniko.insecurePushRegistry=true" in flags
-    assert "nuclio.dashboard.kaniko.insecurePullRegistry=true" in flags
+    for block in ("build", "kaniko"):
+        assert f"nuclio.dashboard.{block}.insecurePushRegistry=true" in flags
+        assert f"nuclio.dashboard.{block}.insecurePullRegistry=true" in flags
 
 
 def test_the_insecure_registry_flag_names_a_key_a_chart_actually_reads(settings):
@@ -560,7 +561,7 @@ def test_kaniko_is_not_told_anything_when_the_registry_is_not_local(settings):
     settings.local_registry = False
 
     flags = helm_ops.build_set_flags(settings)
-    assert not [flag for flag in flags if "kaniko" in flag]
+    assert not [flag for flag in flags if "kaniko" in flag or "insecure" in flag]
 
 
 INGRESS_COMPONENTS = ("jupyterNotebook", "nuclio.dashboard", "mlrun.ui", "mlrun.api")
@@ -1187,7 +1188,13 @@ def test_every_set_flag_names_a_key_the_chart_declares(settings):
     # helm accepts any --set path, whether or not something reads it, which is how the
     # kaniko flag stayed a no-op. Resolving each path against the chart's own values is
     # the only cheap way to notice; `global.*` is helm's cross-chart namespace and is
-    # deliberately not declared anywhere, so it is exempt.
+    # deliberately not declared anywhere, so it is exempt. So is the old `kaniko.*` pair:
+    # nuclio 0.23 no longer declares it but its dashboard template still reads it, and
+    # older nuclio charts read nothing else.
+    read_but_undeclared = {
+        "nuclio.dashboard.kaniko.insecurePushRegistry",
+        "nuclio.dashboard.kaniko.insecurePullRegistry",
+    }
     chart_dir = Path(__file__).resolve().parents[2] / "charts" / "mlrun-ce"
     if not glob.glob(str(chart_dir / "charts" / "*.tgz")):
         pytest.skip("subcharts not vendored — run `make helm-update-dependencies` first")
@@ -1213,7 +1220,9 @@ def test_every_set_flag_names_a_key_the_chart_declares(settings):
     paths = [
         value.split("=", 1)[0]
         for flag, value in zip(flags, flags[1:])
-        if flag == "--set" and not value.startswith("global.")
+        if flag == "--set"
+        and not value.startswith("global.")
+        and value.split("=", 1)[0] not in read_but_undeclared
     ]
     assert paths, "no --set paths to check — did build_set_flags change shape?"
 

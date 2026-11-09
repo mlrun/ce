@@ -34,6 +34,9 @@ global:
   externalHostAddress: localhost
 nuclio:
   dashboard:
+    build:
+      insecurePushRegistry: true
+      insecurePullRegistry: true
     kaniko:
       insecurePushRegistry: true
       insecurePullRegistry: true

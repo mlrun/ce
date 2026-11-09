@@ -47,6 +47,9 @@ nuclio:
       ingressClassName: nginx
       hosts:
       - nuclio.localhost
+    build:
+      insecurePushRegistry: true
+      insecurePullRegistry: true
     kaniko:
       insecurePushRegistry: true
       insecurePullRegistry: true
