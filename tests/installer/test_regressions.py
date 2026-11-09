@@ -1003,11 +1003,11 @@ def test_a_service_with_no_ports_does_not_hide_a_later_nodeport_conflict(
 ):
     # The newline used to sit inside the ports range, so the portless Service below emitted
     # no line terminator and the next Service's "default/" prefix was read as its port.
-    listing = "kube-system/ \ndefault/ 30040 \n"
+    listing = "kube-system/dns/ \ndefault/web/ 30040 \n"
     monkeypatch.setattr(validators, "kubectl", recorder(answers={"get svc": Result(0, listing)}))
     logs = capture_logs(validators)
 
-    validators.validate_nodeport_conflicts(settings)
+    validators.resolve_nodeport_conflicts(settings)
 
     assert any("30040" in line for line in logs), (
         "a conflict on a chart NodePort should be reported, not swallowed"
@@ -1017,11 +1017,11 @@ def test_a_service_with_no_ports_does_not_hide_a_later_nodeport_conflict(
 def test_a_nodeport_owned_by_this_release_is_not_a_conflict(
     monkeypatch, settings, recorder, capture_logs
 ):
-    listing = f"{settings.namespace}/{settings.release_name} 30040 30050 \n"
+    listing = f"{settings.namespace}/jupyter/{settings.release_name} 30040 30050 \n"
     monkeypatch.setattr(validators, "kubectl", recorder(answers={"get svc": Result(0, listing)}))
     logs = capture_logs(validators)
 
-    validators.validate_nodeport_conflicts(settings)
+    validators.resolve_nodeport_conflicts(settings)
 
     assert any("no conflicts" in line for line in logs)
 
@@ -1215,6 +1215,7 @@ def test_every_set_flag_names_a_key_the_chart_declares(settings):
         setattr(settings, field, True)
     settings.mlrun_version = "1.10.0"
     settings.nuclio_version = "1.15.0"
+    settings.node_ports = {key: port + 1 for key, port in cli_settings.NODEPORTS.items()}
 
     flags = helm_ops.build_set_flags(settings)
     paths = [

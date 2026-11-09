@@ -15,21 +15,25 @@
 
 Blocking: Helm version and default StorageClass, run by `run_blocking_validators` before
 the cluster is touched; both run before it exits, so a user fixes everything in one pass.
-Everything in `run_validators` reports and continues.
+Everything in `run_validators` reports and continues, except a busy NodePort set in -f; a
+busy default NodePort is moved to a free one there, with a warning.
 """
 
 import json
 import re
 import tempfile
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
+from .cluster import effective_context
 from .console import die, log_error, log_info, log_warn
+from .helm_ops import _lookup, _values_file_contents
 from .settings import (
     DEFAULT_DOCKER_SERVER,
     MIN_HELM_VERSION,
     MLRUN_CE_INSTALL_DOCS_URL,
+    NODEPORT_RANGE,
+    NODEPORTS,
     RECOMMENDED_K8S_VERSION,
-    REQUIRED_NODEPORTS,
     Settings,
 )
 from .shell import docker_available, helm, kubectl, run
@@ -42,9 +46,9 @@ STORAGECLASS_JSONPATH = (
     r'{"\n"}{end}'
 )
 
-# One line per Service: "<namespace>/<owning release> <port> <port> ...". The release comes
-# from the annotation helm writes on everything it owns, and is empty for Services it does
-# not.
+# One line per Service: "<namespace>/<name>/<owning release> <port> <port> ...". The release
+# comes from the annotation helm writes on everything it owns, and is empty for Services it
+# does not.
 #
 # The newline terminates the Service, not each port. With it inside the ports range a
 # Service with no ports emitted no newline at all, so the next Service's "ns/release"
@@ -52,7 +56,7 @@ STORAGECLASS_JSONPATH = (
 # shifted every real port on the line out of the parser's reach. One unported Service
 # anywhere in the cluster was enough to hide a genuine conflict.
 NODEPORT_JSONPATH = (
-    r'{range .items[*]}{.metadata.namespace}{"/"}'
+    r'{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{"/"}'
     r"{.metadata.annotations.meta\.helm\.sh/release-name}"
     r'{" "}{range .spec.ports[*]}{.nodePort}{" "}{end}{"\n"}{end}'
 )
@@ -239,8 +243,9 @@ def validate_registry_auth(settings: Settings) -> bool:
     return True
 
 
-def validate_nodeport_conflicts(settings: Settings) -> bool:
-    """Warning only: the chart's fixed NodePorts already bound by another Service."""
+def nodeports_held_elsewhere(settings: Settings) -> Dict[int, str]:
+    """Every NodePort in the cluster held by a Service this release does not own, mapped
+    to that Service's `namespace/name`."""
     result = kubectl(
         settings, "get", "svc", "--all-namespaces", "-o", "jsonpath=" + NODEPORT_JSONPATH
     )
@@ -248,26 +253,93 @@ def validate_nodeport_conflicts(settings: Settings) -> bool:
     # to take back on an upgrade. Everything else counts, including the rest of the target
     # namespace: helm will not adopt a Service it does not own, so an unrelated one sitting
     # on 30040 fails the install on a port the bash version reported as clear.
-    used: List[str] = []
+    held: Dict[int, str] = {}
     for line in result.out.splitlines() if result.ok else []:
         fields = line.split()
         if not fields:
             continue
-        namespace, _, release = fields[0].partition("/")
+        namespace, name, release = [*fields[0].split("/", 2), "", ""][:3]
         if namespace == settings.namespace and release == settings.release_name:
             continue
-        used.extend(fields[1:])
+        for port in fields[1:]:
+            if port.isdigit():
+                held[int(port)] = f"{namespace}/{name}"
+    return held
 
-    conflicts = [str(port) for port in REQUIRED_NODEPORTS if str(port) in used]
-    if conflicts:
-        joined = " ".join(conflicts)
+
+def _nodeport_keys_in_use(settings: Settings, user_values: dict) -> List[str]:
+    """The NODEPORTS keys whose Service this install creates as a NodePort."""
+    off = set()
+    if settings.disable_system_monitoring:
+        off |= {key for key in NODEPORTS if key.startswith("kube-prometheus-stack.")}
+    if settings.disable_model_monitoring:
+        off.add("timescaledb.service.nodePort")
+    keys = []
+    for key in NODEPORTS:
+        service_type = _lookup(user_values, key.rsplit(".", 1)[0] + ".type")
+        if key not in off and service_type in (None, "NodePort"):
+            keys.append(key)
+    return keys
+
+
+def _free_nodeport(start: int, taken: Set[int]) -> Optional[int]:
+    after = [port for port in NODEPORT_RANGE if port > start]
+    before = [port for port in NODEPORT_RANGE if port < start]
+    return next((port for port in after + before if port not in taken), None)
+
+
+def resolve_nodeport_conflicts(settings: Settings) -> bool:
+    """Move a busy NodePort to a free one, warning; refuse a busy one the user set in -f.
+
+    The chart's NOTES, the URL table, MLRUN_GRAFANA_URL and Jupyter's link to the MLRun UI
+    all read the port from the values, so writing the new port there is enough for every
+    URL to follow. Returns False when a port the user chose is taken.
+    """
+    held = nodeports_held_elsewhere(settings)
+    user_values = _values_file_contents(settings)
+    keys = _nodeport_keys_in_use(settings, user_values)
+
+    def port_of(key: str) -> int:
+        chosen = _lookup(user_values, key)
+        return int(chosen) if chosen else settings.node_ports.get(key, NODEPORTS[key])
+
+    taken = set(held) | {port_of(key) for key in keys}
+    refused = moved = 0
+    for key in keys:
+        port = port_of(key)
+        holder = held.get(port)
+        if not holder:
+            continue
+        if _lookup(user_values, key):
+            log_error(
+                f"  NodePort {port} ({key}, set in {settings.values_file}) is already held "
+                f"by Service {holder}. Choose a free port for {key}."
+            )
+            refused += 1
+            continue
+        free = _free_nodeport(port, taken)
+        if free is None:
+            log_error(f"  NodePort {port} ({key}) is held by Service {holder}, and none is free.")
+            refused += 1
+            continue
+        taken.add(free)
+        settings.node_ports[key] = free
+        moved += 1
+        host = settings.external_host_address
+        url = f" (http://{host}:{free})" if host else ""
         log_warn(
-            "  NodePort conflict: already in use by a Service not owned by "
-            f"release '{settings.release_name}': {joined}"
+            f"  NodePort {port} ({key}) is held by Service {holder}; using {free} instead{url}."
         )
-    else:
+    if moved:
+        log_warn("  The URLs printed after the install use the new port(s).")
+        if effective_context(settings).startswith("kind-"):
+            log_warn(
+                "  kind reaches a NodePort only if the cluster maps it (extraPortMappings); "
+                "reach a moved one with `kubectl port-forward`."
+            )
+    if not moved and not refused:
         log_info("  NodePorts: no conflicts detected")
-    return True
+    return not refused
 
 
 def allocatable_to_ki(raw: str) -> Optional[int]:
@@ -347,10 +419,16 @@ def run_blocking_validators(settings: Settings) -> None:
 
 
 def run_validators(settings: Settings) -> None:
-    """The warning-only checks. Registry auth needs the credentials resolved first."""
+    """The checks that need the run's values resolved: registry auth needs the credentials,
+    the NodePorts the -f file. All warn and continue, except a busy NodePort set in -f."""
     validate_k8s_version(settings)
     validate_registry_auth(settings)
     validate_ingress_controller(settings)
-    validate_nodeport_conflicts(settings)
+    ports_ok = resolve_nodeport_conflicts(settings)
     validate_node_capacity(settings)
+    if not ports_ok:
+        raise die(
+            "A NodePort set in the values file is already taken (see above); helm would "
+            "fail on it. Set a free port, or remove the key to let the installer pick one."
+        )
     log_info("Pre-install validation passed.")

@@ -24,7 +24,7 @@ from rich.text import Text
 
 from .cluster import api_server, effective_context
 from .console import cancel, log_info, log_warn, out
-from .settings import Settings, confirm, value_changes_file
+from .settings import NODEPORTS, Settings, confirm, value_changes_file
 from .shell import helm, kubectl
 
 
@@ -119,6 +119,10 @@ def confirm_target(settings: Settings) -> None:
     log_info(f"  Registry:  {registry}")
     if settings.external_host_address:
         log_info(f"  Address:   {settings.external_host_address}")
+    moved = [f"{port} ({key})" for key, port in settings.node_ports.items()
+             if port != NODEPORTS[key]]  # fmt: skip
+    if moved:
+        log_warn(f"  NodePorts: {', '.join(moved)}")
     if settings.value_changes:
         log_warn(
             f"  Changes:   {settings.value_changes} value(s) differ from the current release; "

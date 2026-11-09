@@ -39,7 +39,7 @@ from .console import (
 )
 from .registry import MANAGED_BY_LABEL, hosts_file_ip
 from .secret_data import redact_secret_data
-from .settings import Settings, previous_values_file, value_changes_file
+from .settings import NODEPORTS, Settings, previous_values_file, value_changes_file
 from .shell import check_requirements, helm, helm_cmd, kubectl, kubectl_cmd, stream
 from .ui import print_notes_table, run_deployment_progress_ui
 
@@ -127,6 +127,11 @@ def build_set_flags(settings: Settings) -> List[str]:
         flags += ["--set", "nuclio.dashboard.build.insecurePullRegistry=true"]
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePushRegistry=true"]
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePullRegistry=true"]
+
+    for key in NODEPORTS:
+        if key in settings.node_ports:
+            flags += ["--set", f"{key}={settings.node_ports[key]}"]
+
     return flags
 
 

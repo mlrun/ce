@@ -21,7 +21,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .console import die, log_debug
 
@@ -54,8 +54,23 @@ MLRUN_CE_INSTALL_DOCS_URL = (
     "https://github.com/mlrun/mlrun/blob/development/docs/install-mlrun-ce/kubernetes-install.md"
 )
 
-# The chart's fixed NodePorts (not configurable via values.yaml).
-REQUIRED_NODEPORTS = [30010, 30020, 30040, 30050, 30060, 30070, 30093, 30094, 30100, 30110]
+# The chart's NodePorts, by the values key that sets each. The preflight moves a busy
+# default to a free port and refuses a busy one set in -f; an upgrade keeps the ports the
+# release already has.
+NODEPORTS = {
+    "kube-prometheus-stack.grafana.service.nodePort": 30010,
+    "kube-prometheus-stack.prometheus.service.nodePort": 30020,
+    "jupyterNotebook.service.nodePort": 30040,
+    "global.nuclio.dashboard.nodePort": 30050,
+    "mlrun.ui.service.nodePort": 30060,
+    "mlrun.api.service.nodePort": 30070,
+    "seaweedfs.adminService.nodePort": 30093,
+    "seaweedfs.s3Service.nodePort": 30094,
+    "pipelines.service.nodePort": 30100,
+    "timescaledb.service.nodePort": 30110,
+}
+# Kubernetes' default --service-node-port-range.
+NODEPORT_RANGE = range(30000, 32768)
 
 COMMANDS = ("install", "uninstall", "version", "help")
 
@@ -166,6 +181,9 @@ class Settings:
     registry_secret_reused: bool = False
     # Upgrade only: what `helm get values` returns for the current release.
     previous_values: Optional[dict] = None
+    # NodePort values keys this run sets: the current release's ports, and a free port in
+    # place of a busy default.
+    node_ports: Dict[str, int] = field(default_factory=dict)
     # Upgrade only: how many values this run changes on the current release.
     value_changes: int = 0
 

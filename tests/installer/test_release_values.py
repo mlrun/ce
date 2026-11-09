@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""An upgrade saves the release's values and warns about every value it changes."""
+"""An upgrade keeps the release's NodePorts and warns about every other value it changes."""
 
 import json
 import stat
@@ -24,6 +24,7 @@ from ce_installer.shell import Result
 
 PREVIOUS = {
     "global": {"registry": {"url": "index.docker.io/old", "secretName": "registry-credentials"}},
+    "jupyterNotebook": {"service": {"nodePort": 30041}},
     "storage": {"s3": {"secretKey": "hunter2"}},
 }
 
@@ -50,6 +51,7 @@ def test_a_first_install_has_nothing_to_compare(monkeypatch, recorder, settings,
     release_values.report_value_changes(settings)
 
     assert settings.previous_values is None
+    assert settings.node_ports == {}
     assert not release_values.previous_values_file(settings).exists()
     assert not release_values.value_changes_file(settings).exists()
     assert logs == []
@@ -63,6 +65,25 @@ def test_an_upgrade_saves_the_current_values_readable_by_the_user_only(upgrade, 
     saved = release_values.previous_values_file(settings)
     assert yaml.safe_load(saved.read_text()) == PREVIOUS
     assert stat.S_IMODE(saved.stat().st_mode) == 0o600, "it can hold secrets the user set"
+
+
+def test_an_upgrade_keeps_the_nodeports_the_release_has(upgrade, settings):
+    upgrade()
+
+    release_values.load_previous_values(settings)
+
+    assert settings.node_ports == {"jupyterNotebook.service.nodePort": 30041}
+
+
+def test_a_nodeport_in_the_values_file_wins_over_the_release(upgrade, settings, tmp_path):
+    values = tmp_path / "values.yaml"
+    values.write_text("jupyterNotebook:\n  service:\n    nodePort: 31040\n")
+    settings.values_file = str(values)
+    upgrade()
+
+    release_values.load_previous_values(settings)
+
+    assert settings.node_ports == {}
 
 
 def test_every_changed_value_is_warned_about_and_written_down(upgrade, settings, capture_logs):
@@ -80,6 +101,7 @@ def test_every_changed_value_is_warned_about_and_written_down(upgrade, settings,
     assert "global.externalHostAddress: (unset) -> localhost" in text
     assert "storage.s3.secretKey: <redacted> -> (unset)" in text
     assert "hunter2" not in text
+    assert "jupyterNotebook" not in text, "the carried-over port is not a change"
     assert settings.value_changes == 3
 
     written = yaml.safe_load(release_values.value_changes_file(settings).read_text())
@@ -119,13 +141,13 @@ def test_a_dry_run_points_at_every_file_it_left(
 def test_an_upgrade_that_changes_nothing_removes_a_stale_changes_file(
     upgrade, settings, capture_logs, tmp_path
 ):
-    # -f-only mode, so the installer adds nothing of its own.
+    # -f-only mode, so the installer adds nothing of its own but the carried-over port.
     values = tmp_path / "values.yaml"
     values.write_text("{}\n")
     settings.values_file = str(values)
     stale = release_values.value_changes_file(settings)
     stale.write_text("changes: []\n")
-    upgrade({})
+    upgrade({"jupyterNotebook": {"service": {"nodePort": 30041}}})
     logs = capture_logs(release_values)
 
     release_values.load_previous_values(settings)

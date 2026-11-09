@@ -333,57 +333,128 @@ def test_successful_docker_login_is_reported(monkeypatch, settings, capture_logs
 
 
 # ------------------------------------------------------------------------------------------
-# NodePort conflicts — advisory
+# NodePort conflicts — a busy default moves, a busy port from -f stops the run
 # ------------------------------------------------------------------------------------------
 
 
-def test_nodeport_in_use_elsewhere_warns_with_the_conflicting_port(
-    monkeypatch, settings, capture_logs
-):
-    settings.namespace = "mlrun"
-    settings.release_name = "mlrun-ce"
+def write_values(tmp_path, settings, text):
+    path = tmp_path / "values.yaml"
+    path.write_text(text)
+    settings.values_file = str(path)
+
+
+def test_a_busy_default_nodeport_moves_to_the_next_free_one(monkeypatch, settings, capture_logs):
+    settings.external_host_address = "localhost"
     logs = capture_logs(validators)
-    install_kubectl(
-        monkeypatch,
-        {"get svc": Result(0, "other-ns/something 30093\nmlrun/mlrun-ce 30010\n")},
-    )
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/notebook/ 30040 30041\n")})
 
-    assert validators.validate_nodeport_conflicts(settings) is True
-    assert "NodePort conflict" in log_text(logs)
-    assert "30093" in log_text(logs)
-    # 30010 belongs to a previous revision of this same release — helm will adopt it, so
-    # reporting it as a conflict would send a user chasing a non-problem.
-    assert "30010" not in log_text(logs)
+    assert validators.resolve_nodeport_conflicts(settings) is True
+    assert settings.node_ports == {"jupyterNotebook.service.nodePort": 30042}
+    warning = log_text(logs)
+    assert "other-ns/notebook" in warning, "name what holds the port"
+    assert "http://localhost:30042" in warning, "give the URL the user will need"
 
 
-def test_nodeport_held_by_a_foreign_service_in_our_namespace_is_a_conflict(
-    monkeypatch, settings, capture_logs
-):
-    settings.namespace = "mlrun"
-    settings.release_name = "mlrun-ce"
+def test_a_moved_port_skips_the_ports_the_chart_uses_itself(monkeypatch, settings):
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/admin/ 30093\n")})
+
+    validators.resolve_nodeport_conflicts(settings)
+
+    # 30094 is the chart's own S3 port, so taking it would just move the conflict.
+    assert settings.node_ports == {"seaweedfs.adminService.nodePort": 30095}
+
+
+def test_a_nodeport_this_release_owns_is_not_a_conflict(monkeypatch, settings, capture_logs):
     logs = capture_logs(validators)
+    # A previous revision of this same release holds it, and helm adopts it on upgrade;
+    # moving it would change a URL for nothing.
+    install_kubectl(monkeypatch, {"get svc": Result(0, "mlrun/grafana/mlrun-ce 30010\n")})
+
+    assert validators.resolve_nodeport_conflicts(settings) is True
+    assert settings.node_ports == {}
+    assert "no conflicts detected" in log_text(logs)
+
+
+def test_nodeport_held_by_a_foreign_service_in_our_namespace_is_a_conflict(monkeypatch, settings):
     # Same namespace, but owned by nothing (a hand-made Service) and by another release.
     # install.sh skipped the whole namespace and called this clear, and the install then
     # failed on the port: helm will not adopt a Service it does not own.
     install_kubectl(
         monkeypatch,
-        {"get svc": Result(0, "mlrun/ 30040\nmlrun/other-release 30050\n")},
+        {"get svc": Result(0, "mlrun/handmade/ 30040\nmlrun/nuclio/other-release 30050\n")},
     )
 
-    assert validators.validate_nodeport_conflicts(settings) is True
-    assert "30040" in log_text(logs)
-    assert "30050" in log_text(logs)
+    validators.resolve_nodeport_conflicts(settings)
+
+    assert set(settings.node_ports) == {
+        "jupyterNotebook.service.nodePort",
+        "global.nuclio.dashboard.nodePort",
+    }
 
 
-def test_nodeport_check_reports_no_conflicts_when_ports_are_free(
-    monkeypatch, settings, capture_logs
+def test_a_busy_nodeport_set_in_the_values_file_stops_the_run(
+    monkeypatch, settings, capture_logs, tmp_path
 ):
-    settings.namespace = "mlrun"
+    write_values(tmp_path, settings, "jupyterNotebook:\n  service:\n    nodePort: 31040\n")
     logs = capture_logs(validators)
-    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/something 40000\n")})
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/notebook/ 31040\n")})
 
-    assert validators.validate_nodeport_conflicts(settings) is True
-    assert "no conflicts detected" in log_text(logs)
+    assert validators.resolve_nodeport_conflicts(settings) is False
+    assert settings.node_ports == {}, "a port the user chose is theirs to change"
+    assert "jupyterNotebook.service.nodePort" in log_text(logs)
+
+
+def test_the_values_file_port_is_the_one_checked_not_the_default(monkeypatch, settings, tmp_path):
+    write_values(tmp_path, settings, "jupyterNotebook:\n  service:\n    nodePort: 31040\n")
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/notebook/ 30040\n")})
+
+    assert validators.resolve_nodeport_conflicts(settings) is True
+    assert settings.node_ports == {}
+
+
+def test_a_carried_over_port_is_the_one_checked(monkeypatch, settings):
+    settings.node_ports = {"mlrun.ui.service.nodePort": 30061}
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/ui/ 30060\n")})
+
+    validators.resolve_nodeport_conflicts(settings)
+
+    assert settings.node_ports == {"mlrun.ui.service.nodePort": 30061}
+
+
+@pytest.mark.parametrize(
+    "setup, port",
+    [
+        (lambda settings, _: setattr(settings, "disable_system_monitoring", True), 30010),
+        (lambda settings, _: setattr(settings, "disable_model_monitoring", True), 30110),
+        (
+            lambda settings, tmp_path: write_values(
+                tmp_path, settings, "jupyterNotebook:\n  service:\n    type: ClusterIP\n"
+            ),
+            30040,
+        ),
+    ],
+    ids=["monitoring-off", "model-monitoring-off", "cluster-ip"],
+)
+def test_a_port_the_install_does_not_open_is_left_alone(
+    monkeypatch, settings, tmp_path, setup, port
+):
+    setup(settings, tmp_path)
+    install_kubectl(monkeypatch, {"get svc": Result(0, f"other-ns/svc/ {port}\n")})
+
+    assert validators.resolve_nodeport_conflicts(settings) is True
+    assert settings.node_ports == {}
+
+
+def test_a_busy_nodeport_stops_run_validators_only_when_the_user_set_it(
+    monkeypatch, settings, tmp_path
+):
+    write_values(tmp_path, settings, "mlrun:\n  ui:\n    service:\n      nodePort: 31060\n")
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/ui/ 31060\n")})
+    for name in ("validate_k8s_version", "validate_registry_auth", "validate_node_capacity"):
+        monkeypatch.setattr(validators, name, lambda settings: True)
+
+    with pytest.raises(InstallerError):
+        validators.run_validators(settings)
 
 
 # ------------------------------------------------------------------------------------------

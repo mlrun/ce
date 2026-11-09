@@ -32,9 +32,9 @@ To install the chart in a clone of this repo instead, pass `--chart-path ./chart
 
 The cluster needs a default StorageClass, and the MLRun CE docs ask for Kubernetes 1.34 or
 newer (the installer warns below it). It also warns when the nodes have less
-than 8Gi allocatable memory or ephemeral storage in total, or when another Service already
-holds one of the chart's NodePorts (30010, 30020, 30040, 30050, 30060, 30070, 30093, 30094,
-30100, 30110).
+than 8Gi allocatable memory or ephemeral storage in total. The chart's NodePorts are 30010,
+30020, 30040, 30050, 30060, 30070, 30093, 30094, 30100 and 30110; one already taken is
+moved to a free port ([Pre-install checks](#pre-install-checks)).
 
 A local install needs Docker, because the local cluster runs on it: Docker Desktop's
 Kubernetes, kind and minikube's default driver all do, and so does pushing your own images to
@@ -288,12 +288,18 @@ These run before anything is created, dry runs included.
   when set; registry login with the resolved
   credentials, using a throwaway docker config (skipped without docker, with
   `--local-registry`, in a dry run, and when no credentials were given); no IngressClass
-  matching `--enable-ingress`; a chart NodePort held by a Service this release does not
-  own; less than 8Gi allocatable memory or ephemeral storage.
+  matching `--enable-ingress`; less than 8Gi allocatable memory or ephemeral storage.
+- **NodePorts**: a chart NodePort held by a Service this release does not own is moved to
+  the next free port, with a warning naming the Service and the new URL. The new port goes
+  into `mlrun-ce-values.yaml`, so the printed URLs, Grafana's link and Jupyter's link to
+  the MLRun UI all use it. A taken port you set yourself in `-f` stops the run instead. On
+  kind, a moved port is reachable only through `kubectl port-forward`, unless the cluster
+  maps it.
 
-`--skip-validators` skips all of them. Two refusals are not validators and always apply: an
-`-f` file that is the installer's own `GENERATED_VALUES_FILE`, and another MLRun CE release
-in the namespace ([Upgrading](#upgrading)).
+`--skip-validators` skips all of them, NodePorts included: a taken one then fails the
+install. Two refusals are not validators and always apply: an `-f` file that is the
+installer's own `GENERATED_VALUES_FILE`, and another MLRun CE release in the namespace
+([Upgrading](#upgrading)).
 
 ### After installation
 
@@ -455,6 +461,8 @@ upgrades the release in place. Use it to change a setting, move to another chart
 
 - A re-run offers to reuse the pull secret the first run created, so the password is not
   needed again. Credentials passed in the environment replace it.
+- The release keeps its NodePorts, including ports moved on an earlier run, unless `-f`
+  sets them. This applies with `--skip-validators` too.
 - Before upgrading, the installer saves the release's current values to
   `mlrun-ce-values.previous.yaml` (readable by you only; it may hold secrets you set). Every
   value the upgrade changes or resets to the chart default is printed as a warning and

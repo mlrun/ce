@@ -357,6 +357,7 @@ def execute(settings: Settings) -> None:
     load_previous_values(settings)
     if settings.skip_validators:
         log_info("Skipping pre-install validators (--skip-validators or SKIP_VALIDATORS)")
+        log_warn("  NodePorts are not checked: one already taken fails the install.")
     else:
         run_validators(settings)
     report_value_changes(settings)

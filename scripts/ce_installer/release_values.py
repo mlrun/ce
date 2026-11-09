@@ -16,7 +16,8 @@
 `helm upgrade` without --reuse-values starts again from the chart defaults plus what this
 run passes, so a value the current release was installed with and this run omits is reset
 without a word. On an upgrade the installer saves the current values beside its own values
-file and warns about every value that changes.
+file, keeps the release's NodePorts (its URLs), and warns about every other value that
+changes.
 """
 
 import json
@@ -28,8 +29,8 @@ from typing import Dict, List
 import yaml
 
 from .console import log_debug, log_info, log_warn
-from .helm_ops import _values_file_contents, build_set_flags, set_flags_to_values
-from .settings import Settings, previous_values_file, value_changes_file
+from .helm_ops import _lookup, _values_file_contents, build_set_flags, set_flags_to_values
+from .settings import NODEPORTS, Settings, previous_values_file, value_changes_file
 from .shell import helm
 
 UNSET = "(unset)"
@@ -58,9 +59,11 @@ def _write_private(path: Path, text: str) -> None:
 
 
 def load_previous_values(settings: Settings) -> None:
-    """On an upgrade, save the current release's values, to compare this run against.
+    """On an upgrade, save the current release's values and keep its NodePorts.
 
-    Not a validator, so --skip-validators does not skip it: it only reads the release.
+    Not a validator: --skip-validators skips checks, and an upgrade that silently moved
+    every URL back to the chart's default ports would be a change, not a skipped check. A
+    port the user sets in -f is theirs and is not overridden.
     """
     result = helm(
         settings, "get", "values", settings.release_name,
@@ -84,6 +87,12 @@ def load_previous_values(settings: Settings) -> None:
         + yaml.safe_dump(previous, sort_keys=False),
     )
     log_info(f"Current release values saved to {path}")
+
+    user_values = _values_file_contents(settings)
+    for key in NODEPORTS:
+        port = _lookup(previous, key)
+        if isinstance(port, int) and _lookup(user_values, key) is None:
+            settings.node_ports[key] = port
 
 
 def _merge(base: dict, overlay: dict) -> dict:

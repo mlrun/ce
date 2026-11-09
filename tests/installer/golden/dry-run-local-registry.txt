@@ -15,7 +15,7 @@ exit: 0
 ["kubectl", "get", "secret", "registry-credentials", "--namespace", "mlrun", "-o", "jsonpath=exists:{.metadata.labels.app\\.kubernetes\\.io/managed-by}"]
 ["helm", "get", "values", "mlrun-ce", "--namespace", "mlrun", "-o", "json"]
 ["kubectl", "version", "-o", "json"]
-["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.annotations.meta\\.helm\\.sh/release-name}{\" \"}{range .spec.ports[*]}{.nodePort}{\" \"}{end}{\"\\n\"}{end}"]
+["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.name}{\"/\"}{.metadata.annotations.meta\\.helm\\.sh/release-name}{\" \"}{range .spec.ports[*]}{.nodePort}{\" \"}{end}{\"\\n\"}{end}"]
 ["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.memory}{\"\\n\"}{end}"]
 ["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.ephemeral-storage}{\"\\n\"}{end}"]
 ["kubectl", "config", "current-context"]
