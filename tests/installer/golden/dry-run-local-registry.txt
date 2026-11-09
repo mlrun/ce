@@ -20,7 +20,6 @@ exit: 0
 ["kubectl", "config", "current-context"]
 ["kubectl", "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}"]
 ["kubectl", "get", "namespace", "mlrun"]
-["helm", "version", "--short"]
 ["helm", "status", "mlrun-ce", "--namespace", "mlrun"]
 ["kubectl", "get", "crd", "prometheuses.monitoring.coreos.com"]
 ["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--values", "<installer values>", "--version", "<installer chart version>", "--dry-run=server", "--set", "kube-prometheus-stack.enabled=false"]

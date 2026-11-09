@@ -41,7 +41,6 @@ from .secret_data import redact_secret_data
 from .settings import Settings
 from .shell import check_requirements, helm, helm_cmd, kubectl, kubectl_cmd, stream
 from .ui import print_notes_table, run_deployment_progress_ui
-from .validators import parse_major_minor
 
 README_URL = "https://github.com/mlrun/ce/blob/development/scripts/README.md"
 # Headings in scripts/README.md; test_every_readme_anchor_the_installer_prints_exists
@@ -304,33 +303,6 @@ def _lookup(values: dict, dotted: str) -> object:
     return node
 
 
-def dry_run_flag(settings: Settings) -> str:
-    """`--dry-run=server` where helm understands it, plain `--dry-run` below 3.13.
-
-    --dry-run only became a string flag in helm 3.13. Before that it is a bool, and
-    `--dry-run=server` parses as an invalid boolean value, so the whole install fails to
-    start. The Helm floor (3.17) is above 3.13, so only a run with --skip-validators or a
-    lowered MIN_HELM_VERSION gets here.
-
-    Neither mode sends anything to the API server. Server mode lets helm read the cluster
-    (API versions, CRDs, lookup(), existing resources); the fallback renders without
-    connecting at all, so it cannot catch what that reading would — hence the warning
-    rather than a silent downgrade.
-    """
-    parsed = parse_major_minor(helm(settings, "version", "--short").out.strip())
-    if parsed is None or parsed >= (3, 13):
-        return "--dry-run=server"
-    log_warn(
-        f"Helm {parsed[0]}.{parsed[1]} has no server-side dry run (added in 3.13); "
-        "falling back to a client-side one."
-    )
-    log_warn(
-        "  The render will not be checked against the cluster's API versions, CRDs or "
-        "existing resources."
-    )
-    return "--dry-run"
-
-
 def build_helm_install_command(settings: Settings, installer_values: str = "") -> List[str]:
     """`installer_values` is the file from write_installer_values. It goes after the user's
     -f, so its values win exactly as the --set flags they replaced did."""
@@ -353,14 +325,16 @@ def build_helm_install_command(settings: Settings, installer_values: str = "") -
     if settings.ce_version and not settings.chart_path:
         cmd += ["--version", settings.ce_version]
     if settings.dry_run:
-        cmd += [dry_run_flag(settings)]
+        # Server mode reads the cluster (API versions, CRDs, lookup(), existing resources)
+        # without sending anything to it.
+        cmd += ["--dry-run=server"]
     return cmd
 
 
 PROMETHEUS_CRD = "prometheuses.monitoring.coreos.com"
 
 
-def dry_run_exclusions(settings: Settings, cmd: List[str]) -> List[str]:
+def dry_run_exclusions(settings: Settings) -> List[str]:
     """The --set flags that keep a first install's server dry run from failing on CRDs.
 
     The monitoring stack renders Prometheus and PrometheusRule objects whose CRDs the chart
@@ -371,8 +345,7 @@ def dry_run_exclusions(settings: Settings, cmd: List[str]) -> List[str]:
     values file or the printed equivalent.
     """
     if (
-        "--dry-run=server" not in cmd
-        or settings.disable_system_monitoring
+        settings.disable_system_monitoring
         or helm(settings, "status", settings.release_name, "--namespace", settings.namespace).ok
         or kubectl(settings, "get", "crd", PROMETHEUS_CRD).ok
     ):
@@ -448,7 +421,7 @@ def helm_install(settings: Settings) -> None:
     for line in plain_helm_equivalent(settings, cmd):
         log_info(f"  {line}")
     if settings.dry_run:
-        cmd += dry_run_exclusions(settings, cmd)
+        cmd += dry_run_exclusions(settings)
 
     # `out.is_terminal` is part of the condition, not just a guard inside the progress UI:
     # the UI returns immediately off a terminal, but helm is still writing into a temp file

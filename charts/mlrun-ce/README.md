@@ -19,7 +19,7 @@ The Open source MLRun ce chart includes the following stack:
 ## Prerequisites
 
 - Kubernetes >=1.34
-- Helm >=3.17 (4.1 recommended) installed from [here](https://helm.sh/docs/intro/install/)
+- Helm >=4.1 installed from [here](https://helm.sh/docs/intro/install/)
 - Preprovisioned Kubernetes StorageClass
 
 > In case your Kubernetes flavor is not shipped with a default StorageClass, you may use [local-path by Rancher](https://github.com/rancher/local-path-provisioner)

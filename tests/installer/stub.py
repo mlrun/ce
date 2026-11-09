@@ -140,7 +140,7 @@ def handle_helm(args):
     verb = args[0]
 
     if verb == "version":
-        return 0, os.environ.get("STUB_HELM_VERSION", "v3.17.0+g301108e")
+        return 0, os.environ.get("STUB_HELM_VERSION", "v4.1.1+g5caf004")
     if verb == "status":
         return (
             (0, "STATUS: deployed")
@@ -148,7 +148,7 @@ def handle_helm(args):
             else (1, "not found")
         )
     if verb == "list":
-        if "--all" in args and os.environ.get("STUB_HELM_VERSION", "").startswith("v4"):
+        if "--all" in args and not os.environ.get("STUB_HELM_VERSION", "").startswith("v3"):
             return 1, "Error: unknown flag: --all"
         return 0, os.environ.get("STUB_HELM_LIST", "[]")
     if verb == "search":

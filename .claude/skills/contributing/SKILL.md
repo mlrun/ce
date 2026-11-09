@@ -166,7 +166,7 @@ them at once. `run()` returns a `Result` rather than raising, so check `.ok`.
 
 | Tool | Minimum | For |
 |---|---|---|
-| helm | 3.17 | rendering, linting, installing (the SeaweedFS subchart needs `fromToml`) |
+| helm | 4.1 | rendering, linting, installing (the version the MLRun CE docs require) |
 | kubectl | 1.24 | cluster interaction |
 | uv | 0.4 | the installer, its tests, and `uvx ruff` |
 

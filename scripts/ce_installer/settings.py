@@ -41,16 +41,13 @@ DEFAULT_HELM_TIMEOUT = "960s"
 DEFAULT_INGRESS_CLASS = "nginx"
 DEFAULT_DOCKER_SERVER = "https://index.docker.io/v1/"
 
-# The Helm floor is the oldest Helm that renders the chart: the SeaweedFS subchart (4.17.0
-# since #283) calls fromToml, which Helm added in 3.17.0, and an older Helm fails to parse
-# the chart at all. charts/mlrun-ce/README.md states the same. The MLRun CE docs ask for
-# Helm >= 4.1; below that the installer warns rather than refusing a Helm the chart renders on.
+# The Helm floor is the one the MLRun CE docs require, and charts/mlrun-ce/README.md states
+# the same. Below it the install is refused; --skip-validators is the only way past.
 #
 # Kubernetes never blocks: the chart declares no kubeVersion in Chart.yaml, so nothing it
 # renders needs a particular cluster version. The MLRun CE docs ask for Kubernetes >= 1.34,
 # and below that the installer warns. MIN_K8S_VERSION adds a stricter warning on top.
-DEFAULT_MIN_HELM_VERSION = "3.17"
-RECOMMENDED_HELM_VERSION = "4.1"
+MIN_HELM_VERSION = "4.1"
 RECOMMENDED_K8S_VERSION = "1.34"
 MLRUN_CE_INSTALL_DOCS_URL = (
     "https://github.com/mlrun/mlrun/blob/development/docs/install-mlrun-ce/kubernetes-install.md"
@@ -121,9 +118,6 @@ class Settings:
     mlrun_version: str = field(default_factory=lambda: env_str("MLRUN_VERSION"))
     nuclio_version: str = field(default_factory=lambda: env_str("NUCLIO_VERSION"))
     min_k8s_version: str = field(default_factory=lambda: env_str("MIN_K8S_VERSION"))
-    min_helm_version: str = field(
-        default_factory=lambda: env_str("MIN_HELM_VERSION", DEFAULT_MIN_HELM_VERSION)
-    )
     progress_interval_sec: str = field(
         default_factory=lambda: env_str("PROGRESS_INTERVAL_SEC", "10")
     )
@@ -177,11 +171,9 @@ class Settings:
     config_registry_email: str = ""
     config_external_host_address: str = ""
 
-    # Parsed forms of the version floors.
+    # Parsed form of MIN_K8S_VERSION.
     min_k8s_major: Optional[int] = None
     min_k8s_minor: Optional[int] = None
-    min_helm_major: int = 3
-    min_helm_minor: int = 17
 
 
 # --------------------------------------------------------------------------------------
@@ -258,8 +250,7 @@ def parse_floor(raw: str, name: str) -> Tuple[int, int]:
     """Parse a MAJOR.MINOR version floor, rejecting anything else."""
     match = re.fullmatch(r"(\d+)\.(\d+)", raw)
     if not match:
-        example = "1.30" if "K8S" in name else DEFAULT_MIN_HELM_VERSION
-        raise die(f"{name} must be in MAJOR.MINOR form (e.g. {example}), got: '{raw}'")
+        raise die(f"{name} must be in MAJOR.MINOR form (e.g. 1.30), got: '{raw}'")
     return int(match.group(1)), int(match.group(2))
 
 
@@ -268,6 +259,3 @@ def apply_version_floors(settings: Settings) -> None:
         settings.min_k8s_major, settings.min_k8s_minor = parse_floor(
             settings.min_k8s_version, "MIN_K8S_VERSION"
         )
-    settings.min_helm_major, settings.min_helm_minor = parse_floor(
-        settings.min_helm_version, "MIN_HELM_VERSION"
-    )

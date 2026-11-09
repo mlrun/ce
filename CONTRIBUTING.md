@@ -4,14 +4,13 @@
 
 | Tool | Minimum version | Purpose |
 |---|---|---|
-| helm | 3.17 | Chart rendering, linting, install |
+| helm | 4.1 | Chart rendering, linting, install |
 | kubectl | 1.24 | Cluster interaction |
 | uv | 0.4 | Runs `scripts/install.py`, and `make installer-lint-python` / `installer-format` via `uvx ruff` |
 
 For Kubernetes storage class setup and cluster prerequisites, see [charts/mlrun-ce/README.md](charts/mlrun-ce/README.md#prerequisites).
 
-Helm 3.17 is the oldest that renders the chart (the SeaweedFS subchart uses `fromToml`);
-`scripts/install.py` refuses an older Helm and warns below 4.1.
+Helm 4.1 is the version the MLRun CE docs require; `scripts/install.py` refuses an older Helm.
 
 The installer is `scripts/install.py` plus the `scripts/ce_installer/` package, documented
 for users in [scripts/README.md](scripts/README.md). Keep `make installer-test` green: it

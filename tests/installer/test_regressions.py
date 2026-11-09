@@ -1046,27 +1046,6 @@ def test_a_directory_without_a_chart_yaml_is_rejected(settings, tmp_path):
         cluster.validate_chart_path(settings)
 
 
-def test_a_helm_older_than_313_gets_a_client_side_dry_run(
-    monkeypatch, settings, recorder, capture_logs
-):
-    # --dry-run only became a string flag in helm 3.13; before that `--dry-run=server` is an
-    # invalid boolean and the install never starts. Below the 3.17 floor, so only reachable
-    # with --skip-validators or a lowered MIN_HELM_VERSION.
-    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"version": Result(0, "v3.12.3")}))
-    logs = capture_logs(helm_ops)
-    settings.dry_run = True
-
-    assert helm_ops.dry_run_flag(settings) == "--dry-run"
-    assert any("3.13" in message for message in logs), "the downgrade must not be silent"
-
-
-def test_a_helm_new_enough_still_gets_the_server_side_dry_run(monkeypatch, settings, recorder):
-    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"version": Result(0, "v3.16.2")}))
-    settings.dry_run = True
-
-    assert helm_ops.dry_run_flag(settings) == "--dry-run=server"
-
-
 def test_a_dry_run_does_not_log_in_to_the_registry(monkeypatch, settings, recorder):
     # A successful `docker login` rewrites ~/.docker/config.json, which is the one thing a
     # dry run is promising not to do to the machine it runs on.
@@ -2007,9 +1986,6 @@ def test_an_unexpected_error_puts_its_traceback_in_the_log(monkeypatch, tmp_path
 # A first install's dry run always failed on the Prometheus CRDs the chart itself installs
 # ------------------------------------------------------------------------------------------
 
-SERVER_DRY_RUN = ["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce"]
-SERVER_DRY_RUN += ["--dry-run=server"]
-
 
 def _cluster(monkeypatch, recorder, *, release=False, crds=False):
     helm = recorder(answers={"status": Result(0 if release else 1, "")})
@@ -2022,7 +1998,7 @@ def _cluster(monkeypatch, recorder, *, release=False, crds=False):
 def test_a_first_install_dry_runs_without_the_monitoring_stack(monkeypatch, settings, recorder):
     _cluster(monkeypatch, recorder)
 
-    assert helm_ops.dry_run_exclusions(settings, SERVER_DRY_RUN) == [
+    assert helm_ops.dry_run_exclusions(settings) == [
         "--set", "kube-prometheus-stack.enabled=false",
     ]  # fmt: skip
 
@@ -2030,26 +2006,21 @@ def test_a_first_install_dry_runs_without_the_monitoring_stack(monkeypatch, sett
 def test_an_upgrade_dry_runs_the_whole_chart(monkeypatch, settings, recorder):
     _, kubectl = _cluster(monkeypatch, recorder, release=True)
 
-    assert helm_ops.dry_run_exclusions(settings, SERVER_DRY_RUN) == []
+    assert helm_ops.dry_run_exclusions(settings) == []
     assert not kubectl.calls
 
 
 def test_a_cluster_that_has_the_crds_dry_runs_the_whole_chart(monkeypatch, settings, recorder):
     _cluster(monkeypatch, recorder, crds=True)
 
-    assert helm_ops.dry_run_exclusions(settings, SERVER_DRY_RUN) == []
+    assert helm_ops.dry_run_exclusions(settings) == []
 
 
-@pytest.mark.parametrize("case", ["client fallback", "monitoring disabled"])
-def test_nothing_is_excluded_where_nothing_would_fail(monkeypatch, settings, recorder, case):
+def test_nothing_is_excluded_with_the_monitoring_stack_disabled(monkeypatch, settings, recorder):
     helm, kubectl = _cluster(monkeypatch, recorder)
-    cmd = SERVER_DRY_RUN
-    if case == "client fallback":
-        cmd = [arg.replace("--dry-run=server", "--dry-run") for arg in SERVER_DRY_RUN]
-    else:
-        settings.disable_system_monitoring = True
+    settings.disable_system_monitoring = True
 
-    assert helm_ops.dry_run_exclusions(settings, cmd) == []
+    assert helm_ops.dry_run_exclusions(settings) == []
     assert not helm.calls and not kubectl.calls
 
 
@@ -2147,7 +2118,7 @@ def test_a_release_listing_that_is_not_json_stops_the_run(monkeypatch, settings,
 
 
 # ------------------------------------------------------------------------------------------
-# The Helm floor (3.6) let through a Helm that cannot render the chart
+# The Helm floor (3.6) let through a Helm older than the MLRun CE docs require
 # ------------------------------------------------------------------------------------------
 
 
@@ -2156,25 +2127,17 @@ def _helm_check(monkeypatch, recorder, settings, version):
     logs = {"info": [], "warn": [], "error": []}
     for level, messages in logs.items():
         monkeypatch.setattr(validators, f"log_{level}", messages.append)
-    cli_settings.apply_version_floors(settings)
     return validators.validate_helm_version(settings), logs
 
 
-def test_a_helm_without_fromtoml_is_refused_with_the_reason(monkeypatch, settings, recorder):
-    ok, logs = _helm_check(monkeypatch, recorder, settings, "v3.16.4+g7877b45")
+@pytest.mark.parametrize("version", ["v3.17.0+g301108e", "v3.19.0", "v4.0.5"])
+def test_a_helm_below_41_is_refused_naming_the_mlrun_docs(monkeypatch, settings, recorder, version):
+    ok, logs = _helm_check(monkeypatch, recorder, settings, version)
 
     assert ok is False
-    assert "below the minimum supported version (3.17)" in " ".join(logs["error"])
-    assert "fromToml" in " ".join(logs["info"]), "say why, not just that"
-
-
-def test_helm_317_passes_with_a_warning_naming_the_mlrun_docs(monkeypatch, settings, recorder):
-    ok, logs = _helm_check(monkeypatch, recorder, settings, "v3.17.0+g301108e")
-
-    assert ok is True
-    warning = " ".join(logs["warn"])
-    assert ">= 4.1" in warning
-    assert cli_settings.MLRUN_CE_INSTALL_DOCS_URL in warning
+    error = " ".join(logs["error"])
+    assert "below the minimum supported version (4.1)" in error
+    assert cli_settings.MLRUN_CE_INSTALL_DOCS_URL in error, "say where the floor comes from"
 
 
 @pytest.mark.parametrize("version", ["v4.1.1+g5caf004", "v4.2.0"])
@@ -2183,24 +2146,6 @@ def test_helm_41_and_later_pass_without_a_warning(monkeypatch, settings, recorde
 
     assert ok is True
     assert logs["warn"] == []
-
-
-def test_a_lowered_helm_floor_still_lets_an_old_helm_through(monkeypatch, settings, recorder):
-    settings.min_helm_version = "3.6"
-
-    ok, logs = _helm_check(monkeypatch, recorder, settings, "v3.16.4+g7877b45")
-
-    assert ok is True, "MIN_HELM_VERSION is the user's override"
-    assert "fromToml" in " ".join(logs["warn"]), "but helm will fail, so say so"
-
-
-def test_a_raised_helm_floor_blocks_a_helm_the_chart_renders_on(monkeypatch, settings, recorder):
-    settings.min_helm_version = "4.1"
-
-    ok, logs = _helm_check(monkeypatch, recorder, settings, "v3.19.0")
-
-    assert ok is False
-    assert "fromToml" not in " ".join(logs["info"]), "3.19 has it; the reason would mislead"
 
 
 def capture_by_level(monkeypatch, module):

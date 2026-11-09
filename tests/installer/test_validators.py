@@ -135,7 +135,7 @@ def test_min_k8s_version_only_warns_when_the_cluster_is_below_it(
 
 def test_helm_version_below_the_floor_blocks_the_install(monkeypatch, settings, capture_logs):
     logs = capture_logs(validators)
-    monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v3.5.0+g12345")))
+    monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v3.19.0+g12345")))
 
     assert validators.validate_helm_version(settings) is False
     assert "below the minimum supported version" in log_text(logs)
@@ -143,22 +143,11 @@ def test_helm_version_below_the_floor_blocks_the_install(monkeypatch, settings, 
 
 def test_helm_version_at_the_floor_is_accepted(monkeypatch, settings, capture_logs):
     logs = capture_logs(validators)
-    # Exactly 3.17, the oldest Helm that renders the chart: an off-by-one here would refuse
-    # a Helm the chart itself supports.
-    monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v3.17.0+g12345")))
+    # Exactly 4.1: an off-by-one here would refuse the version the MLRun CE docs require.
+    monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v4.1.0+g12345")))
 
     assert validators.validate_helm_version(settings) is True
-    assert "Helm version: 3.17" in log_text(logs)
-
-
-def test_min_helm_version_raises_the_enforced_helm_floor(monkeypatch, settings, capture_logs):
-    settings.min_helm_version = "4.1"
-    apply_version_floors(settings)
-    logs = capture_logs(validators)
-    monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v3.19.0+g12345")))
-
-    assert validators.validate_helm_version(settings) is False
-    assert "below the minimum supported version" in log_text(logs)
+    assert "Helm version: 4.1" in log_text(logs)
 
 
 # ------------------------------------------------------------------------------------------
@@ -183,7 +172,6 @@ def test_empty_min_k8s_version_leaves_no_kubernetes_floor(settings):
     # Empty is the default and must stay valid: a floor of "" is "no floor", not an error.
     assert settings.min_k8s_major is None
     assert settings.min_k8s_minor is None
-    assert (settings.min_helm_major, settings.min_helm_minor) == (3, 17)
 
 
 # ------------------------------------------------------------------------------------------
