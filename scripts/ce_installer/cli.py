@@ -459,6 +459,9 @@ def install(
         '"nginx"). Requires an ingress controller already present in the cluster — this '
         "installer does not install one for you.",
     ),
+    # The five otel parameters are never read: their order decides the outcome and click
+    # does not keep it, so resolve_otel_flags reads raw argv. Declared so click accepts the
+    # flags and lists them in --help.
     enable_otel: Optional[str] = typer.Option(
         None,
         "--enable-otel",
@@ -578,9 +581,7 @@ def install(
                 settings.ingress_class = enable_ingress
 
         # The otel four-state is folded from raw argv rather than from the parsed flags,
-        # because a MODE names a complete state and order decides the outcome. The five
-        # otel parameters above are declared only so click renders them in --help; their
-        # parsed values are deliberately unused here.
+        # because a MODE names a complete state and order decides the outcome.
         (
             settings.enable_otel_operator,
             settings.enable_otel_collector,

@@ -78,6 +78,7 @@ def open_debug_log(path: str, header: List[str]) -> str:
     _debug_log_path = str(resolved)
     for line in header:
         log_debug(line)
+    log_info(f"Debug log: {_debug_log_path}")
     return _debug_log_path
 
 

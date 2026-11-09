@@ -333,11 +333,14 @@ def test_an_env_var_enables_a_toggle_without_the_flag(ran, monkeypatch, env_var,
     assert getattr(settings, attribute) is True
 
 
-def test_only_the_exact_string_true_counts_as_an_env_toggle(ran, monkeypatch):
-    # Mirrors bash's [[ "$VAR" == "true" ]]; "1" or "yes" must not silently enable things.
-    monkeypatch.setenv("DRY_RUN", "1")
+@pytest.mark.parametrize(
+    "value, enabled",
+    [("true", True), ("1", True), ("false", False), ("0", False), ("yes", False), ("", False)],
+)
+def test_true_and_1_turn_an_env_toggle_on_and_nothing_else_does(ran, monkeypatch, value, enabled):
+    monkeypatch.setenv("DRY_RUN", value)
     _, settings = ran()
-    assert settings.dry_run is False
+    assert settings.dry_run is enabled
 
 
 def test_ci_implies_non_interactive(ran, monkeypatch):

@@ -628,7 +628,8 @@ the right one, it asks you to type the namespace name, and refuses under
 
 ### Flags
 
-Each flag's environment variable is set to `true` (exactly) for the same effect.
+Each flag's environment variable is set to `true` or `1` for the same effect; anything
+else, `false` and `0` included, leaves it off.
 
 | Flag | Variable | Effect |
 |---|---|---|

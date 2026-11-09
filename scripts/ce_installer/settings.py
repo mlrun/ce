@@ -88,8 +88,8 @@ def env_str(name: str, default: str = "") -> str:
 
 
 def env_true(name: str) -> bool:
-    """Mirror bash's [[ "${NAME}" == "true" ]] — only the exact string counts."""
-    return os.environ.get(name, "") == "true"
+    """`true` or `1` turns a toggle on; anything else, `false` and `0` included, leaves it off."""
+    return os.environ.get(name, "") in ("true", "1")
 
 
 # --------------------------------------------------------------------------------------
