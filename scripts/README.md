@@ -1,11 +1,12 @@
 # MLRun CE Installer
 
-`mlrun-ce-installer` installs the MLRun CE Helm chart on a Kubernetes cluster. It checks the
+`mlrun-ce-installer` installs the MLRun CE Helm chart on a Kubernetes cluster or your local machine. It checks the
 cluster, creates the namespace and the registry pull secret, runs `helm upgrade --install`,
 and prints where each service is reachable.
 
-It installs the **published** chart from `https://mlrun.github.io/ce`. To install the chart
-in a clone of this repo instead, pass `--chart-path ./charts/mlrun-ce`
+It installs the **published** chart from `https://mlrun.github.io/ce`. 
+
+To install the chart in a clone of this repo instead, pass `--chart-path ./charts/mlrun-ce`
 ([Installing this repo's chart](#installing-this-repos-chart)).
 
 - [Requirements](#requirements)
