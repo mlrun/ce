@@ -368,7 +368,10 @@ def deploy_local_registry(settings: Settings) -> None:
 
     hosts_ip = hosts_file_ip(settings.external_host_address)
     if hosts_ip:
-        log_warn("To push images from this machine, add to /etc/hosts:")
+        log_warn(
+            "This machine resolves it only through /etc/hosts, and on Docker Desktop so do "
+            "the nodes pulling function images. Add:"
+        )
         log_warn(f"  {hosts_ip}  {settings.local_registry_url}")
     log_warn("In Docker Desktop: Settings -> Docker Engine -> add:")
     log_warn(f'  "insecure-registries": ["{settings.local_registry_url}"]')

@@ -54,9 +54,11 @@ inside a pod you don't need Docker.
    `--local-registry` needs the extra steps under [Local registry](#local-registry), so
    Docker Hub is the simpler path.
 4. Run `./scripts/install.py` from a clone, or the `uvx` command under
-   [Without a clone](#without-a-clone), with `EXTERNAL_HOST_ADDRESS=localhost` exported (or
-   answer `localhost` at the address prompt). The suggested `host.docker.internal` resolves
-   inside the cluster but may not on your machine.
+   [Without a clone](#without-a-clone). With a registry account, export
+   `EXTERNAL_HOST_ADDRESS=localhost` (or answer `localhost` at the address prompt): the
+   suggested `host.docker.internal` resolves inside the cluster but may not on your machine.
+   With `--local-registry --enable-ingress`, keep `host.docker.internal`: `localhost` makes
+   the registry `registry.localhost`, which a pod may resolve to itself.
 5. If the access table's addresses don't open (Docker Desktop's kind-based cluster does not
    publish NodePorts to the host), forward each service you use to its NodePort number,
    then open `http://localhost:<port>`:
@@ -412,6 +414,20 @@ wildcard DNS for a domain, or a name such as `203.0.113.10.nip.io` for a bare IP
 bare IP the installer prints the `/etc/hosts` line to add. A host or class you set in an
 `-f` file is kept.
 
+If the cluster has no controller (`kubectl get ingressclass` is empty), install one first.
+For example ingress-nginx, which provides the default class `nginx`:
+
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx --create-namespace --wait
+kubectl -n ingress-nginx get svc ingress-nginx-controller   # EXTERNAL-IP is localhost on Docker Desktop
+```
+
+Any controller works: pass its class to `--enable-ingress`. The names above, such as
+`mlrun.host.docker.internal`, must also resolve on your machine for a browser to open them.
+On a Mac, `host.docker.internal` resolves but its subdomains do not, so add them to
+`/etc/hosts` as `127.0.0.1` (Docker Desktop) or use wildcard DNS.
+
 ### Local registry
 
 ```bash
@@ -427,9 +443,17 @@ Without ingress the registry is `local-registry.<namespace>.svc.cluster.local:50
 push there, but most nodes cannot resolve that name, so function pods then fail to pull.
 Add `--enable-ingress` for a name the nodes can resolve, or use a regular registry instead.
 
-With ingress it is `registry.<host>`. Pods resolve that name only once CoreDNS has an entry
-for it. The installer prints the entry and the commands to add it, and does not edit
-CoreDNS itself:
+With ingress it is `registry.<host>` (for example `registry.host.docker.internal`). It needs
+an ingress controller ([Ingress](#ingress)) and three name-resolution steps, because two
+different resolvers are involved. The installer prints the CoreDNS entry, the `/etc/hosts`
+line and the `insecure-registries` setting, and edits none of them itself.
+
+| Who resolves the name | Used for | Needs |
+|---|---|---|
+| Pods, through CoreDNS | the builder pushing the image | [1. CoreDNS entry](#1-coredns-entry) |
+| The node's container runtime (Docker Desktop: the Docker daemon, which uses the Mac's resolver) | pulling the image to start the function pod | [2. `/etc/hosts`](#2-etchosts-docker-desktop) and [3. Insecure registry](#3-insecure-registry) |
+
+#### 1. CoreDNS entry
 
 ```
 [WARN] Pods cannot resolve registry.host.docker.internal until CoreDNS knows about it.
@@ -443,8 +467,43 @@ The IP is your ingress controller Service's ClusterIP, looked up in `ingress-ngi
 in the release namespace. For a controller elsewhere, name it:
 `INGRESS_CONTROLLER_SERVICE=kube-system/traefik`.
 
-To push from your own machine on Docker Desktop, add the registry host to
-`insecure-registries` under **Settings → Docker Engine**, then **Apply & Restart**:
+If the Corefile has no `hosts` block, add one after the `kubernetes` block. Keep
+`fallthrough`: without it every other name that reaches the plugin gets an empty answer and
+cluster DNS breaks.
+
+```
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        hosts {
+           <controller ClusterIP> registry.host.docker.internal
+           fallthrough
+        }
+```
+
+Check it from a pod:
+
+```bash
+kubectl run dnstest --rm -it --restart=Never --image=busybox -- nslookup registry.host.docker.internal
+```
+
+#### 2. `/etc/hosts` (Docker Desktop)
+
+Docker Desktop resolves `host.docker.internal` itself, but not `registry.host.docker.internal`.
+Without a hosts entry the pull fails with `lookup registry.host.docker.internal: no such host`.
+With Docker Desktop's `docker-desktop` (kubeadm) cluster, the ingress controller's
+LoadBalancer listens on the Mac's `localhost:80`:
+
+```bash
+echo "127.0.0.1 registry.host.docker.internal" | sudo tee -a /etc/hosts
+```
+
+#### 3. Insecure registry
+
+The registry serves plain HTTP. Add its host to `insecure-registries` under
+**Settings → Docker Engine**, then **Apply & Restart** (the cluster is down for a minute):
 
 ```json
 { "insecure-registries": ["registry.host.docker.internal"] }
@@ -602,6 +661,18 @@ next option, not the ingress class.
 Either no ingress controller provides the class (the checks warned about it), or the hosts
 do not resolve to the controller. See [Ingress](#ingress). Once a controller is running, the
 existing Ingresses start working without a reinstall.
+
+### Function pod: `ImagePullBackOff` with `--local-registry`
+
+The event names the registry the node tried. See [Local registry](#local-registry):
+
+- `local-registry.<namespace>.svc.cluster.local:5000` and `no such host`: the install has no
+  `--enable-ingress`, or the function was created before it did. Reinstall with
+  `--enable-ingress`, then delete and redeploy the function.
+- `registry.<host>` and `no such host`: the `/etc/hosts` entry (step 2) is missing.
+- `registry.<host>` and an `https://` request (port 443) failing: the host is not in
+  Docker's `insecure-registries` (step 3).
+- Pushes fail from the builder pod: the CoreDNS entry (step 1) is missing.
 
 ### `--local-registry` refuses to take over existing objects
 
