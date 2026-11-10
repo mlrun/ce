@@ -974,6 +974,7 @@ def test_a_non_interactive_uninstall_does_not_demand_registry_credentials(
     # branch, so tearing a release down asked for a registry URL and a password.
     for var in ("REGISTRY_URL", "REGISTRY_USERNAME", "REGISTRY_PASSWORD"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
     monkeypatch.setattr(helm_ops, "kubectl", recorder())
     settings.non_interactive = True
