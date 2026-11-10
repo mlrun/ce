@@ -3022,6 +3022,15 @@ def test_nothing_to_ask_about_means_no_functions_prompt(monkeypatch, settings, r
     assert asked == [] and settings.delete_runtime
 
 
+def _listing(*objects):
+    """`kubectl get ... -o json` output for (kind, name, labels) triples."""
+    items = [
+        {"kind": kind, "metadata": {"name": name, "labels": labels}}
+        for kind, name, labels in objects
+    ]
+    return Result(0, json.dumps({"items": items}))
+
+
 @pytest.mark.parametrize("answer, deleted", [("", False), ("n", False), ("y", True)])
 def test_an_interactive_hard_clean_asks_before_deleting_the_namespace(
     monkeypatch, settings, recorder, answer, deleted
@@ -3031,8 +3040,8 @@ def test_an_interactive_hard_clean_asks_before_deleting_the_namespace(
         settings,
         recorder,
         answers={
-            "get deployments,statefulsets": Result(
-                0, "configmap/kube-root-ca.crt\nsecret/my-own-secret\n"
+            "get deployments,statefulsets": _listing(
+                ("ConfigMap", "kube-root-ca.crt", {}), ("Secret", "my-own-secret", {})
             )
         },
     )
@@ -3042,10 +3051,56 @@ def test_an_interactive_hard_clean_asks_before_deleting_the_namespace(
 
     helm_ops.do_uninstall(settings)
 
-    assert "'mlrun' still holds: secret/my-own-secret" in logs["warn"]
+    assert any(
+        "did not create" in line and line.endswith(": secret/my-own-secret")
+        for line in logs["warn"]
+    )
     assert rec.ran("delete namespace mlrun") is deleted
     # Deleted, the namespace has nothing left to report on.
     assert rec.ran("app.kubernetes.io/instance=") is not deleted
+
+
+def test_the_namespace_prompt_names_in_full_what_mlrun_ce_did_not_create(
+    monkeypatch, settings, recorder
+):
+    # From a lab namespace: the pull secret and Ingress a person applied by hand sat among
+    # 22 CE leftovers, past the first 8 the prompt showed, and a yes would have taken them.
+    strimzi = {"app.kubernetes.io/managed-by": "strimzi-cluster-operator", "strimzi.io/kind": "x"}
+    chart = {"app.kubernetes.io/managed-by": "Helm", "app.kubernetes.io/instance": "mlrun-ce"}
+    leftovers = [("Secret", f"kafka-stream-ca-{i}", strimzi) for i in range(9)] + [
+        ("Pod", "kafka-stream-kafka-stream-pool-0", strimzi),
+        ("Secret", "seaweedfs-s3-secret", chart),
+        ("Job", "nuclio-buildjob-processor-demo-fn-latest-2mqxf", {}),
+        ("Pod", "nuclio-buildjob-processor-demo-fn-latest-2mqxjx9v9", {"job-name": "x"}),
+        ("Secret", "spark-operator-webhook-certs", {}),
+        ("ConfigMap", "kube-root-ca.crt", {}),
+    ]
+    others = [
+        ("Secret", "artifactory-registry-secret", {}),
+        ("Ingress", "seaweedfs-s3-ingress", {}),
+        ("Secret", "other-app", {"app.kubernetes.io/instance": "other-app"}),
+    ]
+    monkeypatch.setattr(
+        helm_ops, "kubectl", recorder(answers={"get deployments": _listing(*leftovers, *others)})
+    )
+    logs = capture_by_level(monkeypatch, helm_ops)
+
+    helm_ops._warn_about_namespace_contents(settings)
+
+    ours, theirs = logs["warn"]
+    assert "MLRun CE leftovers" in ours and "and 6 more" in ours
+    assert theirs.endswith(
+        ": secret/artifactory-registry-secret, ingress/seaweedfs-s3-ingress, secret/other-app"
+    )
+
+
+def test_a_namespace_that_cannot_be_listed_is_said_to_go_whole(monkeypatch, settings, recorder):
+    monkeypatch.setattr(helm_ops, "kubectl", recorder(answers={"get deployments": Result(1, "")}))
+    logs = capture_by_level(monkeypatch, helm_ops)
+
+    helm_ops._warn_about_namespace_contents(settings)
+
+    assert logs["warn"] == ["Could not list what 'mlrun' holds; deleting it deletes all of it."]
 
 
 @pytest.mark.parametrize("flag, deleted", [(False, False), (True, True)])

@@ -664,7 +664,8 @@ there are any it lists them and asks first; `--non-interactive` deletes them. A 
 namespace name, and refuses under `--non-interactive`.
 
 The namespace itself is kept, since it may be yours. At the end, a hard clean lists what is
-still in it and asks whether to delete it too (default no); `--delete-namespace` deletes it
+still in it, naming in full anything MLRun CE did not create, and asks whether to delete it
+too (default no); `--delete-namespace` deletes it
 without asking, and is the only way under `--non-interactive`.
 
 Unless the namespace went, the run ends by listing anything still labelled with the release

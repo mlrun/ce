@@ -41,7 +41,7 @@ from .console import (
     log_warn,
     out,
 )
-from .registry import MANAGED_BY_LABEL, hosts_file_ip
+from .registry import MANAGED_BY_KEY, MANAGED_BY_LABEL, MANAGED_BY_VALUE, hosts_file_ip
 from .secret_data import redact_secret_data
 from .settings import (
     NODEPORTS,
@@ -1176,6 +1176,61 @@ NAMESPACE_CONTENT_KINDS = (
     "deployments,statefulsets,daemonsets,jobs,cronjobs,pods,services,ingresses,configmaps,"
     "secrets,persistentvolumeclaims"
 )
+# What CE leaves at run time with no label to tell it by: Nuclio's image build Jobs and
+# their pods, and the Spark operator's webhook certificate.
+CE_UNLABELLED_NAMES = ("nuclio-buildjob-", "spark-operator-webhook-certs")
+RUNTIME_LABEL_PREFIXES = ("strimzi.io/", "nuclio.io/", "mlrun/")
+
+
+def _from_ce(settings: Settings, metadata: Dict) -> bool:
+    labels = metadata.get("labels") or {}
+    if labels.get("app.kubernetes.io/instance") == settings.release_name:
+        return True
+    if labels.get(MANAGED_BY_KEY) in (MANAGED_BY_VALUE, "strimzi-cluster-operator"):
+        return True
+    if any(key.startswith(RUNTIME_LABEL_PREFIXES) for key in labels):
+        return True
+    return str(metadata.get("name", "")).startswith(CE_UNLABELLED_NAMES)
+
+
+def _namespace_contents(settings: Settings) -> Optional[Tuple[List[str], List[str]]]:
+    """What the namespace holds, split into MLRun CE's leftovers and everything else, or
+    None when it cannot be listed."""
+    result = kubectl(
+        settings, "get", NAMESPACE_CONTENT_KINDS, "--namespace", settings.namespace, "-o", "json"
+    )
+    try:
+        items = json.loads(result.out).get("items", []) if result.ok else None
+    except ValueError:
+        items = None
+    if items is None:
+        return None
+    ours: List[str] = []
+    others: List[str] = []
+    for item in items:
+        metadata = item.get("metadata") or {}
+        name = f"{str(item.get('kind', '')).lower()}/{metadata.get('name', '')}"
+        if name != "configmap/kube-root-ca.crt":
+            (ours if _from_ce(settings, metadata) else others).append(name)
+    return ours, others
+
+
+def _warn_about_namespace_contents(settings: Settings) -> None:
+    namespace = settings.namespace
+    contents = _namespace_contents(settings)
+    if contents is None:
+        log_warn(f"Could not list what '{namespace}' holds; deleting it deletes all of it.")
+        return
+    ours, others = contents
+    if ours:
+        shown = ", ".join(ours[:8]) + (f" and {len(ours) - 8} more" if len(ours) > 8 else "")
+        log_warn(f"'{namespace}' still holds MLRun CE leftovers: {shown}")
+    if others:
+        # Listed in full: these are what a yes would take that nobody here created.
+        log_warn(
+            f"'{namespace}' also holds what MLRun CE did not create, which deleting it "
+            f"deletes too: {', '.join(others)}"
+        )
 
 
 def delete_namespace_if_asked(settings: Settings) -> bool:
@@ -1189,14 +1244,7 @@ def delete_namespace_if_asked(settings: Settings) -> bool:
     if not settings.delete_namespace:
         if settings.non_interactive:
             return False
-        held = [
-            name
-            for name in _names(settings, NAMESPACE_CONTENT_KINDS)
-            if name != "configmap/kube-root-ca.crt"
-        ]
-        if held:
-            shown = ", ".join(held[:8]) + (f" and {len(held) - 8} more" if len(held) > 8 else "")
-            log_warn(f"'{namespace}' still holds: {shown}")
+        _warn_about_namespace_contents(settings)
         if not confirm(
             settings, f"Delete namespace '{namespace}' and everything in it?", default_yes=False
         ):
