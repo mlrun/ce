@@ -93,6 +93,7 @@ FLAG_KEYS = {
     "--enable-otel-namespace-label": "otel.namespaceLabel",
     "--enable-otel-instrumentation": "otel.instrumentation",
     "--local-registry": "localRegistry.enabled",
+    "--kube-context": "kubeContext",
     "--ce-version": "chartSource.chartVersion",
     "--chart-path": "chartSource.chartPath",
     "--skip-dependency-update": "chartSource.skipDependencyUpdate",

@@ -256,7 +256,13 @@ def test_ce_version_stores_the_supplied_value(ran):
     assert settings.ce_version == "0.11.0"
 
 
-@pytest.mark.parametrize("option", ["--ce-version", "--chart-path", "--config"])
+def test_kube_context_wins_over_the_environment(ran, monkeypatch):
+    monkeypatch.setenv("KUBE_CONTEXT", "from-env")
+    assert ran()[1].kube_context == "from-env"
+    assert ran("--kube-context", "kind-ce")[1].kube_context == "kind-ce"
+
+
+@pytest.mark.parametrize("option", ["--ce-version", "--chart-path", "--config", "--kube-context"])
 def test_an_option_needing_a_value_rejects_a_following_flag(option):
     # click would otherwise happily swallow "--dry-run" as the value.
     with pytest.raises(InstallerError) as excinfo:
@@ -264,7 +270,7 @@ def test_an_option_needing_a_value_rejects_a_following_flag(option):
     assert excinfo.value.code == 1
 
 
-@pytest.mark.parametrize("option", ["--ce-version", "--chart-path", "--config"])
+@pytest.mark.parametrize("option", ["--ce-version", "--chart-path", "--config", "--kube-context"])
 def test_an_option_needing_a_value_rejects_a_missing_value(option):
     with pytest.raises(InstallerError):
         cli.normalize_argv([option])
@@ -528,7 +534,7 @@ def test_enable_otel_does_not_swallow_a_following_short_option(ran, tmp_path):
     assert settings.values_file == str(values)
 
 
-@pytest.mark.parametrize("flag", ["--chart-path", "--ce-version", "--config"])
+@pytest.mark.parametrize("flag", ["--chart-path", "--ce-version", "--config", "--kube-context"])
 def test_a_value_requiring_option_rejects_a_following_short_option(flag):
     with pytest.raises(InstallerError):
         cli.normalize_argv([flag, "-f"])

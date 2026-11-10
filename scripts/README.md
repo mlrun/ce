@@ -159,7 +159,7 @@ asks before its first write:
 Proceed? [Y/n]:
 ```
 
-Check the cluster line: it is your kubeconfig's current context, or `KUBE_CONTEXT`.
+Check the cluster line: it is your kubeconfig's current context, or `--kube-context`.
 Answering `n` or pressing Ctrl-C leaves the cluster untouched (exit 1).
 
 ### Non-interactive (CI)
@@ -229,12 +229,12 @@ secret, `registry-credentials` (`REGISTRY_SECRET_NAME`).
 ### Targeting another cluster
 
 ```bash
-KUBE_CONTEXT=my-cluster ./scripts/install.py
+./scripts/install.py --kube-context my-cluster
 ```
 
-`KUBE_CONTEXT` (or `installer.kubeContext`) selects the kubeconfig context for every
-`kubectl` and `helm` call. The installer never connects over SSH itself. For a cluster
-reachable only over SSH, open a tunnel and point a context at it:
+`--kube-context` (or `KUBE_CONTEXT`, or `installer.kubeContext`) selects the kubeconfig
+context for every `kubectl` and `helm` call. The installer never connects over SSH itself.
+For a cluster reachable only over SSH, open a tunnel and point a context at it:
 
 ```bash
 ssh -f -N -L 16443:<cluster-api-ip>:6443 user@jump-host
@@ -466,13 +466,13 @@ the namespace once instrumentation is on. `--enable-otel off` turns all four off
 ### External host address
 
 The address you reach the cluster's NodePorts at, and the base of the ingress hosts. The
-installer suggests one from the targeted context (`KUBE_CONTEXT`, or the current context):
+installer suggests one from the targeted context (`--kube-context`, or the current context):
 
 1. A minikube context: `minikube ip -p <context>`.
 2. `docker-desktop`: `host.docker.internal`, which pods resolve but the Mac may not. When
    it doesn't, the installer prints the `/etc/hosts` line to add
    ([Local install on Docker Desktop](#local-install-on-docker-desktop)).
-3. Any other context named by `KUBE_CONTEXT`: the first node's internal IP.
+3. Any other context named by `--kube-context`: the first node's internal IP.
 4. Anything else (kind, k3d, …): `localhost`.
 
 Set `EXTERNAL_HOST_ADDRESS` (or `installer.externalHostAddress`) when the suggestion is wrong.
@@ -645,7 +645,7 @@ again **interactively** and type the namespace when asked. Under `--non-interact
 
 A hard clean deletes every PVC in the namespace, so with no release there to confirm it is
 the right one, it asks you to type the namespace name, and refuses under
-`--non-interactive`. Check `NAMESPACE` and `KUBE_CONTEXT`, or run interactively.
+`--non-interactive`. Check `NAMESPACE` and `--kube-context`, or run interactively.
 
 ### Known issues
 
@@ -684,6 +684,7 @@ else, `false` and `0` included, leaves it off.
 | `--skip-secret` | `SKIP_REGISTRY_SECRET` | Use an existing pull secret instead of creating one |
 | `--skip-validators` | `SKIP_VALIDATORS` | Skip the [pre-install checks](#pre-install-checks) |
 | `--local-registry` | `LOCAL_REGISTRY` | Run a registry in the cluster |
+| `--kube-context` | `KUBE_CONTEXT` | kubeconfig context for kubectl and helm (default: the current one) |
 | `--enable-ingress [CLASS]` | `ENABLE_INGRESS`, `INGRESS_CLASS` | Turn on the chart's Ingresses (class `nginx` by default) |
 | `--enable-otel [MODE]` | | `off`, `collector` or `full` (the default) |
 | `--enable-otel-operator` | `ENABLE_OTEL_OPERATOR` | Install the OpenTelemetry operator |
@@ -705,7 +706,6 @@ These have no flag. An empty value counts as unset.
 |---|---|---|
 | `NAMESPACE` | `mlrun` | Target namespace |
 | `RELEASE_NAME` | `mlrun-ce` | Helm release name |
-| `KUBE_CONTEXT` | current context | kubeconfig context for kubectl and helm |
 | `REGISTRY_USERNAME` | | Registry username |
 | `REGISTRY_PASSWORD` | | Registry password |
 | `REGISTRY_PASSWORD_FILE` | | File holding only the password; `REGISTRY_PASSWORD` wins if both are set |

@@ -178,6 +178,7 @@ VALUE_REQUIRED = {
     "--chart-path": "Option {opt} requires a directory path (e.g. --chart-path ./charts/mlrun-ce).",
     "--ce-version": "Option {opt} requires a version value (e.g. --ce-version 0.11.0).",
     "--config": "Option {opt} requires a file path (e.g. --config ce-config.yaml).",
+    "--kube-context": "Option {opt} requires a context name (e.g. --kube-context kind-ce).",
 }
 
 
@@ -512,6 +513,13 @@ def install(
     local_registry: bool = typer.Option(
         False, "--local-registry", help="Deploy a local registry:2 registry inside the cluster"
     ),
+    kube_context: Optional[str] = typer.Option(
+        None,
+        "--kube-context",
+        metavar="CONTEXT",
+        help="The kubeconfig context every kubectl and helm call targets (default: the "
+        "current context)",
+    ),
     ce_version: Optional[str] = typer.Option(
         None,
         "--ce-version",
@@ -595,6 +603,7 @@ def install(
         settings.non_interactive = non_interactive or env_true("NON_INTERACTIVE") or env_true("CI")
 
         settings.values_file = values or ""
+        settings.kube_context = kube_context or env_str("KUBE_CONTEXT")
         settings.ce_version = ce_version or env_str("CE_VERSION")
         settings.chart_path = chart_path or env_str("CHART_PATH")
         settings.config_file = config or env_str("CONFIG_FILE")
