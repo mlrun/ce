@@ -114,6 +114,33 @@ def test_every_changed_value_is_warned_about_and_written_down(upgrade, settings,
     assert "hunter2" not in release_values.value_changes_file(settings).read_text()
 
 
+def test_a_registry_change_warns_that_existing_functions_keep_the_old_one(
+    upgrade, settings, capture_logs
+):
+    # Each function stores its registry; a redeploy after the upgrade still used the old one.
+    settings.registry_url = "registry.host.docker.internal"
+    upgrade()
+    logs = capture_logs(release_values)
+
+    release_values.load_previous_values(settings)
+    release_values.report_value_changes(settings)
+
+    warning = next(line for line in logs if "Functions created before" in line)
+    assert "index.docker.io/old" in warning
+    assert "registry.host.docker.internal" in warning
+
+
+def test_a_first_registry_value_is_not_a_registry_change(upgrade, settings, capture_logs):
+    settings.registry_url = "index.docker.io/new"
+    upgrade({"mlrunMigrations": {"enabled": False}})
+    logs = capture_logs(release_values)
+
+    release_values.load_previous_values(settings)
+    release_values.report_value_changes(settings)
+
+    assert not any("Functions created before" in line for line in logs)
+
+
 def test_a_dry_run_points_at_every_file_it_left(
     monkeypatch, upgrade, settings, capture_logs, tmp_path
 ):

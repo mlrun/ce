@@ -487,6 +487,11 @@ upgrades the release in place. Use it to change a setting, move to another chart
   value the upgrade changes or resets to the chart default is printed as a warning and
   written to `mlrun-ce-values.changes.yaml`, with secret-like values redacted. To keep a
   value, pass it again.
+- **A registry change does not move existing functions.** Each function stores the registry
+  it was created with (`spec.image`, and for Nuclio functions `spec.build.registry` and
+  `spec.runRegistry`), and a redeploy reuses it. After changing the registry (adding
+  `--enable-ingress` to a `--local-registry` install, for example), create those functions
+  again. The upgrade warns when the registry changes.
 - **MLRun DB migrations** run only when asked: `--trigger-migrations` (or
   `TRIGGER_MIGRATIONS`, or `triggerMigrations` in the config file) runs the migrations Job
   with this upgrade. `mlrun-ce-values.yaml` always sets `mlrunMigrations.enabled: false`,

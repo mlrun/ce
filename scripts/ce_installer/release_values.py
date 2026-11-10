@@ -173,3 +173,13 @@ def report_value_changes(settings: Settings) -> None:
         + yaml.safe_dump({"changes": changes}, sort_keys=False),
     )
     log_warn(f"  Written to {path}. To keep a previous value, pass it again.")
+
+    registry = next((c for c in changes if c["key"] == "global.registry.url"), None)
+    if registry and registry["previous"] != UNSET:
+        # A function stores its registry when it is created (spec.image, and for Nuclio
+        # spec.build.registry and spec.runRegistry); the chart value is only the default.
+        log_warn(
+            f"  Functions created before this upgrade keep {registry['previous']} as their "
+            "registry, and a redeploy reuses it. Create them again to move them to "
+            f"{_inline(registry['new'])}."
+        )
