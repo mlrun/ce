@@ -661,6 +661,7 @@ def test_the_config_file_cannot_turn_off_a_toggle_set_by_flag(settings, tmp_path
     settings.skip_validators = True
     settings.trigger_migrations = True
     settings.ingress_class = "haproxy"
+    settings.ingress_class_set_by_cli = True
     settings.config_file = write_config(
         tmp_path,
         "installer:\n"

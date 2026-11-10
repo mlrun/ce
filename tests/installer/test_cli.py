@@ -508,6 +508,28 @@ def test_enable_ingress_takes_an_optional_class(ran):
     assert settings.ingress_class == "traefik"
 
 
+@pytest.mark.parametrize(
+    ("argv", "env", "expected"),
+    [
+        (["--enable-ingress", "nginx"], {}, "nginx"),
+        (["--enable-ingress"], {"INGRESS_CLASS": "nginx"}, "nginx"),
+        (["--enable-ingress"], {}, "traefik"),
+    ],
+)
+def test_a_class_named_by_flag_or_env_beats_the_config_file_even_when_nginx(
+    ran, monkeypatch, tmp_path, argv, env, expected
+):
+    # Naming nginx looked the same as naming nothing, so the file's className won.
+    config_file = tmp_path / "ce-config.yaml"
+    config_file.write_text("installer:\n  ingress:\n    className: traefik\n")
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+
+    _, settings = ran(*argv, "--config", str(config_file))
+
+    assert settings.ingress_class == expected
+
+
 def test_enable_ingress_does_not_swallow_the_next_flag_as_a_class(ran):
     _, settings = ran("--enable-ingress", "--dry-run")
     assert settings.enable_ingress is True

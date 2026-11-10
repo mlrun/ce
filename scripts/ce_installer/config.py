@@ -25,7 +25,7 @@ from typing import Dict, List, Optional, Tuple
 import yaml
 
 from .console import InstallerError, die, log_error, log_warn
-from .settings import DEFAULT_INGRESS_CLASS, Settings, env_str
+from .settings import Settings, env_str
 
 EXAMPLES = ("ce-config.local.yaml.example", "ce-config.remote.yaml.example")
 EXAMPLES_URL = "https://github.com/mlrun/ce/blob/development/scripts/"
@@ -305,8 +305,7 @@ def _apply_flag_and_env_settings(data: Dict, settings: Settings) -> None:
     if not settings.enable_ingress and cfg(data, "installer", "ingress", "enabled") == "true":
         settings.enable_ingress = True
     cfg_ingress_class = cfg(data, "installer", "ingress", "className")
-    # `--enable-ingress CLASS` and INGRESS_CLASS both leave a class other than the default.
-    if cfg_ingress_class and settings.ingress_class == DEFAULT_INGRESS_CLASS:
+    if cfg_ingress_class and not settings.ingress_class_set_by_cli:
         settings.ingress_class = cfg_ingress_class
 
 

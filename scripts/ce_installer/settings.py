@@ -156,6 +156,9 @@ class Settings:
     disable_model_monitoring: bool = False
     enable_ingress: bool = False
     ingress_class: str = DEFAULT_INGRESS_CLASS
+    # Set when --enable-ingress CLASS or INGRESS_CLASS named the class, nginx included, so
+    # the config file's className does not replace it.
+    ingress_class_set_by_cli: bool = False
     enable_otel_operator: bool = False
     enable_otel_collector: bool = False
     enable_otel_namespace_label: bool = False

@@ -628,11 +628,13 @@ def install(
         settings.config_file = config or env_str("CONFIG_FILE")
 
         settings.ingress_class = env_str("INGRESS_CLASS", DEFAULT_INGRESS_CLASS)
+        settings.ingress_class_set_by_cli = bool(env_str("INGRESS_CLASS"))
         settings.enable_ingress = env_true("ENABLE_INGRESS")
         if enable_ingress is not None:
             settings.enable_ingress = True
             if enable_ingress:
                 settings.ingress_class = enable_ingress
+                settings.ingress_class_set_by_cli = True
 
         # The otel four-state is folded from raw argv rather than from the parsed flags,
         # because a MODE names a complete state and order decides the outcome.
