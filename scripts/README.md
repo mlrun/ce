@@ -437,7 +437,9 @@ On a Mac, `host.docker.internal` resolves but its subdomains do not, so add them
 ```
 
 Runs `registry:2.8.3` in the namespace, with images on a 10Gi PVC (`local-registry`, default
-StorageClass), and points MLRun at it over plain HTTP. No registry account or pull secret
+StorageClass), and points MLRun at it over plain HTTP: both image builders, Nuclio's and
+MLRun's (`MLRUN_HTTPDB__BUILDER__INSECURE_PULL_REGISTRY_MODE` and `..._PUSH_...` set to
+`enabled` on the MLRun API), skip TLS for it. No registry account or pull secret
 credentials are needed.
 
 Without ingress the registry is `local-registry.<namespace>.svc.cluster.local:5000`. Builds

@@ -122,9 +122,9 @@ def build_set_flags(settings: Settings) -> List[str]:
 
     if settings.local_registry:
         # registry:2 serves plain HTTP, through the ingress and on its ClusterIP alike, so
-        # the builder has to be told not to try TLS in either mode.
+        # both builders have to be told not to try TLS in either mode.
         #
-        # The builder is nuclio's dashboard, not mlrun — values.yaml sets
+        # Nuclio functions are built by nuclio's dashboard — values.yaml sets
         # nuclio.dashboard.containerBuilderKind: kaniko, and dashboard.yaml reads these two
         # keys. bash set `mlrun.api.kaniko.insecureRegistry`, which no chart has ever read;
         # helm accepts an unknown --set path silently, so the flag looked present and did
@@ -137,6 +137,11 @@ def build_set_flags(settings: Settings) -> List[str]:
         flags += ["--set", "nuclio.dashboard.build.insecurePullRegistry=true"]
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePushRegistry=true"]
         flags += ["--set", "nuclio.dashboard.kaniko.insecurePullRegistry=true"]
+        # Job images are built by MLRun's own kaniko pod, which the API configures from
+        # these two env vars; the chief and the workers both read extraEnvKeyValue.
+        for mode in ("PULL", "PUSH"):
+            env = f"MLRUN_HTTPDB__BUILDER__INSECURE_{mode}_REGISTRY_MODE"
+            flags += ["--set", f"mlrun.api.extraEnvKeyValue.{env}=enabled"]
 
     for key in NODEPORTS:
         if key in settings.node_ports:

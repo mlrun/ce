@@ -27,6 +27,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -564,6 +565,45 @@ def test_kaniko_is_told_the_local_registry_is_insecure_in_either_mode(settings, 
     for block in ("build", "kaniko"):
         assert f"nuclio.dashboard.{block}.insecurePushRegistry=true" in flags
         assert f"nuclio.dashboard.{block}.insecurePullRegistry=true" in flags
+
+
+def test_mlrun_builds_are_told_the_local_registry_is_insecure_too(settings):
+    # MLRun's own builder pod pushes job images: nuclio's keys never reach it, so it tried
+    # TLS against the plain-HTTP registry.
+    settings.local_registry = True
+
+    flags = helm_ops.build_set_flags(settings)
+    for mode in ("PULL", "PUSH"):
+        env = f"MLRUN_HTTPDB__BUILDER__INSECURE_{mode}_REGISTRY_MODE"
+        assert f"mlrun.api.extraEnvKeyValue.{env}=enabled" in flags
+
+
+def test_mlrun_insecure_registry_env_reaches_the_chief_and_the_workers(settings):
+    chart_dir = Path(__file__).resolve().parents[2] / "charts" / "mlrun-ce"
+    if not glob.glob(str(chart_dir / "charts" / "*.tgz")):
+        pytest.skip("subcharts not vendored — run `make helm-update-dependencies` first")
+    settings.local_registry = True
+    flags = helm_ops.build_set_flags(settings)
+
+    rendered = subprocess.run(
+        [
+            "helm",
+            "template",
+            "mlrun",
+            str(chart_dir),
+            *flags,
+            "--show-only",
+            "charts/mlrun/templates/api-chief-deployment.yaml",
+            "--show-only",
+            "charts/mlrun/templates/api-worker-deployment.yaml",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    for mode in ("PULL", "PUSH"):
+        env = f"MLRUN_HTTPDB__BUILDER__INSECURE_{mode}_REGISTRY_MODE"
+        assert rendered.count(f"name: {env}") == 2, env
 
 
 def test_the_insecure_registry_flag_names_a_key_a_chart_actually_reads(settings):
@@ -1243,6 +1283,9 @@ def test_every_set_flag_names_a_key_the_chart_declares(settings):
         node = values
         for part in path.split("."):
             key, _, index = part.partition("[")
+            # A map declared empty, like mlrun.api.extraEnvKeyValue, takes any key.
+            if node == {} and node is not values:
+                break
             if not isinstance(node, dict) or key not in node:
                 missing.append(path)
                 break

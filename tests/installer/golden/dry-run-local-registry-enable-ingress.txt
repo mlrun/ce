@@ -73,5 +73,8 @@ mlrun:
         paths:
         - path: /
           pathType: ImplementationSpecific
+    extraEnvKeyValue:
+      MLRUN_HTTPDB__BUILDER__INSECURE_PULL_REGISTRY_MODE: enabled
+      MLRUN_HTTPDB__BUILDER__INSECURE_PUSH_REGISTRY_MODE: enabled
 mlrunMigrations:
   enabled: false
