@@ -347,6 +347,10 @@ wins for the keys it sets. Ingress hosts and classes are the exception: one set 
 file is kept. Chart values the installer does not manage (resources, replicas, …) come only
 from your `-f` file.
 
+If that file is already there and this run would change it, the installer asks before
+overwriting it; without a prompt (`--non-interactive`) it keeps the old one as
+`mlrun-ce-values.yaml.bak`.
+
 ### The config file
 
 `--config FILE` (or `CONFIG_FILE`) reads the `installer:` block of a YAML file. Every flag

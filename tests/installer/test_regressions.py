@@ -49,7 +49,7 @@ from ce_installer import (
 )
 from ce_installer import settings as cli_settings
 from ce_installer.config import check_required_non_interactive
-from ce_installer.console import InstallerError
+from ce_installer.console import Cancelled, InstallerError
 from ce_installer.settings import prompt_or_env
 from ce_installer.shell import Result
 
@@ -2695,3 +2695,51 @@ def test_other_addresses_are_not_looked_up(monkeypatch, settings):
     settings.external_host_address = "203.0.113.10"
 
     helm_ops.report_unresolved_host(settings)
+
+
+# ------------------------------------------------------------------------------------------
+# An existing installer values file was overwritten without a word
+# ------------------------------------------------------------------------------------------
+
+
+def _existing_values(settings, tmp_path, text="global: {}\n"):
+    path = tmp_path / "mlrun-ce-values.yaml"
+    path.write_text(text)
+    settings.generated_values_file = str(path)
+    settings.registry_url = "index.docker.io/me"
+    return path
+
+
+def test_an_existing_values_file_is_overwritten_only_after_asking(monkeypatch, settings, tmp_path):
+    path = _existing_values(settings, tmp_path)
+    asked = []
+    monkeypatch.setattr(helm_ops, "confirm", lambda s, q: asked.append(q) or False)
+
+    with pytest.raises(Cancelled):
+        helm_ops.settle_existing_installer_values(settings)
+
+    assert asked and str(path) in asked[0]
+    assert path.read_text() == "global: {}\n"
+
+
+def test_without_a_prompt_the_old_values_file_is_kept_as_bak(settings, tmp_path, capture_logs):
+    path = _existing_values(settings, tmp_path)
+    logs = capture_logs(helm_ops)
+    settings.non_interactive = True
+
+    helm_ops.settle_existing_installer_values(settings)
+
+    assert (tmp_path / "mlrun-ce-values.yaml.bak").read_text() == "global: {}\n"
+    assert any(str(path) in line and ".bak" in line for line in logs)
+
+
+def test_an_unchanged_values_file_is_not_asked_about(monkeypatch, settings, tmp_path):
+    settings.registry_url = "index.docker.io/me"
+    path = _existing_values(settings, tmp_path, helm_ops.installer_values_text(settings))
+    monkeypatch.setattr(helm_ops, "confirm", lambda s, q: pytest.fail("asked"))
+    settings.non_interactive = True
+
+    helm_ops.settle_existing_installer_values(settings)
+
+    assert not (tmp_path / "mlrun-ce-values.yaml.bak").exists()
+    assert path.exists()

@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -40,7 +41,13 @@ from .console import (
 )
 from .registry import MANAGED_BY_LABEL, hosts_file_ip
 from .secret_data import redact_secret_data
-from .settings import NODEPORTS, Settings, previous_values_file, value_changes_file
+from .settings import (
+    NODEPORTS,
+    Settings,
+    confirm,
+    previous_values_file,
+    value_changes_file,
+)
 from .shell import helm, helm_cmd, kubectl, kubectl_cmd, stream
 from .ui import print_notes_table, run_deployment_progress_ui
 
@@ -263,6 +270,36 @@ def refuse_values_file_collision(settings: Settings) -> None:
     )
 
 
+def installer_values_text(settings: Settings) -> str:
+    """The installer values file's content, or "" when there is nothing to write."""
+    values = set_flags_to_values(build_set_flags(settings))
+    if not values:
+        return ""
+    return GENERATED_VALUES_HEADER + yaml.safe_dump(values, sort_keys=False)
+
+
+def settle_existing_installer_values(settings: Settings) -> None:
+    """Ask before replacing an installer values file this run would change.
+
+    It is rewritten every run, but a user may have edited it, or kept it for a plain helm
+    upgrade. Read-only until confirm_target, so a "no" leaves everything as it was. Without
+    a prompt the old file is kept beside it as .bak.
+    """
+    path = Path(settings.generated_values_file).resolve()
+    if not path.is_file() or path.read_text() == installer_values_text(settings):
+        return
+    if not settings.non_interactive:
+        if not confirm(settings, f"{path} exists from an earlier run and will change. Overwrite?"):
+            raise cancel(
+                f"Kept {path}; nothing on the cluster was changed. Move it, or set "
+                "GENERATED_VALUES_FILE to another path."
+            )
+        return
+    backup = path.with_name(path.name + ".bak")
+    shutil.copy2(path, backup)
+    log_warn(f"{path} exists from an earlier run and will change; the old one is kept as {backup}.")
+
+
 def write_installer_values(settings: Settings) -> str:
     """Write the installer's values to their file and return its path, or "" if none.
 
@@ -270,12 +307,12 @@ def write_installer_values(settings: Settings) -> str:
     passed as --set live only in the release, and a later `helm upgrade -f` without
     --reuse-values silently resets every one of them to the chart default.
     """
-    values = set_flags_to_values(build_set_flags(settings))
-    if not values:
+    text = installer_values_text(settings)
+    if not text:
         return ""
     refuse_values_file_collision(settings)
     path = Path(settings.generated_values_file).resolve()
-    path.write_text(GENERATED_VALUES_HEADER + yaml.safe_dump(values, sort_keys=False))
+    path.write_text(text)
     log_info(f"Installer values written to {path}")
     return str(path)
 

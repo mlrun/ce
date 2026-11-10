@@ -51,6 +51,7 @@ from .helm_ops import (
     helm_install,
     refuse_a_second_release,
     refuse_values_file_collision,
+    settle_existing_installer_values,
 )
 from .registry import (
     apply_registry_secret,
@@ -376,6 +377,7 @@ def execute(settings: Settings) -> None:
     else:
         run_validators(settings)
     report_value_changes(settings)
+    settle_existing_installer_values(settings)
 
     confirm_target(settings)
 
