@@ -45,7 +45,10 @@ UNSET = "(unset)"
 REDACTED = "<redacted>"
 # Leaf keys whose values stay out of the console and the changes file. Names like
 # `secretName` are references, not secrets, and are shown.
-_SENSITIVE = re.compile(r"(?i)(password|passwd|secretkey|accesskey|token|apikey|credentials?)$")
+_SENSITIVE = re.compile(
+    r"(?i)(password|passwd|secretkey|accesskey|accountkey|clientsecret|connectionstring"
+    r"|token|apikey|credentials?)$"
+)
 
 PREVIOUS_VALUES_HEADER = """\
 # Written by the MLRun CE installer before upgrading: the values release '{release}' was

@@ -114,6 +114,20 @@ def test_every_changed_value_is_warned_about_and_written_down(upgrade, settings,
     assert "hunter2" not in release_values.value_changes_file(settings).read_text()
 
 
+@pytest.mark.parametrize("key", ["clientSecret", "accountKey", "connectionString", "sasToken"])
+def test_azure_credentials_are_redacted_too(upgrade, settings, capture_logs, key):
+    # Only the S3 key names matched, so the chart's Azure credentials were printed.
+    upgrade({"storage": {"azure": {key: "hunter2"}}})
+    logs = capture_logs(release_values)
+
+    release_values.load_previous_values(settings)
+    release_values.report_value_changes(settings)
+
+    assert f"storage.azure.{key}: <redacted> -> (unset)" in "\n".join(logs)
+    assert "hunter2" not in "\n".join(logs)
+    assert "hunter2" not in release_values.value_changes_file(settings).read_text()
+
+
 def test_a_registry_change_warns_that_existing_functions_keep_the_old_one(
     upgrade, settings, capture_logs
 ):
