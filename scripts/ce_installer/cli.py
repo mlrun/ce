@@ -24,6 +24,7 @@ from typing import List, Optional, Sequence
 
 import click
 import typer
+import typer.rich_utils
 
 from .cluster import (
     ensure_namespace,
@@ -398,6 +399,21 @@ def execute(settings: Settings) -> None:
 # left-to-right order, which click does not preserve.
 _RAW_ARGS: List[str] = []
 
+
+# One colour for every option, switch, metavar and the usage line, legible on a light
+# terminal as on a dark one. typer 0.29 renamed STYLE_METAVAR to STYLE_TYPES.
+HELP_STYLE = "bold dark_cyan"
+for _style in (
+    "STYLE_OPTION",
+    "STYLE_SWITCH",
+    "STYLE_NEGATIVE_OPTION",
+    "STYLE_NEGATIVE_SWITCH",
+    "STYLE_METAVAR",
+    "STYLE_TYPES",
+    "STYLE_USAGE",
+):
+    if hasattr(typer.rich_utils, _style):
+        setattr(typer.rich_utils, _style, HELP_STYLE)
 
 app = typer.Typer(
     add_completion=False,

@@ -822,3 +822,19 @@ def test_every_readme_link_in_the_install_skill_lands_on_a_heading():
     assert linked, "the install-ce skill links to no README section"
     broken = sorted(linked - readme_anchors())
     assert not broken, f"install-ce links to missing scripts/README.md headings: {broken}"
+
+
+def test_help_draws_every_option_in_the_one_help_colour(monkeypatch, capsys):
+    # typer's defaults mix bold cyan, green, magenta and yellow; yellow on a light
+    # terminal is barely readable.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(typer.rich_utils, "FORCE_TERMINAL", True)
+    monkeypatch.setattr(typer.rich_utils, "COLOR_SYSTEM", "256")
+
+    assert cli.main(["--help"]) == 0
+
+    out = capsys.readouterr().out
+    assert "\x1b[1;38;5;36m-kube\x1b[0m\x1b[1;38;5;36m-context" in out
+    assert "\x1b[1;38;5;36mCONTEXT" in out
+    for default in ("\x1b[1;36m", "\x1b[1;32m", "\x1b[1;35m", "\x1b[1;33m", "\x1b[33m"):
+        assert default not in out, repr(default)
