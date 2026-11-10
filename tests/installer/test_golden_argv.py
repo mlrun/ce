@@ -98,6 +98,7 @@ CASES = [
     "uninstall --hard-clean",
     "uninstall --dry-run",
     "uninstall --hard-clean --dry-run",
+    "uninstall --hard-clean --delete-namespace",
     # Refusals: the installer must keep declining these, and for the same reason
     "--hard-clean",
     "badverb",

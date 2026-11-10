@@ -295,6 +295,8 @@ def execute(settings: Settings) -> None:
 
     if settings.hard_clean and not settings.uninstall:
         raise die("--hard-clean requires --uninstall.")
+    if settings.delete_namespace and not settings.hard_clean:
+        raise die("--delete-namespace requires --hard-clean.")
 
     if settings.uninstall:
         do_uninstall(settings)
@@ -426,7 +428,14 @@ def install(
     hard_clean: bool = typer.Option(
         False,
         "--hard-clean",
-        help="Use with --uninstall: also delete all PVCs and PVs in the namespace (data loss!)",
+        help="Use with --uninstall: also delete all PVCs and PVs in the namespace (data loss!), "
+        "and the Nuclio functions and MLRun runs in it (asked first when interactive)",
+    ),
+    delete_namespace: bool = typer.Option(
+        False,
+        "--delete-namespace",
+        help="Use with --hard-clean: also delete the namespace and everything left in it, "
+        "without asking (interactive runs ask; non-interactive ones keep it)",
     ),
     skip_secret: bool = typer.Option(
         False,
@@ -578,25 +587,27 @@ def install(
 
         # Flag > env for every boolean toggle; bash seeded each from the env var and then
         # let the flag set it to true, which is the same OR.
-        settings.skip_registry_secret = skip_secret or env_true("SKIP_REGISTRY_SECRET")
-        settings.skip_validators = skip_validators or env_true("SKIP_VALIDATORS")
-        settings.show_progress = show_progress or env_true("SHOW_PROGRESS")
-        settings.uninstall = uninstall or env_true("UNINSTALL")
-        settings.hard_clean = hard_clean or env_true("HARD_CLEAN")
-        settings.disable_system_monitoring = disable_system_monitoring or env_true(
-            "DISABLE_SYSTEM_MONITORING"
-        )
-        settings.disable_spark = disable_spark or env_true("DISABLE_SPARK")
-        settings.disable_mpi = disable_mpi or env_true("DISABLE_MPI")
-        settings.disable_model_monitoring = disable_model_monitoring or env_true(
-            "DISABLE_MODEL_MONITORING"
-        )
-        settings.local_registry = local_registry or env_true("LOCAL_REGISTRY")
-        settings.dry_run = dry_run or env_true("DRY_RUN")
-        settings.devel = devel or env_true("DEVEL")
-        settings.update_dependencies = update_dependencies or env_true("UPDATE_DEPENDENCIES")
+        for attr, flag, env_var in (
+            ("skip_registry_secret", skip_secret, "SKIP_REGISTRY_SECRET"),
+            ("skip_validators", skip_validators, "SKIP_VALIDATORS"),
+            ("show_progress", show_progress, "SHOW_PROGRESS"),
+            ("uninstall", uninstall, "UNINSTALL"),
+            ("hard_clean", hard_clean, "HARD_CLEAN"),
+            ("delete_namespace", delete_namespace, "DELETE_NAMESPACE"),
+            ("disable_system_monitoring", disable_system_monitoring, "DISABLE_SYSTEM_MONITORING"),
+            ("disable_spark", disable_spark, "DISABLE_SPARK"),
+            ("disable_mpi", disable_mpi, "DISABLE_MPI"),
+            ("disable_model_monitoring", disable_model_monitoring, "DISABLE_MODEL_MONITORING"),
+            ("local_registry", local_registry, "LOCAL_REGISTRY"),
+            ("dry_run", dry_run, "DRY_RUN"),
+            ("devel", devel, "DEVEL"),
+            ("update_dependencies", update_dependencies, "UPDATE_DEPENDENCIES"),
+            ("non_interactive", non_interactive, "NON_INTERACTIVE"),
+            ("trigger_migrations", trigger_migrations, "TRIGGER_MIGRATIONS"),
+        ):
+            setattr(settings, attr, flag or env_true(env_var))
         # CI auto-enables non-interactive, matching the bash installer.
-        settings.non_interactive = non_interactive or env_true("NON_INTERACTIVE") or env_true("CI")
+        settings.non_interactive = settings.non_interactive or env_true("CI")
 
         settings.values_file = values or ""
         settings.kube_context = kube_context or env_str("KUBE_CONTEXT")
@@ -628,8 +639,6 @@ def install(
             ),
         )
         settings.otel_set_by_cli = otel_flags_present(_RAW_ARGS)
-
-        settings.trigger_migrations = trigger_migrations or env_true("TRIGGER_MIGRATIONS")
 
         run(settings)
     except InstallerError as exc:

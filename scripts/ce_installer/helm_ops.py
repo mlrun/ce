@@ -566,9 +566,13 @@ def _names(settings: Settings, *args: str) -> List[str]:
     return [line.strip() for line in result.out.splitlines() if line.strip()] if result.ok else []
 
 
+def _nuclio_resources(settings: Settings) -> List[str]:
+    return [name for crd in NUCLIO_CRS for name in _names(settings, crd)]
+
+
 def delete_nuclio_resources(settings: Settings) -> None:
     """Delete the namespace's Nuclio functions and API gateways while Nuclio still runs."""
-    found = [name for crd in NUCLIO_CRS for name in _names(settings, crd)]
+    found = _nuclio_resources(settings) if settings.delete_runtime else []
     if not found:
         return
     if settings.dry_run:
@@ -600,13 +604,31 @@ RUNTIME_KINDS = (
 )
 
 
-def delete_runtime_leftovers(settings: Settings) -> None:
-    """Delete what Nuclio and MLRun created in the namespace and no controller is left to."""
+def _runtime_objects(settings: Settings) -> List[str]:
     found: List[str] = []
     for label in RUNTIME_LABELS:
         for name in _names(settings, RUNTIME_KINDS, "-l", label):
             if name not in found:
                 found.append(name)
+    return found
+
+
+def ask_about_runtime_objects(settings: Settings) -> None:
+    """Ask whether the hard clean takes the user's functions and runs too. Yes by default,
+    which is what --non-interactive keeps: it is a hard clean."""
+    if settings.dry_run or settings.non_interactive:
+        return
+    found = _nuclio_resources(settings) + _runtime_objects(settings)
+    if not found:
+        return
+    shown = ", ".join(found[:8]) + (f" and {len(found) - 8} more" if len(found) > 8 else "")
+    log_warn(f"'{settings.namespace}' holds what Nuclio and MLRun created at run time: {shown}")
+    settings.delete_runtime = confirm(settings, "Delete these functions and runs too?")
+
+
+def delete_runtime_leftovers(settings: Settings) -> None:
+    """Delete what Nuclio and MLRun created in the namespace and no controller is left to."""
+    found = _runtime_objects(settings) if settings.delete_runtime else []
     if not found:
         return
     if settings.dry_run:
@@ -1034,6 +1056,7 @@ def do_uninstall(settings: Settings) -> None:
             )
         if settings.hard_clean and not settings.dry_run:
             confirm_hard_clean_without_release(settings)
+            ask_about_runtime_objects(settings)
     elif settings.dry_run:
         # --dry-run used to be read only on the install path, so
         # `--uninstall --hard-clean --dry-run` really removed the release and really
@@ -1047,6 +1070,7 @@ def do_uninstall(settings: Settings) -> None:
             delete_nuclio_resources(settings)
     else:
         if settings.hard_clean:
+            ask_about_runtime_objects(settings)
             delete_nuclio_resources(settings)
         log_info(
             f"Uninstalling MLRun CE release '{settings.release_name}' "
@@ -1067,4 +1091,47 @@ def do_uninstall(settings: Settings) -> None:
     remove_installer_resources(settings)
 
     pvcs = do_hard_clean(settings) if settings.hard_clean else []
+    if settings.hard_clean and delete_namespace_if_asked(settings):
+        return
     report_uninstall_leftovers(settings, pvcs)
+
+
+# What a namespace can still hold that is worth naming before deleting it.
+NAMESPACE_CONTENT_KINDS = (
+    "deployments,statefulsets,daemonsets,jobs,cronjobs,pods,services,ingresses,configmaps,"
+    "secrets,persistentvolumeclaims"
+)
+
+
+def delete_namespace_if_asked(settings: Settings) -> bool:
+    """Delete the namespace itself: with --delete-namespace, or when asked and answered yes.
+    Never by default, since the namespace may be the user's own. Returns whether it went."""
+    namespace = settings.namespace
+    if settings.dry_run:
+        if settings.delete_namespace:
+            log_info(f"Dry-run: would delete namespace '{namespace}'")
+        return False
+    if not settings.delete_namespace:
+        if settings.non_interactive:
+            return False
+        held = [
+            name
+            for name in _names(settings, NAMESPACE_CONTENT_KINDS)
+            if name != "configmap/kube-root-ca.crt"
+        ]
+        if held:
+            shown = ", ".join(held[:8]) + (f" and {len(held) - 8} more" if len(held) > 8 else "")
+            log_warn(f"'{namespace}' still holds: {shown}")
+        if not confirm(
+            settings, f"Delete namespace '{namespace}' and everything in it?", default_yes=False
+        ):
+            return False
+    log_warn(f"Deleting namespace '{namespace}'...")
+    if kubectl(settings, "delete", "namespace", namespace, "--timeout", "120s").ok:
+        log_info(f"Namespace '{namespace}' deleted. Hard clean complete.")
+        return True
+    log_warn(
+        f"Namespace '{namespace}' is still terminating; check it with: "
+        f"{' '.join(kubectl_cmd(settings))} get namespace {namespace}"
+    )
+    return True

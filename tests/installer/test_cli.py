@@ -580,6 +580,14 @@ def test_hard_clean_without_uninstall_is_refused(monkeypatch):
     assert "--hard-clean requires --uninstall" in excinfo.value.message
 
 
+def test_delete_namespace_without_hard_clean_is_refused(monkeypatch):
+    settings = Settings(uninstall=True, delete_namespace=True)
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
+    with pytest.raises(InstallerError) as excinfo:
+        cli.execute(settings)
+    assert "--delete-namespace requires --hard-clean" in excinfo.value.message
+
+
 def test_uninstall_skips_every_install_step(monkeypatch):
     called = []
     monkeypatch.setattr(cli, "load_config", lambda s: None)

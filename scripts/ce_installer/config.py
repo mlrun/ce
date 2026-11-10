@@ -72,7 +72,8 @@ SCHEMA: Dict = {
 }
 
 # The config key behind each flag. --version, --config and the per-run actions (--uninstall,
-# --hard-clean, --dry-run) have none: a file left saying `hardClean: true` would be a trap.
+# --hard-clean, --delete-namespace, --dry-run) have none: a file left saying
+# `hardClean: true` would be a trap.
 FLAG_KEYS = {
     "--skip-secret": "registry.skipSecret",
     "--skip-validators": "validators.skip",
@@ -97,7 +98,14 @@ FLAG_KEYS = {
     "--non-interactive": "nonInteractive",
     "--trigger-migrations": "triggerMigrations",
 }
-FLAGS_WITHOUT_KEY = ("--version", "--config", "--uninstall", "--hard-clean", "--dry-run")
+FLAGS_WITHOUT_KEY = (
+    "--version",
+    "--config",
+    "--uninstall",
+    "--hard-clean",
+    "--delete-namespace",
+    "--dry-run",
+)
 
 # Keys earlier files may still hold, with what replaced them.
 REMOVED_KEYS = {

@@ -2664,6 +2664,7 @@ def _uninstall_with_release(monkeypatch, settings, recorder, labelled=LABELLED_O
     monkeypatch.setattr(helm_ops, "helm", recorder())
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
     settings.uninstall = True
+    settings.non_interactive = True
     return kube_rec, capture_by_level(monkeypatch, helm_ops)
 
 
@@ -2755,6 +2756,7 @@ def _hard_clean_with_functions(monkeypatch, settings, recorder, answers=None):
     monkeypatch.setattr(helm_ops, "kubectl", rec)
     settings.uninstall = True
     settings.hard_clean = True
+    settings.non_interactive = True
     return rec
 
 
@@ -2843,6 +2845,108 @@ def test_no_nuclio_crd_means_no_delete_and_no_wait(monkeypatch, settings, record
     helm_ops.delete_nuclio_resources(settings)
 
     assert not rec.ran("delete") and not rec.ran("wait")
+
+
+def _answer(monkeypatch, *answers):
+    replies = iter(answers)
+    monkeypatch.setattr("builtins.input", lambda: next(replies))
+
+
+@pytest.mark.parametrize("answer, deleted", [("n", False), ("", True), ("y", True)])
+def test_an_interactive_hard_clean_asks_before_deleting_functions_and_runs(
+    monkeypatch, settings, recorder, answer, deleted
+):
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder)
+    settings.non_interactive = False
+    logs = capture_by_level(monkeypatch, helm_ops)
+    _answer(monkeypatch, answer, "")  # the second answer keeps the namespace
+
+    helm_ops.do_uninstall(settings)
+
+    assert any("nucliofunction.nuclio.io/demo-fn" in line for line in logs["warn"])
+    assert rec.ran("delete nucliofunction.nuclio.io/demo-fn") is deleted
+    assert rec.ran("delete pod/demo-job-x7k2p") is deleted
+    assert rec.ran("uninstall mlrun-ce"), "a no keeps the functions, not the release"
+
+
+def test_nothing_to_ask_about_means_no_functions_prompt(monkeypatch, settings, recorder):
+    _hard_clean_with_functions(
+        monkeypatch,
+        settings,
+        recorder,
+        answers={"get nucliofunctions.nuclio.io": Result(0, ""), "-l mlrun/class": Result(0, "")},
+    )
+    settings.non_interactive = False
+    asked = []
+    monkeypatch.setattr(helm_ops, "confirm", lambda _s, question, **_kw: asked.append(question))
+
+    helm_ops.ask_about_runtime_objects(settings)
+
+    assert asked == [] and settings.delete_runtime
+
+
+@pytest.mark.parametrize("answer, deleted", [("", False), ("n", False), ("y", True)])
+def test_an_interactive_hard_clean_asks_before_deleting_the_namespace(
+    monkeypatch, settings, recorder, answer, deleted
+):
+    rec = _hard_clean_with_functions(
+        monkeypatch,
+        settings,
+        recorder,
+        answers={
+            "get deployments,statefulsets": Result(
+                0, "configmap/kube-root-ca.crt\nsecret/my-own-secret\n"
+            )
+        },
+    )
+    settings.non_interactive = False
+    logs = capture_by_level(monkeypatch, helm_ops)
+    _answer(monkeypatch, "y", answer)
+
+    helm_ops.do_uninstall(settings)
+
+    assert "'mlrun' still holds: secret/my-own-secret" in logs["warn"]
+    assert rec.ran("delete namespace mlrun") is deleted
+    # Deleted, the namespace has nothing left to report on.
+    assert rec.ran("app.kubernetes.io/instance=") is not deleted
+
+
+@pytest.mark.parametrize("flag, deleted", [(False, False), (True, True)])
+def test_a_non_interactive_hard_clean_deletes_the_namespace_only_with_the_flag(
+    monkeypatch, settings, recorder, flag, deleted
+):
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder)
+    settings.delete_namespace = flag
+
+    helm_ops.do_uninstall(settings)
+
+    assert rec.ran("delete namespace mlrun") is deleted
+    assert not rec.ran("get deployments,statefulsets"), "nothing to list without a question"
+
+
+def test_a_dry_run_names_the_namespace_without_deleting_it(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder)
+    logs = capture_by_level(monkeypatch, helm_ops)
+    settings.delete_namespace = True
+    settings.dry_run = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert "Dry-run: would delete namespace 'mlrun'" in logs["info"]
+    assert not rec.ran("delete namespace")
+
+
+def test_a_namespace_that_does_not_go_in_time_is_reported(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(
+        monkeypatch, settings, recorder, answers={"delete namespace": Result(1, "timed out")}
+    )
+    logs = capture_by_level(monkeypatch, helm_ops)
+    settings.delete_namespace = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert any("still terminating" in line for line in logs["warn"])
+    assert not rec.ran("app.kubernetes.io/instance=")
 
 
 def test_the_chart_renders_none_of_the_run_time_labels():

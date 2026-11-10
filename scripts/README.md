@@ -649,14 +649,18 @@ operator's `spark-operator-webhook-certs` has no release label.
 **`--hard-clean`** also deletes every PVC in the namespace and the PVs bound to them. This
 is irreversible. It first deletes the namespace's Nuclio functions and API gateways, while
 Nuclio still runs to remove their Deployments and Services, and after the uninstall the
-pods of MLRun runs and image builds (labelled `mlrun/class` or `mlrun/function`). A plain
-`uninstall` leaves both running. With no release in the namespace it asks you to type the namespace name,
-and refuses under `--non-interactive`.
+pods of MLRun runs and image builds (labelled `mlrun/class` or `mlrun/function`). When
+there are any it lists them and asks first; `--non-interactive` deletes them. A plain
+`uninstall` leaves both running. With no release in the namespace it asks you to type the
+namespace name, and refuses under `--non-interactive`.
 
-Either way the run ends by listing anything still labelled with the release that helm no
-longer tracks (a migrations Job from a failed upgrade, for example), with the
-`kubectl delete` command for it. It deletes none of them. To remove everything that is
-left, delete the namespace: `kubectl delete namespace mlrun`.
+The namespace itself is kept, since it may be yours. At the end, a hard clean lists what is
+still in it and asks whether to delete it too (default no); `--delete-namespace` deletes it
+without asking, and is the only way under `--non-interactive`.
+
+Unless the namespace went, the run ends by listing anything still labelled with the release
+that helm no longer tracks (a migrations Job from a failed upgrade, for example), with the
+`kubectl delete` command for it. It deletes none of them.
 
 ---
 
@@ -797,6 +801,7 @@ else, `false` and `0` included, leaves it off.
 | `-v`, `--version` | | Print the installer version (the chart version it ships with) |
 | `--uninstall` | `UNINSTALL` | Same as the `uninstall` command |
 | `--hard-clean` | `HARD_CLEAN` | With `uninstall`: also delete the namespace's PVCs and PVs, Nuclio functions and MLRun run pods |
+| `--delete-namespace` | `DELETE_NAMESPACE` | With `--hard-clean`: also delete the namespace, without asking |
 | `--dry-run` | `DRY_RUN` | Change nothing: render the chart with `--dry-run=server`, or list what `uninstall` would remove |
 | `--non-interactive` | `NON_INTERACTIVE`, `CI` | Never prompt; exit 1 on a missing required value |
 | `--config FILE` | `CONFIG_FILE` | Read defaults from a `ce-config.yaml` |

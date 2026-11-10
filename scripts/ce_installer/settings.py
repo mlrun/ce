@@ -145,6 +145,9 @@ class Settings:
     show_progress: bool = False
     uninstall: bool = False
     hard_clean: bool = False
+    delete_namespace: bool = False
+    # A hard clean's answer to "delete the functions and runs too?"; yes unless asked.
+    delete_runtime: bool = True
     disable_system_monitoring: bool = False
     disable_spark: bool = False
     disable_mpi: bool = False
