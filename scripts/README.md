@@ -78,13 +78,15 @@ inside a pod you don't need Docker.
 MLRun publishes `mlrun-api`, `mlrun-ui`, `jupyter`, `log-collector` and `mlrun` (the image
 functions run on) for amd64 only. An arm64 node finds no image for its platform, and those
 pods fail with `ImagePullBackOff` (`no match for platform in manifest`). The installer warns
-about this before it installs, and prints these commands with `<mlrun_tag>` filled in:
-the MLRun version of the chart you install (its `appVersion`, or `MLRUN_VERSION` when set).
-Pull the amd64 images first; Docker Desktop runs them under emulation:
+about this before it installs, and prints these commands with the version filled in. Set
+`MLRUN_VERSION` to the MLRun version of the chart you install, its `appVersion`
+(`helm show chart mlrun-ce/mlrun-ce | grep appVersion`), and pull the amd64 images first;
+Docker Desktop runs them under emulation:
 
 ```bash
+MLRUN_VERSION=<appVersion>
 for image in mlrun-api mlrun-ui jupyter log-collector mlrun; do
-  docker pull --platform linux/amd64 quay.io/mlrun/$image:<mlrun_tag>
+  docker pull --platform linux/amd64 "quay.io/mlrun/$image:$MLRUN_VERSION"
 done
 ```
 
@@ -95,7 +97,7 @@ digest and point the tag at it; the chart's `imagePullPolicy: IfNotPresent` then
 
 ```bash
 for image in mlrun-api mlrun-ui jupyter log-collector mlrun; do
-  ref=quay.io/mlrun/$image:<mlrun_tag>
+  ref="quay.io/mlrun/$image:$MLRUN_VERSION"
   digest=$(docker buildx imagetools inspect "$ref" --format \
     '{{range .Manifest.Manifests}}{{if eq .Platform.Architecture "amd64"}}{{.Digest}}{{end}}{{end}}')
   docker exec desktop-control-plane crictl pull "quay.io/mlrun/$image@$digest"

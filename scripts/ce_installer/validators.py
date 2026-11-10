@@ -414,7 +414,7 @@ def validate_node_architecture(settings: Settings) -> bool:
     if "arm64" not in architectures:
         return True
 
-    tag = settings.mlrun_version or chart_app_version(settings) or "<mlrun_tag>"
+    tag = settings.mlrun_version or chart_app_version(settings) or "$MLRUN_VERSION"
     log_warn(
         f"  Node architecture: arm64. MLRun publishes {', '.join(MLRUN_AMD64_ONLY_IMAGES)} "
         "for amd64 only, so those pods fail with ImagePullBackOff unless the amd64 images are "
