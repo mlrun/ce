@@ -251,6 +251,12 @@ def report_coredns_entry_for_registry(settings: Settings, registry_host: str) ->
 
     Nothing here mutates anything, so it runs under --dry-run unchanged.
     """
+    if registry_host.endswith(WILDCARD_DNS_SUFFIXES):
+        log_info(
+            f"Pods resolve {registry_host} through public wildcard DNS; a cluster without "
+            "outside DNS still needs a CoreDNS entry for it (see the README)."
+        )
+        return
     clusterip = resolve_ingress_controller_ip(settings)
     log_warn(f"Pods cannot resolve {registry_host} until CoreDNS knows about it.")
     if not clusterip:

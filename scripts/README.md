@@ -538,6 +538,10 @@ Check it from a pod:
 kubectl run dnstest --rm -it --restart=Never --image=busybox -- nslookup registry.host.docker.internal
 ```
 
+A `nip.io` or `sslip.io` host (`registry.203.0.113.10.nip.io`) needs no entry: CoreDNS
+forwards it to public DNS, which answers with the IP in the name, so the installer prints no
+warning. A cluster without outside DNS still needs the entry.
+
 #### 2. `/etc/hosts` (Docker Desktop)
 
 Docker Desktop resolves `host.docker.internal` itself, but not `registry.host.docker.internal`.

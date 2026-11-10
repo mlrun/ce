@@ -102,7 +102,8 @@ Ask which registry MLRun pushes function images to ([Choosing a registry](../../
 
 `--local-registry` needs, before function builds work ([Local registry](../../../scripts/README.md#local-registry)):
 - an ingress controller in the cluster ([Ingress](../../../scripts/README.md#ingress));
-- a CoreDNS entry for `registry.<address>`, so the builder can push;
+- a CoreDNS entry for `registry.<address>`, so the builder can push (not for a `nip.io` or
+  `sslip.io` address, which public DNS resolves);
 - an `/etc/hosts` line for it on the user's machine, which Docker Desktop's nodes pull through;
 - the host in Docker's `insecure-registries`, because the registry serves plain HTTP;
 - on Docker Desktop, `EXTERNAL_HOST_ADDRESS=host.docker.internal`, not `localhost`.

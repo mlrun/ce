@@ -268,6 +268,22 @@ def test_the_coredns_entry_is_reported_and_the_cluster_configmap_left_alone(
     assert "edit configmap coredns" in reported, "and how to apply it"
 
 
+@pytest.mark.parametrize("host", ["registry.203.0.113.10.nip.io", "registry.203-0-113-10.sslip.io"])
+def test_a_wildcard_dns_registry_needs_no_coredns_entry(
+    monkeypatch, settings, recorder, capture_logs, host
+):
+    rec = recorder(answers={"get svc": Result(0, "10.96.0.10")})
+    monkeypatch.setattr(registry, "kubectl", rec)
+    logs = capture_logs(registry)
+
+    registry.report_coredns_entry_for_registry(settings, host)
+
+    reported = "\n".join(logs)
+    assert "cannot resolve" not in reported and "10.96.0.10" not in reported
+    assert "public wildcard DNS" in reported
+    assert not rec.ran("get svc"), "no controller lookup for an entry nobody needs"
+
+
 def test_a_missing_ingress_controller_says_which_variable_to_set(
     monkeypatch, settings, recorder, capture_logs
 ):
