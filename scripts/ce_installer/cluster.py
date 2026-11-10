@@ -19,7 +19,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import yaml
 
@@ -287,10 +287,10 @@ def register_dependency_repos(settings: Settings, chart_dir: Path) -> None:
         helm(settings, "repo", "add", "--force-update", f"mlrun-ce-dep-{index}", url, check=True)
 
 
-def _published_versions(
+def _published_charts(
     settings: Settings, version: str = "", devel: bool = True
-) -> Optional[List[str]]:
-    """Versions of mlrun-ce/mlrun-ce `helm search` reports, or None if it could not say.
+) -> Optional[List[Dict]]:
+    """The mlrun-ce/mlrun-ce entries `helm search` reports, or None if it could not say.
     Without `version`, helm reports only the newest; prereleases count only with `devel`."""
     args = ["search", "repo", "mlrun-ce/mlrun-ce"]
     if devel:
@@ -307,10 +307,33 @@ def _published_versions(
         return None
     # The keyword is a substring match, so mlrun-ce/mlrun-ce-anything would match too.
     return [
-        str(entry.get("version", "")).lstrip("v")
+        entry
         for entry in entries
         if isinstance(entry, dict) and entry.get("name") == "mlrun-ce/mlrun-ce"
     ]
+
+
+def _published_versions(
+    settings: Settings, version: str = "", devel: bool = True
+) -> Optional[List[str]]:
+    charts = _published_charts(settings, version, devel)
+    if charts is None:
+        return None
+    return [str(chart.get("version", "")).lstrip("v") for chart in charts]
+
+
+def chart_app_version(settings: Settings) -> str:
+    """The MLRun version of the chart being installed (its appVersion), or "" if unknown."""
+    if settings.chart_path:
+        try:
+            chart = yaml.safe_load((Path(settings.chart_path) / "Chart.yaml").read_text())
+        except (OSError, yaml.YAMLError):
+            return ""
+        return str(chart.get("appVersion", "")) if isinstance(chart, dict) else ""
+    if not settings.ce_version:
+        return ""
+    charts = _published_charts(settings, settings.ce_version) or [{}]
+    return str(charts[0].get("app_version", ""))
 
 
 def newest_kind(settings: Settings) -> str:

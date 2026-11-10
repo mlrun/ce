@@ -15,6 +15,7 @@ exit: 0
 ["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.name}{\"/\"}{.metadata.annotations.meta\\.helm\\.sh/release-name}{\" \"}{range .spec.ports[*]}{.nodePort}{\" \"}{end}{\"\\n\"}{end}"]
 ["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.memory}{\"\\n\"}{end}"]
 ["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.ephemeral-storage}{\"\\n\"}{end}"]
+["kubectl", "get", "nodes", "-o", "jsonpath={.items[*].status.nodeInfo.architecture}"]
 ["kubectl", "config", "current-context"]
 ["kubectl", "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}"]
 ["kubectl", "get", "namespace", "mlrun"]

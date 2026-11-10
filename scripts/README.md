@@ -53,13 +53,15 @@ inside a pod you don't need Docker.
 3. Have a Docker Hub username and access token ready ([Choosing a registry](#choosing-a-registry)).
    `--local-registry` needs the extra steps under [Local registry](#local-registry), so
    Docker Hub is the simpler path.
-4. Run `./scripts/install.py` from a clone, or the `uvx` command under
+4. On Apple Silicon, put MLRun's amd64 images on the node first
+   ([Apple Silicon](#apple-silicon-arm64)).
+5. Run `./scripts/install.py` from a clone, or the `uvx` command under
    [Without a clone](#without-a-clone). With a registry account, export
    `EXTERNAL_HOST_ADDRESS=localhost` (or answer `localhost` at the address prompt): the
    suggested `host.docker.internal` resolves inside the cluster but may not on your machine.
    With `--local-registry --enable-ingress`, keep `host.docker.internal`: `localhost` makes
    the registry `registry.localhost`, which a pod may resolve to itself.
-5. If the access table's addresses don't open (Docker Desktop's kind-based cluster does not
+6. If the access table's addresses don't open (Docker Desktop's kind-based cluster does not
    publish NodePorts to the host), forward each service you use to its NodePort number,
    then open `http://localhost:<port>`:
 
@@ -70,6 +72,44 @@ inside a pod you don't need Docker.
    ```
 
    The API is `svc/mlrun-api 30070:8080` and Grafana `svc/grafana 30010:80`.
+
+### Apple Silicon (arm64)
+
+MLRun publishes `mlrun-api`, `mlrun-ui`, `jupyter`, `log-collector` and `mlrun` (the image
+functions run on) for amd64 only. An arm64 node finds no image for its platform, and those
+pods fail with `ImagePullBackOff` (`no match for platform in manifest`). The installer warns
+about this before it installs, and prints these commands with `<mlrun_tag>` filled in:
+the MLRun version of the chart you install (its `appVersion`, or `MLRUN_VERSION` when set).
+Pull the amd64 images first; Docker Desktop runs them under emulation:
+
+```bash
+for image in mlrun-api mlrun-ui jupyter log-collector mlrun; do
+  docker pull --platform linux/amd64 quay.io/mlrun/$image:<mlrun_tag>
+done
+```
+
+That is enough when the cluster uses Docker's own images (Docker Desktop's kubeadm cluster).
+The kind cluster (node `desktop-control-plane`) keeps a separate image store, and there the
+tag still points at a list with no arm64 entry. Pull each amd64 build into the node by
+digest and point the tag at it; the chart's `imagePullPolicy: IfNotPresent` then uses it:
+
+```bash
+for image in mlrun-api mlrun-ui jupyter log-collector mlrun; do
+  ref=quay.io/mlrun/$image:<mlrun_tag>
+  digest=$(docker buildx imagetools inspect "$ref" --format \
+    '{{range .Manifest.Manifests}}{{if eq .Platform.Architecture "amd64"}}{{.Digest}}{{end}}{{end}}')
+  docker exec desktop-control-plane crictl pull "quay.io/mlrun/$image@$digest"
+  docker exec desktop-control-plane ctr -n k8s.io images tag --force "quay.io/mlrun/$image@$digest" "$ref"
+done
+```
+
+Images MLRun builds for your functions start from the amd64 `mlrun` image too, so build them
+for amd64 with Kaniko's `--custom-platform` flag, passed through `extra_args`
+([MLRun: extra arguments](https://docs.mlrun.org/en/stable/runtimes/image-build.html#extra-arguments)):
+
+```python
+func.spec.build.extra_args = "--custom-platform=linux/amd64"
+```
 
 ---
 
@@ -295,7 +335,8 @@ These run before anything is created, dry runs included.
   when set; registry login with the resolved
   credentials, using a throwaway docker config (skipped without docker, with
   `--local-registry`, in a dry run, and when no credentials were given); no IngressClass
-  matching `--enable-ingress`; less than 8Gi allocatable memory or ephemeral storage.
+  matching `--enable-ingress`; less than 8Gi allocatable memory or ephemeral storage; arm64
+  nodes, with the amd64 image pulls to run first ([Apple Silicon](#apple-silicon-arm64)).
 - **NodePorts**: a chart NodePort held by a Service this release does not own is moved to
   the next free port, with a warning naming the Service and the new URL. The new port goes
   into `mlrun-ce-values.yaml`, so the printed URLs, Grafana's link and Jupyter's link to
@@ -681,6 +722,11 @@ The event names the registry the node tried. See [Local registry](#local-registr
 - `registry.<host>` and an `https://` request (port 443) failing: the host is not in
   Docker's `insecure-registries` (step 3).
 - Pushes fail from the builder pod: the CoreDNS entry (step 1) is missing.
+
+### `ImagePullBackOff`: `no match for platform in manifest`
+
+An MLRun image on an arm64 node; MLRun publishes it for amd64 only. See
+[Apple Silicon](#apple-silicon-arm64), then delete the pod so it starts again.
 
 ### `--local-registry` refuses to take over existing objects
 

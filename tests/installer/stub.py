@@ -109,6 +109,8 @@ def handle_kubectl(args):
                 return 0, os.environ.get("STUB_NODE_STORAGE", "56403987978")
             if "InternalIP" in path:
                 return 0, os.environ.get("STUB_NODE_IP", "10.0.0.5")
+            if "nodeInfo.architecture" in path:
+                return 0, os.environ.get("STUB_NODE_ARCH", "amd64")
             return 0, ""
         if what == "svc":
             if "ingress-nginx-controller" in args:

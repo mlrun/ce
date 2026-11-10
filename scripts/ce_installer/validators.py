@@ -24,9 +24,9 @@ import re
 import tempfile
 from typing import Dict, List, Optional, Set, Tuple
 
-from .cluster import effective_context
+from .cluster import chart_app_version, effective_context
 from .console import die, log_error, log_info, log_warn
-from .helm_ops import _lookup, _values_file_contents
+from .helm_ops import README_URL, _lookup, _values_file_contents
 from .settings import (
     DEFAULT_DOCKER_SERVER,
     MIN_HELM_VERSION,
@@ -37,6 +37,10 @@ from .settings import (
     Settings,
 )
 from .shell import docker_available, helm, kubectl, run
+
+# The chart's images with no arm64 build, and `mlrun`, which function pods run on.
+MLRUN_AMD64_ONLY_IMAGES = ("mlrun-api", "mlrun-ui", "jupyter", "log-collector", "mlrun")
+ARM64_ANCHOR = "#apple-silicon-arm64"
 
 STORAGECLASS_JSONPATH = (
     r'{range .items[*]}{.metadata.name}{"="}'
@@ -401,6 +405,31 @@ def validate_node_capacity(settings: Settings) -> bool:
     return True
 
 
+def validate_node_architecture(settings: Settings) -> bool:
+    """Warning only: MLRun publishes some images for amd64 alone, which arm64 nodes refuse."""
+    result = kubectl(
+        settings, "get", "nodes", "-o", "jsonpath={.items[*].status.nodeInfo.architecture}"
+    )
+    architectures = set(result.out.split()) if result.ok else set()
+    if "arm64" not in architectures:
+        return True
+
+    tag = settings.mlrun_version or chart_app_version(settings) or "<mlrun_tag>"
+    log_warn(
+        f"  Node architecture: arm64. MLRun publishes {', '.join(MLRUN_AMD64_ONLY_IMAGES)} "
+        "for amd64 only, so those pods fail with ImagePullBackOff unless the amd64 images are "
+        "on the node first. On Docker Desktop, pull them before installing:"
+    )
+    for image in MLRUN_AMD64_ONLY_IMAGES:
+        log_warn(f"    docker pull --platform linux/amd64 quay.io/mlrun/{image}:{tag}")
+    log_warn(
+        "  Build MLRun functions for amd64: func.spec.build.extra_args = "
+        '"--custom-platform=linux/amd64"'
+    )
+    log_warn(f"  Docker Desktop's kind cluster needs one more step: {README_URL}{ARM64_ANCHOR}")
+    return True
+
+
 def run_blocking_validators(settings: Settings) -> None:
     """The checks that can stop an install, run before anything mutates the cluster.
 
@@ -426,6 +455,7 @@ def run_validators(settings: Settings) -> None:
     validate_ingress_controller(settings)
     ports_ok = resolve_nodeport_conflicts(settings)
     validate_node_capacity(settings)
+    validate_node_architecture(settings)
     if not ports_ok:
         raise die(
             "A NodePort set in the values file is already taken (see above); helm would "

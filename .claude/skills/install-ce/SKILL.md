@@ -175,6 +175,7 @@ Then match the symptom:
 | `chart dependencies ... are missing` | Add `--update-dependencies`, or run `make helm-update-dependencies` |
 | Dry run: `no matches for kind` | [Why](../../../scripts/README.md#--dry-run-fails-with-no-matches-for-kind); a real install is fine |
 | `ErrImagePull` with 401/403 | The pull secret: credentials, `REGISTRY_SERVER` |
+| `ImagePullBackOff` with `no match for platform in manifest` (arm64 node, e.g. Apple Silicon) | MLRun's images are amd64-only: [load them first](../../../scripts/README.md#apple-silicon-arm64) |
 | Function pod `ImagePullBackOff` with `--local-registry` | The event names the registry and the cause: [the step it maps to](../../../scripts/README.md#function-pod-imagepullbackoff-with---local-registry) |
 | A function still builds or pulls from the old registry after a registry change | It keeps the registry it was created with; delete it and create it again |
 | Timeout or `ProgressDeadlineExceeded` | Usually a slow pull: rerun, it upgrades in place ([An install failed or timed out](../../../scripts/README.md#an-install-failed-or-timed-out)) |

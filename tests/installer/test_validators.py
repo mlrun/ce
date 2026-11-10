@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from ce_installer import cli, validators
+from ce_installer import cli, cluster, validators
 from ce_installer.console import InstallerError
 from ce_installer.settings import apply_version_floors
 from ce_installer.shell import Result
@@ -492,6 +492,67 @@ def test_node_capacity_above_the_floor_reports_the_totals(monkeypatch, settings,
     assert "total allocatable memory ~8Gi" in log_text(logs)
     assert "total allocatable ephemeral storage ~8Gi" in log_text(logs)
     assert "below the documented floor" not in log_text(logs)
+
+
+# ------------------------------------------------------------------------------------------
+# Node architecture — advisory
+# ------------------------------------------------------------------------------------------
+
+ARCH_QUERY = "nodeInfo.architecture"
+
+
+def test_arm64_nodes_get_the_amd64_pulls_before_the_install_fails(
+    monkeypatch, settings, capture_logs, tmp_path
+):
+    # MLRun's images have no arm64 build: on Apple Silicon the pods sat in ImagePullBackOff
+    # with no hint, after the install had already started.
+    (tmp_path / "Chart.yaml").write_text("name: mlrun-ce\nappVersion: 1.12.1\n")
+    settings.chart_path = str(tmp_path)
+    install_kubectl(monkeypatch, {ARCH_QUERY: Result(0, "arm64")})
+    logs = capture_logs(validators)
+
+    assert validators.validate_node_architecture(settings) is True
+    text = log_text(logs)
+    for image in validators.MLRUN_AMD64_ONLY_IMAGES:
+        assert f"docker pull --platform linux/amd64 quay.io/mlrun/{image}:1.12.1" in text
+    assert '--custom-platform=linux/amd64"' in text
+    assert validators.ARM64_ANCHOR in text
+
+
+def test_a_published_chart_names_its_mlrun_version_from_the_repo(
+    monkeypatch, settings, capture_logs, recorder
+):
+    settings.ce_version = "0.12.0"
+    entry = {"name": "mlrun-ce/mlrun-ce", "version": "0.12.0", "app_version": "1.12.0"}
+    found = recorder(answers={"search": Result(0, json.dumps([entry]))})
+    monkeypatch.setattr(cluster, "helm", found)
+    install_kubectl(monkeypatch, {ARCH_QUERY: Result(0, "amd64 arm64")})
+    logs = capture_logs(validators)
+
+    validators.validate_node_architecture(settings)
+
+    assert "quay.io/mlrun/mlrun-api:1.12.0" in log_text(logs)
+
+
+def test_mlrun_version_overrides_the_tag_in_the_arm64_pulls(monkeypatch, settings, capture_logs):
+    settings.mlrun_version = "1.11.3"
+    install_kubectl(monkeypatch, {ARCH_QUERY: Result(0, "arm64")})
+    logs = capture_logs(validators)
+
+    validators.validate_node_architecture(settings)
+
+    assert "quay.io/mlrun/mlrun-ui:1.11.3" in log_text(logs)
+
+
+@pytest.mark.parametrize("answer", [Result(0, "amd64 amd64"), Result(1, "", "forbidden")])
+def test_amd64_or_unknown_nodes_say_nothing_about_architecture(
+    monkeypatch, settings, capture_logs, answer
+):
+    install_kubectl(monkeypatch, {ARCH_QUERY: answer})
+    logs = capture_logs(validators)
+
+    assert validators.validate_node_architecture(settings) is True
+    assert "amd64 only" not in log_text(logs)
 
 
 # ------------------------------------------------------------------------------------------
