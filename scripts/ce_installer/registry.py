@@ -314,6 +314,15 @@ def prepare_local_registry(settings: Settings) -> None:
     """The read-only half of the local registry, run before anything is created: its URL,
     which the pull secret and the --set flags need, and the check for objects in the way."""
     settings.local_registry_url = resolve_local_registry_url(settings)
+    if settings.enable_ingress and settings.external_host_address in ("localhost", "127.0.0.1"):
+        log_warn(
+            f"The registry would be {settings.local_registry_url}, which a pod may resolve to "
+            "itself rather than to the ingress controller, so builds could fail to push."
+        )
+        log_warn(
+            "  The tested setup is EXTERNAL_HOST_ADDRESS=host.docker.internal "
+            "(Docker Desktop) or the address of a node."
+        )
     _refuse_foreign_registry_objects(settings)
 
 

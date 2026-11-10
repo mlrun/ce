@@ -309,6 +309,25 @@ def test_local_registry_dry_run_still_resolves_the_url_for_the_rendered_flags(
     assert settings.local_registry_url
 
 
+@pytest.mark.parametrize(
+    ("address", "warned"),
+    [("localhost", True), ("127.0.0.1", True), ("host.docker.internal", False)],
+)
+def test_a_loopback_address_with_an_ingress_registry_is_warned_about(
+    monkeypatch, settings, capture_logs, address, warned
+):
+    # registry.localhost may resolve to the builder pod itself, not to the ingress.
+    logs = capture_logs(registry)
+    settings.local_registry = True
+    settings.enable_ingress = True
+    settings.external_host_address = address
+    monkeypatch.setattr(registry, "kubectl", Recorder())
+
+    registry.prepare_local_registry(settings)
+
+    assert any("host.docker.internal" in line for line in logs) is warned
+
+
 def test_local_registry_real_run_still_applies(monkeypatch, settings):
     settings.dry_run = False
     settings.external_host_address = "localhost"
