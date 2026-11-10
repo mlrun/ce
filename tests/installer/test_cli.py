@@ -300,7 +300,7 @@ def test_values_file_rejects_a_flag_looking_value():
         ("--disable-mpi", "disable_mpi"),
         ("--disable-system-monitoring", "disable_system_monitoring"),
         ("--disable-model-monitoring", "disable_model_monitoring"),
-        ("--skip-dependency-update", "skip_dependency_update"),
+        ("--update-dependencies", "update_dependencies"),
         ("--show-progress", "show_progress"),
         ("--devel", "devel"),
     ],

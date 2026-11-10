@@ -163,7 +163,7 @@ class Settings:
     # True when ce_version is the newest stable chart rather than --ce-version.
     ce_version_is_newest: bool = False
     chart_path: str = ""
-    skip_dependency_update: bool = False
+    update_dependencies: bool = False
     devel: bool = False
     dry_run: bool = False
     non_interactive: bool = False

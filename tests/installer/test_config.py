@@ -159,16 +159,22 @@ def test_an_empty_chart_path_means_the_published_chart(settings, tmp_path):
     assert settings.chart_path == ""
 
 
-def test_the_removed_chart_source_kind_says_what_replaced_it(settings, tmp_path, capture_logs):
+@pytest.mark.parametrize(
+    "key, value, replacement",
+    [("kind", "path", "chartPath"), ("skipDependencyUpdate", "true", "updateDependencies")],
+)
+def test_a_removed_chart_source_key_says_what_replaced_it(
+    settings, tmp_path, capture_logs, key, value, replacement
+):
     logs = capture_logs(config)
     settings.config_file = write_config(
-        tmp_path, "installer:\n  chartSource:\n    kind: path\n    chartPath: ./charts/mlrun-ce\n"
+        tmp_path, f"installer:\n  chartSource:\n    {key}: {value}\n    chartPath: ./c\n"
     )
 
     with pytest.raises(InstallerError):
         config.load_config(settings)
 
-    assert any("chartSource.kind: removed" in line and "chartPath" in line for line in logs)
+    assert any(f"chartSource.{key}: removed" in line and replacement in line for line in logs)
 
 
 # ------------------------------------------------------------------------------------------
@@ -624,7 +630,7 @@ def test_toggles_come_from_the_config_file(settings, tmp_path):
         "  valuesFile: my-values.yaml\n"
         "  registry:\n    skipSecret: true\n"
         "  localRegistry:\n    enabled: true\n"
-        "  chartSource:\n    skipDependencyUpdate: true\n    devel: true\n"
+        "  chartSource:\n    updateDependencies: true\n    devel: true\n"
         "  ingress:\n    enabled: true\n    className: traefik\n"
         "  validators:\n    skip: true\n"
         "  progress:\n    show: true\n",
@@ -635,7 +641,7 @@ def test_toggles_come_from_the_config_file(settings, tmp_path):
     assert settings.non_interactive and settings.trigger_migrations
     assert settings.values_file == "my-values.yaml"
     assert settings.skip_registry_secret and settings.local_registry and settings.devel
-    assert settings.skip_dependency_update and settings.skip_validators and settings.show_progress
+    assert settings.update_dependencies and settings.skip_validators and settings.show_progress
     assert (settings.enable_ingress, settings.ingress_class) == (True, "traefik")
 
 

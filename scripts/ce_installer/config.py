@@ -52,7 +52,7 @@ SCHEMA: Dict = {
             "chartVersion": str,
             "chartPath": str,
             "repoUrl": str,
-            "skipDependencyUpdate": bool,
+            "updateDependencies": bool,
             "devel": bool,
         },
         "versions": {"mlrun": str, "nuclio": str},
@@ -92,7 +92,7 @@ FLAG_KEYS = {
     "--kube-context": "kubeContext",
     "--ce-version": "chartSource.chartVersion",
     "--chart-path": "chartSource.chartPath",
-    "--skip-dependency-update": "chartSource.skipDependencyUpdate",
+    "--update-dependencies": "chartSource.updateDependencies",
     "--devel": "chartSource.devel",
     "--non-interactive": "nonInteractive",
     "--trigger-migrations": "triggerMigrations",
@@ -102,6 +102,9 @@ FLAGS_WITHOUT_KEY = ("--version", "--config", "--uninstall", "--hard-clean", "--
 # Keys earlier files may still hold, with what replaced them.
 REMOVED_KEYS = {
     "installer.chartSource.kind": "removed; a non-empty chartPath selects a local chart",
+    "installer.chartSource.skipDependencyUpdate": (
+        "removed; dependencies are fetched only with updateDependencies: true"
+    ),
 }
 
 
@@ -274,7 +277,7 @@ def _apply_flag_and_env_settings(data: Dict, settings: Settings) -> None:
     for attr, path in (
         ("skip_registry_secret", ("registry", "skipSecret")),
         ("local_registry", ("localRegistry", "enabled")),
-        ("skip_dependency_update", ("chartSource", "skipDependencyUpdate")),
+        ("update_dependencies", ("chartSource", "updateDependencies")),
         ("devel", ("chartSource", "devel")),
         ("non_interactive", ("nonInteractive",)),
         ("skip_validators", ("validators", "skip")),

@@ -523,18 +523,18 @@ def install(
         metavar="DIR",
         help="Install from a local chart directory instead of the published repo — use "
         "./charts/mlrun-ce for this repo's own chart, on whatever branch is checked out. "
-        "Resolves the chart's dependencies first (honouring requirements.lock).",
+        "Its dependencies must be in charts/ already, or pass --update-dependencies.",
     ),
     devel: bool = typer.Option(
         False,
         "--devel",
         help="Without --ce-version: install the newest chart, prereleases (rc) included",
     ),
-    skip_dependency_update: bool = typer.Option(
+    update_dependencies: bool = typer.Option(
         False,
-        "--skip-dependency-update",
-        help="With --chart-path: do not fetch chart dependencies at all. Use when charts/ is "
-        "already vendored and the host has no access to the upstream Helm repos.",
+        "--update-dependencies",
+        help="With --chart-path: fetch the chart dependencies requirements.lock names when "
+        "charts/ lacks them (helm dependency build). Without it, missing ones stop the run.",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -592,9 +592,7 @@ def install(
         settings.local_registry = local_registry or env_true("LOCAL_REGISTRY")
         settings.dry_run = dry_run or env_true("DRY_RUN")
         settings.devel = devel or env_true("DEVEL")
-        settings.skip_dependency_update = skip_dependency_update or env_true(
-            "SKIP_DEPENDENCY_UPDATE"
-        )
+        settings.update_dependencies = update_dependencies or env_true("UPDATE_DEPENDENCIES")
         # CI auto-enables non-interactive, matching the bash installer.
         settings.non_interactive = non_interactive or env_true("NON_INTERACTIVE") or env_true("CI")
 

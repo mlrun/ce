@@ -49,7 +49,8 @@ ce() { uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=script
 
 `CE_TAG` is a tag from the releases page ([Getting the installer](../../../scripts/README.md#getting-the-installer)).
 The published chart is the default. In a clone, `--chart-path ./charts/mlrun-ce` tests this
-checkout instead ([Installing this repo's chart](../../../scripts/README.md#installing-this-repos-chart)).
+checkout instead ([Installing this repo's chart](../../../scripts/README.md#installing-this-repos-chart));
+add `--update-dependencies` unless `charts/mlrun-ce/charts/` is already filled.
 
 ## 3. Cluster
 

@@ -52,7 +52,7 @@ installer:
     chartVersion: ""
     chartPath: ""
     repoUrl: ""                  # HELM_REPO_URL; blank = https://mlrun.github.io/ce
-    skipDependencyUpdate: false  # --skip-dependency-update: with chartPath, charts/ is vendored
+    updateDependencies: false    # --update-dependencies: with chartPath, fetch missing ones
     devel: false                 # --devel: without chartVersion, an rc can be the newest
 
   # Service image tags on top of the chart's (MLRUN_VERSION, NUCLIO_VERSION).

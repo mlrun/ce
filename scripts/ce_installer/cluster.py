@@ -360,6 +360,8 @@ def resolve_chart_source(settings: Settings) -> None:
         log_warn("--devel is ignored: --ce-version or --chart-path already names the chart.")
         settings.devel = False
     if not settings.chart_path:
+        if settings.update_dependencies:
+            log_warn("--update-dependencies is ignored: it applies only to --chart-path.")
         isolate_helm_repo_config()
         log_info("Adding Helm repository...")
         # --force-update because plain `repo add` errors out when the `mlrun-ce` alias is
@@ -393,10 +395,16 @@ def resolve_chart_source(settings: Settings) -> None:
         )
     log_info(f"Using local chart: {settings.chart_path}")
 
-    if settings.skip_dependency_update:
-        log_info("Skipping chart dependency resolution (--skip-dependency-update).")
-    elif chart_deps_satisfied(chart_dir):
+    if chart_deps_satisfied(chart_dir):
         log_info("Chart dependencies already vendored and match requirements.lock; skipping fetch.")
+    elif not settings.update_dependencies:
+        # Fetching reaches several upstream Helm repos, which an air-gapped host or a pod
+        # cannot, so it is asked for rather than done behind the user's back.
+        raise die(
+            f"The chart dependencies in {chart_dir / 'charts'} are missing or do not match "
+            "requirements.lock. Pass --update-dependencies to fetch them, or run "
+            "`make helm-update-dependencies` in the repo."
+        )
     elif (chart_dir / "requirements.lock").is_file():
         # `build` honours requirements.lock; `update` re-resolves requirements.yaml and
         # rewrites the lock, which is the maintainer operation rather than the consumer one.

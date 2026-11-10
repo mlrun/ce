@@ -20,8 +20,8 @@ a different chart than the operator asked for.
 
 The dependency-resolution tests have no bats counterpart — `--chart-path` preferring
 `helm dependency build`, skipping the fetch when `charts/` already satisfies the lock, and
-obeying `--skip-dependency-update` are deliberate divergences from install.sh (which always
-ran `helm dependency update`).
+fetching only with `--update-dependencies` are deliberate divergences from install.sh (which
+always ran `helm dependency update`).
 """
 
 import os
@@ -96,7 +96,7 @@ def test_chart_path_without_chart_yaml_is_rejected(monkeypatch, settings, tmp_pa
 
 
 def test_valid_chart_path_becomes_the_chart_ref(monkeypatch, settings, tmp_path, recorder):
-    chart_dir = make_chart(tmp_path, deps=LOCK_DEPS)
+    chart_dir = make_chart(tmp_path, deps=LOCK_DEPS, vendored=VENDORED_TARBALLS)
     monkeypatch.setattr(cluster, "helm", recorder())
     settings.chart_path = str(chart_dir)
 
@@ -112,6 +112,7 @@ def test_local_chart_path_does_not_add_the_published_repo(
     rec = recorder()
     monkeypatch.setattr(cluster, "helm", rec)
     settings.chart_path = str(chart_dir)
+    settings.update_dependencies = True
 
     cluster.resolve_chart_source(settings)
 
@@ -142,6 +143,7 @@ def test_dependency_repos_are_registered_before_the_build(
     rec = recorder()
     monkeypatch.setattr(cluster, "helm", rec)
     settings.chart_path = str(chart_dir)
+    settings.update_dependencies = True
 
     cluster.resolve_chart_source(settings)
 
@@ -162,6 +164,7 @@ def test_dependency_repos_go_into_the_isolated_helm_config(
     (chart_dir / "requirements.yaml").write_text(REQUIREMENTS)
     monkeypatch.setattr(cluster, "helm", recorder())
     settings.chart_path = str(chart_dir)
+    settings.update_dependencies = True
 
     cluster.resolve_chart_source(settings)
 
@@ -175,6 +178,7 @@ def test_vendored_dependencies_register_no_repos(monkeypatch, settings, tmp_path
     rec = recorder()
     monkeypatch.setattr(cluster, "helm", rec)
     settings.chart_path = str(chart_dir)
+    settings.update_dependencies = True
 
     cluster.resolve_chart_source(settings)
 
@@ -217,7 +221,7 @@ def test_published_repo_mode_registers_the_repo_before_using_it(monkeypatch, set
 def test_ce_version_in_local_path_mode_warns_that_it_is_ignored(
     monkeypatch, settings, tmp_path, recorder, capture_logs
 ):
-    chart_dir = make_chart(tmp_path, deps=LOCK_DEPS)
+    chart_dir = make_chart(tmp_path, deps=LOCK_DEPS, vendored=VENDORED_TARBALLS)
     monkeypatch.setattr(cluster, "helm", recorder())
     logs = capture_logs(cluster)
     settings.chart_path = str(chart_dir)
@@ -265,6 +269,7 @@ def test_chart_dependencies_are_built_rather_than_updated(
     rec = recorder()
     monkeypatch.setattr(cluster, "helm", rec)
     settings.chart_path = str(chart_dir)
+    settings.update_dependencies = True
 
     cluster.resolve_chart_source(settings)
 
@@ -281,6 +286,7 @@ def test_chart_without_a_lock_falls_back_to_dependency_update(
     rec = recorder()
     monkeypatch.setattr(cluster, "helm", rec)
     settings.chart_path = str(chart_dir)
+    settings.update_dependencies = True
 
     cluster.resolve_chart_source(settings)
 
@@ -296,6 +302,7 @@ def test_vendored_dependencies_matching_the_lock_skip_the_fetch(
     rec = recorder()
     monkeypatch.setattr(cluster, "helm", rec)
     settings.chart_path = str(chart_dir)
+    settings.update_dependencies = True
 
     cluster.resolve_chart_source(settings)
 
@@ -306,20 +313,33 @@ def test_vendored_dependencies_matching_the_lock_skip_the_fetch(
     assert settings.chart_ref == str(chart_dir)
 
 
-def test_skip_dependency_update_never_fetches_even_when_nothing_is_vendored(
+def test_missing_dependencies_stop_the_run_unless_asked_to_fetch(
     monkeypatch, settings, tmp_path, recorder
 ):
     chart_dir = make_chart(tmp_path, deps=LOCK_DEPS)
     rec = recorder()
     monkeypatch.setattr(cluster, "helm", rec)
     settings.chart_path = str(chart_dir)
-    settings.skip_dependency_update = True
+
+    with pytest.raises(InstallerError) as excinfo:
+        cluster.resolve_chart_source(settings)
+
+    # The fetch reaches several upstream repos; it is asked for, never done unannounced.
+    assert not rec.calls
+    assert "--update-dependencies" in excinfo.value.message
+    assert "make helm-update-dependencies" in excinfo.value.message
+
+
+def test_update_dependencies_without_a_chart_path_is_warned_about(
+    monkeypatch, settings, recorder, capture_logs
+):
+    monkeypatch.setattr(cluster, "helm", recorder())
+    logs = capture_logs(cluster)
+    settings.update_dependencies = True
 
     cluster.resolve_chart_source(settings)
 
-    # An explicit opt-out has to win over the automatic check, or the flag only works in
-    # the case where it was not needed.
-    assert not rec.ran("dependency")
+    assert any("--update-dependencies is ignored" in line for line in logs)
 
 
 def test_renamed_dependency_tarball_still_counts_as_vendored(tmp_path):

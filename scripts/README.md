@@ -254,15 +254,15 @@ reaches the nodes.
 To test a branch or a PR, check it out and point the installer at the chart:
 
 ```bash
-./scripts/install.py --chart-path ./charts/mlrun-ce --dry-run
+./scripts/install.py --chart-path ./charts/mlrun-ce --update-dependencies --dry-run
 ./scripts/install.py --chart-path ./charts/mlrun-ce
 ```
 
 The chart version is the one in `charts/mlrun-ce/Chart.yaml`; `--ce-version` is ignored.
-Chart dependencies are fetched with `helm dependency build`, which follows
-`requirements.lock`. The fetch is skipped when `charts/` already holds every locked
-dependency, so an air-gapped host works once they are vendored. `--skip-dependency-update`
-skips it unconditionally.
+The chart's dependencies must already be in `charts/` (`make helm-update-dependencies`),
+or the run stops before changing anything. `--update-dependencies` fetches the missing ones
+with `helm dependency build`, which follows `requirements.lock`; once they are there, an
+air-gapped host needs no flag.
 
 ### Dry run
 
@@ -671,7 +671,7 @@ else, `false` and `0` included, leaves it off.
 | `--config FILE` | `CONFIG_FILE` | Read defaults from a `ce-config.yaml` |
 | `-f`, `--values FILE` | | Base values file; see [From a values file](#from-a-values-file) |
 | `--chart-path DIR` | `CHART_PATH` | Install a local chart directory instead of the published chart |
-| `--skip-dependency-update` | `SKIP_DEPENDENCY_UPDATE` | With `--chart-path`: do not fetch chart dependencies |
+| `--update-dependencies` | `UPDATE_DEPENDENCIES` | With `--chart-path`: fetch the chart dependencies `charts/` lacks |
 | `--ce-version VERSION` | `CE_VERSION` | Install this published chart version (default: the newest stable one) |
 | `--devel` | `DEVEL` | Without `--ce-version`: the newest chart, prereleases (rc) included |
 | `--skip-secret` | `SKIP_REGISTRY_SECRET` | Use an existing pull secret instead of creating one |
