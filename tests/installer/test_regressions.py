@@ -2218,6 +2218,31 @@ def test_the_debug_log_never_holds_the_password(debug_log, monkeypatch, settings
     assert "hunter2-secret" not in debug_log.read_text()
 
 
+def test_the_release_values_an_upgrade_reads_stay_out_of_the_debug_log(
+    debug_log, monkeypatch, settings, tmp_path
+):
+    # `helm get values -o json` is not a Secret manifest, so the redactor let a configured
+    # storage.s3.secretKey into the log the user shares.
+    # Read from a file: argv is logged, and would hold the secret itself.
+    values = tmp_path / "values.json"
+    values.write_text('{"storage": {"s3": {"secretKey": "hunter2-secret"}}}')
+    reader = f"import sys; sys.stdout.write(open({str(values)!r}).read())"
+
+    def helm(_settings, *args, **kwargs):
+        return shell.run([sys.executable, "-c", reader], **kwargs)
+
+    monkeypatch.setattr(release_values, "helm", helm)
+    settings.generated_values_file = str(tmp_path / "mlrun-ce-values.yaml")
+
+    release_values.load_previous_values(settings)
+    console.close_debug_log()
+
+    assert settings.previous_values == {"storage": {"s3": {"secretKey": "hunter2-secret"}}}
+    text = debug_log.read_text()
+    assert "hunter2-secret" not in text
+    assert "stdout not logged" in text
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
 def test_the_debug_log_is_readable_by_its_owner_only(tmp_path):
     path = tmp_path / "install.log"

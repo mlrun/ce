@@ -90,9 +90,14 @@ def _clip(text: str) -> str:
     return text[:DEBUG_OUTPUT_LIMIT] + f"\n... ({len(text) - DEBUG_OUTPUT_LIMIT} more characters)"
 
 
-def _log_command(cmd: Sequence[str], code: int, seconds: float, out: str, error: str) -> None:
+def _log_command(
+    cmd: Sequence[str], code: int, seconds: float, out: str, error: str, log_stdout: bool = True
+) -> None:
     """Record one finished command. stdin is never written: it carries the pull secret."""
     lines = [f"$ {' '.join(redact(cmd))}", f"  exit {code} in {seconds:.2f}s"]
+    if out.strip() and not log_stdout:
+        lines.append(f"  --- stdout not logged ({len(out)} characters) ---")
+        out = ""
     for label, text in (("stdout", out), ("stderr", error)):
         if text.strip():
             lines.append(f"  --- {label} ---")
@@ -105,6 +110,7 @@ def run(
     *,
     input_data: Optional[str] = None,
     check: bool = False,
+    log_stdout: bool = True,
 ) -> Result:
     """Run a command, capturing stdout and stderr separately.
 
@@ -120,6 +126,9 @@ def run(
     manifest. The version validators are the subtler one: `parse_major_minor` takes the
     first `vN.N` anywhere in the string, and a warning naming a Kubernetes version would be
     read as the cluster's own.
+
+    `log_stdout=False` keeps stdout out of the debug log, for output that holds values the
+    Secret redactor does not recognise (`helm get values`).
     """
     started = time.monotonic()
     try:
@@ -136,7 +145,7 @@ def run(
         return Result(127, "")
 
     result = Result(proc.returncode, proc.stdout or "", proc.stderr or "")
-    _log_command(cmd, result.code, time.monotonic() - started, result.out, result.err)
+    _log_command(cmd, result.code, time.monotonic() - started, result.out, result.err, log_stdout)
     if check and not result.ok:
         # Diagnostics land on stderr, but fall back to stdout for tools that report
         # failures there rather than lose the only explanation the user would get.

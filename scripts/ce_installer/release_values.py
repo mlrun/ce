@@ -79,6 +79,7 @@ def load_previous_values(settings: Settings) -> None:
     result = helm(
         settings, "get", "values", settings.release_name,
         "--namespace", settings.namespace, "-o", "json",
+        log_stdout=False,
     )  # fmt: skip
     if not result.ok:
         log_debug(f"No current release values ({(result.err or result.out).strip()})")

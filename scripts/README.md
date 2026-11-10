@@ -681,7 +681,7 @@ that helm no longer tracks (a migrations Job from a failed upgrade, for example)
 Every run writes `mlrun-ce-install.log` in the current directory (`INSTALL_LOG_FILE`): each
 command with its exit code, timing and output, helm's full output, and the traceback if the
 installer crashed. A failed run prints its path. The file is readable by you only and never
-contains the registry password. Values under `data:`/`stringData:` of rendered Secrets are
+contains the registry password, nor the current release's values an upgrade reads. Values under `data:`/`stringData:` of rendered Secrets are
 replaced with `<redacted>`, but values the chart puts in ConfigMaps, pod `env:` or its NOTES
 are not, so check for your own before sharing the log.
 
