@@ -307,6 +307,11 @@ def execute(settings: Settings) -> None:
     # First, for install and uninstall alike: without helm, kubectl and a reachable cluster
     # nothing below can do anything, and every later failure would only be a symptom.
     check_requirements(settings)
+    if settings.dry_run and debug_log_path():
+        log_info(
+            "Dry run: nothing on the cluster changes. Every command and its output, the "
+            f"rendered manifests included, go to the debug log: {debug_log_path()}"
+        )
 
     if settings.hard_clean and not settings.uninstall:
         raise die("--hard-clean requires --uninstall.")

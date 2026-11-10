@@ -372,7 +372,8 @@ def check_required_non_interactive(settings: Settings) -> None:
     time, from inside prompt_or_env. execute() also calls it after the uninstall branch, since
     an uninstall needs no registry credentials.
     """
-    if not settings.non_interactive:
+    # A dry run asks nothing about the registry and needs none of it.
+    if not settings.non_interactive or settings.dry_run:
         return
     if settings.values_file and not settings.config_file:
         return

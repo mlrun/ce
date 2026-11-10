@@ -24,8 +24,12 @@ from typing import List, Optional
 import yaml
 
 from .console import InstallerError, die, log_error, log_info, log_warn
-from .settings import Settings, prompt_or_env
+from .settings import Settings, env_str, prompt_or_env
 from .shell import helm, kubectl, run
+
+# A reserved TLD (RFC 2606): a dry run with no registry renders this, and nothing can
+# ever push to it by accident.
+DRY_RUN_REGISTRY_URL = "dry-run.invalid/registry"
 
 
 def ensure_namespace(settings: Settings) -> None:
@@ -144,6 +148,13 @@ def gather_install_params(settings: Settings) -> None:
                 "node-resolvable name."
             )
         settings.registry_url = settings.local_registry_url
+        return
+
+    if settings.dry_run:
+        settings.registry_url = env_str("REGISTRY_URL") or settings.config_registry_url
+        if not settings.registry_url:
+            settings.registry_url = DRY_RUN_REGISTRY_URL
+            log_info(f"Dry run: no registry URL given; rendering with {DRY_RUN_REGISTRY_URL}.")
         return
 
     suggested = ""

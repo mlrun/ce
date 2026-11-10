@@ -200,6 +200,14 @@ def test_every_missing_required_field_is_reported_in_one_run(settings, tmp_path,
     assert "REGISTRY_PASSWORD" in reported
 
 
+def test_a_dry_run_demands_no_registry_fields(settings):
+    # It asks nothing about the registry and renders a placeholder without one.
+    settings.non_interactive = True
+    settings.dry_run = True
+
+    load_and_check(settings)
+
+
 def test_local_registry_does_not_demand_a_registry_url(settings, tmp_path):
     settings.non_interactive = True
     settings.local_registry = True

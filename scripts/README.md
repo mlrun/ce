@@ -270,8 +270,10 @@ skips it unconditionally.
 ./scripts/install.py --dry-run
 ```
 
-Runs every check and prompt, prints the plan and renders the chart with
-`helm upgrade --install --dry-run=server`. Nothing is created. Helm reads the cluster (API
+Runs every check, prints the plan and renders the chart with
+`helm upgrade --install --dry-run=server`. Nothing is created. It asks nothing about the
+registry: a registry URL or username you pass is used, and without a URL the chart is
+rendered with `dry-run.invalid/registry`. Helm reads the cluster (API
 versions, CRDs, existing resources) but sends nothing to it, so admission webhooks are not
 exercised. A first install on a cluster without the Prometheus Operator CRDs is rendered
 without the monitoring stack ([why](#--dry-run-fails-with-no-matches-for-kind)).

@@ -456,14 +456,21 @@ def prepare_registry_secret(settings: Settings) -> bool:
         return True
 
     # A re-run would otherwise ask for a password it already stored. Only offered when the
-    # run was not handed credentials, which are then meant to replace the stored ones.
+    # run was not handed credentials, which are then meant to replace the stored ones. A dry
+    # run asks nothing about the registry, so it takes the answer that changes nothing.
     if (
         owner == SECRET_OURS
-        and not settings.non_interactive
         and not _credentials_supplied(settings)
-        and confirm(
-            settings,
-            f"Secret '{name}' from a previous install exists in '{settings.namespace}'. Reuse it?",
+        and (
+            settings.dry_run
+            or (
+                not settings.non_interactive
+                and confirm(
+                    settings,
+                    f"Secret '{name}' from a previous install exists in "
+                    f"'{settings.namespace}'. Reuse it?",
+                )
+            )
         )
     ):
         log_info(f"Reusing secret '{name}' (same as --skip-secret).")
@@ -532,6 +539,19 @@ def _apply_registry_secret(settings: Settings, manifest: str) -> None:
 
 
 def collect_registry_credentials(settings: Settings) -> None:
+    if settings.dry_run:
+        # Nothing is pushed, pulled or logged in to, so there is nothing to ask for; the
+        # password is not even read.
+        settings.registry_username_value = (
+            env_str("REGISTRY_USERNAME") or settings.config_registry_username
+        )
+        settings.registry_server_value = (
+            env_str("REGISTRY_SERVER") or settings.config_registry_server or DEFAULT_DOCKER_SERVER
+        )
+        settings.registry_email_value = env_str("REGISTRY_EMAIL") or settings.config_registry_email
+        log_info("Dry run: registry credentials are not asked for.")
+        return
+
     will_prompt = not (env_str("REGISTRY_USERNAME") and _credentials_supplied(settings))
     if will_prompt and not settings.non_interactive:
         log_info(

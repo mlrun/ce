@@ -29,7 +29,7 @@ import os
 import pytest
 import yaml
 
-from ce_installer import registry
+from ce_installer import cluster, registry
 from ce_installer.console import InstallerError
 from ce_installer.shell import Result
 
@@ -73,9 +73,8 @@ def test_password_is_read_from_the_password_file_when_the_env_var_is_unset(
     password_file.write_text("supersecret\n")
     prepare(monkeypatch, settings)
     settings.registry_password_file = str(password_file)
-    settings.dry_run = True
 
-    create_secret(settings)
+    registry.collect_registry_credentials(settings)
 
     # The trailing newline every editor and `echo` leaves at EOF is not part of the
     # password; carrying it through produces a 401 from the registry at image-pull time.
@@ -87,9 +86,8 @@ def test_password_file_windows_line_ending_is_stripped(monkeypatch, settings, tm
     password_file.write_text("supersecret\r\n")
     prepare(monkeypatch, settings)
     settings.registry_password_file = str(password_file)
-    settings.dry_run = True
 
-    create_secret(settings)
+    registry.collect_registry_credentials(settings)
 
     # A file authored on Windows, or mounted from a Secret created there, is the same case
     # as above but leaves a \r that is invisible in every log and error message.
@@ -102,9 +100,8 @@ def test_password_env_var_wins_over_the_password_file(monkeypatch, settings, tmp
     prepare(monkeypatch, settings)
     monkeypatch.setenv("REGISTRY_PASSWORD", "fromenv")
     settings.registry_password_file = str(password_file)
-    settings.dry_run = True
 
-    create_secret(settings)
+    registry.collect_registry_credentials(settings)
 
     # Both set at once is the "override what the CI mount provides" case, so the explicit
     # variable has to win. The file must not even be consulted.
@@ -117,10 +114,9 @@ def test_missing_password_file_is_rejected_naming_the_variable_and_the_path(
     missing = tmp_path / "nonexistent" / "pw.txt"
     prepare(monkeypatch, settings)
     settings.registry_password_file = str(missing)
-    settings.dry_run = True
 
     with pytest.raises(InstallerError) as excinfo:
-        create_secret(settings)
+        registry.collect_registry_credentials(settings)
 
     # Falling back to the prompt (or to an empty password) would turn a typo'd mount path
     # into a secret containing nothing, discovered only when a pod cannot pull.
@@ -315,3 +311,58 @@ def test_a_controller_reference_without_a_namespace_is_rejected(monkeypatch, set
 
     with pytest.raises(InstallerError):
         registry.resolve_ingress_controller_ip(settings)
+
+
+# ------------------------------------------------------------------------------------------
+# A dry run asks nothing about the registry
+# ------------------------------------------------------------------------------------------
+
+
+def _no_prompts(monkeypatch):
+    def refuse(*args, **kwargs):
+        raise AssertionError("a dry run prompted")
+
+    monkeypatch.setattr(registry, "prompt_or_env", refuse)
+    monkeypatch.setattr(registry, "confirm", refuse)
+
+
+def test_a_dry_run_asks_for_no_registry_credentials(monkeypatch, settings):
+    _no_prompts(monkeypatch)
+    settings.dry_run = True
+    settings.config_registry_username = "from-config"
+
+    assert registry.prepare_registry_secret(settings) is True
+
+    assert settings.registry_username_value == "from-config"
+    assert settings.registry_password_value == ""
+
+
+def test_a_dry_run_reuses_the_installers_secret_without_asking(monkeypatch, settings, recorder):
+    _no_prompts(monkeypatch)
+    monkeypatch.setattr(
+        registry, "kubectl", recorder(default=Result(0, f"exists:{registry.MANAGED_BY_VALUE}"))
+    )
+    settings.dry_run = True
+
+    assert registry.prepare_registry_secret(settings) is False
+    assert settings.registry_secret_reused
+
+
+def test_a_dry_run_without_a_registry_url_renders_a_placeholder(monkeypatch, settings):
+    monkeypatch.setattr(cluster, "resolve_external_host", lambda s: None)
+    monkeypatch.setattr(cluster, "prompt_or_env", lambda *a, **k: pytest.fail("a dry run prompted"))
+    settings.dry_run = True
+
+    cluster.gather_install_params(settings)
+
+    assert settings.registry_url == cluster.DRY_RUN_REGISTRY_URL
+
+
+def test_a_dry_run_uses_a_registry_url_it_was_given(monkeypatch, settings):
+    monkeypatch.setattr(cluster, "resolve_external_host", lambda s: None)
+    monkeypatch.setenv("REGISTRY_URL", "index.docker.io/me")
+    settings.dry_run = True
+
+    cluster.gather_install_params(settings)
+
+    assert settings.registry_url == "index.docker.io/me"
