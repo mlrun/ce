@@ -24,7 +24,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
 import yaml
 
@@ -33,6 +33,8 @@ from .helm_ops import (
     _lookup,
     _values_file_contents,
     build_set_flags,
+    flatten_values,
+    merge_values,
     migration_set_flags,
     set_flags_to_values,
 )
@@ -101,27 +103,6 @@ def load_previous_values(settings: Settings) -> None:
             settings.node_ports[key] = port
 
 
-def _merge(base: dict, overlay: dict) -> dict:
-    merged = dict(base)
-    for key, value in overlay.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = _merge(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
-def _flatten(values: dict, prefix: str = "") -> Dict[str, object]:
-    flat: Dict[str, object] = {}
-    for key, value in values.items():
-        path = f"{prefix}{key}"
-        if isinstance(value, dict) and value:
-            flat.update(_flatten(value, f"{path}."))
-        else:
-            flat[path] = value
-    return flat
-
-
 def _shown(key: str, value: object) -> object:
     if value is UNSET:
         return UNSET
@@ -139,8 +120,9 @@ def value_changes(settings: Settings) -> List[dict]:
     if settings.previous_values is None:
         return []
     flags = build_set_flags(settings) + migration_set_flags(settings)
-    new = _merge(_values_file_contents(settings), set_flags_to_values(flags))
-    before, after = _flatten(settings.previous_values), _flatten(new)
+    ours = merge_values(settings.kept_installer_values, set_flags_to_values(flags))
+    new = merge_values(_values_file_contents(settings), ours)
+    before, after = flatten_values(settings.previous_values), flatten_values(new)
     changes = []
     for key in sorted(set(before) | set(after)):
         old, now = before.get(key, UNSET), after.get(key, UNSET)

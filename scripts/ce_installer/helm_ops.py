@@ -45,6 +45,7 @@ from .secret_data import redact_secret_data
 from .settings import (
     NODEPORTS,
     Settings,
+    choose,
     confirm,
     previous_values_file,
     value_changes_file,
@@ -276,34 +277,105 @@ def refuse_values_file_collision(settings: Settings) -> None:
     )
 
 
+def merge_values(base: dict, overlay: dict) -> dict:
+    """`overlay` over `base`, block by block, as helm layers two values files."""
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = merge_values(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def flatten_values(values: dict, prefix: str = "") -> Dict[str, object]:
+    flat: Dict[str, object] = {}
+    for key, value in values.items():
+        path = f"{prefix}{key}"
+        if isinstance(value, dict) and value:
+            flat.update(flatten_values(value, f"{path}."))
+        else:
+            flat[path] = value
+    return flat
+
+
+def installer_values(settings: Settings) -> dict:
+    """What the installer values file holds: this run's values over any kept by a merge."""
+    return merge_values(
+        settings.kept_installer_values, set_flags_to_values(build_set_flags(settings))
+    )
+
+
 def installer_values_text(settings: Settings) -> str:
     """The installer values file's content, or "" when there is nothing to write."""
-    values = set_flags_to_values(build_set_flags(settings))
+    values = installer_values(settings)
     if not values:
         return ""
     return GENERATED_VALUES_HEADER + yaml.safe_dump(values, sort_keys=False)
 
 
+def _old_installer_values(path: Path) -> Optional[dict]:
+    try:
+        old = yaml.safe_load(path.read_text())
+    except yaml.YAMLError:
+        return None
+    return old if isinstance(old, dict) else None
+
+
+MERGE_CHOICES = ["merge", "override", "cancel"]
+
+
 def settle_existing_installer_values(settings: Settings) -> None:
-    """Ask before replacing an installer values file this run would change.
+    """Ask what to do with an installer values file this run would change.
 
     It is rewritten every run, but a user may have edited it, or kept it for a plain helm
-    upgrade. Read-only until confirm_target, so a "no" leaves everything as it was. Without
-    a prompt the old file is kept beside it as .bak.
+    upgrade. A merge keeps the keys only the old file sets (this run's value wins on the
+    rest); an override drops them. Read-only until confirm_target, so a cancel leaves
+    everything as it was. The old file is kept beside it as .bak either way, and without a
+    prompt the run overrides.
     """
     path = Path(settings.generated_values_file).resolve()
     if not path.is_file() or path.read_text() == installer_values_text(settings):
         return
-    if not settings.non_interactive:
-        if not confirm(settings, f"{path} exists from an earlier run and will change. Overwrite?"):
-            raise cancel(
-                f"Kept {path}; nothing on the cluster was changed. Move it, or set "
-                "GENERATED_VALUES_FILE to another path."
-            )
+    if settings.non_interactive:
+        _back_up(path, "will change")
         return
+
+    old = _old_installer_values(path)
+    before, now = flatten_values(old or {}), flatten_values(installer_values(settings))
+    only_old = sorted(key for key in set(before) - set(now) if before[key] != {})
+    differ = sorted(key for key in set(before) & set(now) if before[key] != now[key])
+    log_warn(f"{path} exists from an earlier run and differs from this run's values:")
+    for key in differ:
+        log_warn(f"  {key}: {before[key]} -> {now[key]}")
+    for key in only_old:
+        log_warn(f"  {key}: {before[key]} (only in the old file)")
+
+    if old is None or not only_old:
+        if old is None:
+            log_warn("  It is not a YAML block of values, so it cannot be merged.")
+        overrides = confirm(settings, "Override it with this run's values?")
+        choice = "override" if overrides else "cancel"
+    else:
+        log_warn(
+            "  merge keeps the keys only in the old file (this run's value wins on the rest); "
+            "override drops them."
+        )
+        choice = choose(settings, "Merge or override it?", MERGE_CHOICES, "override")
+    if choice == "cancel":
+        raise cancel(
+            f"Kept {path}; nothing on the cluster was changed. Move it, or set "
+            "GENERATED_VALUES_FILE to another path."
+        )
+    if choice == "merge":
+        settings.kept_installer_values = old or {}
+    _back_up(path, "is merged" if choice == "merge" else "is overridden")
+
+
+def _back_up(path: Path, what: str) -> None:
     backup = path.with_name(path.name + ".bak")
     shutil.copy2(path, backup)
-    log_warn(f"{path} exists from an earlier run and will change; the old one is kept as {backup}.")
+    log_warn(f"{path} exists from an earlier run and {what}; the old one is kept as {backup}.")
 
 
 def write_installer_values(settings: Settings) -> str:

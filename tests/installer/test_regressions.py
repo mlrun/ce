@@ -43,6 +43,7 @@ from ce_installer import (
     console,
     helm_ops,
     registry,
+    release_values,
     secret_data,
     shell,
     ui,
@@ -51,7 +52,7 @@ from ce_installer import (
 from ce_installer import settings as cli_settings
 from ce_installer.config import check_required_non_interactive
 from ce_installer.console import Cancelled, InstallerError
-from ce_installer.settings import prompt_or_env
+from ce_installer.settings import choose, prompt_or_env
 from ce_installer.shell import Result
 
 from .conftest import Recorder
@@ -3061,16 +3062,118 @@ def _existing_values(settings, tmp_path, text="global: {}\n"):
     return path
 
 
-def test_an_existing_values_file_is_overwritten_only_after_asking(monkeypatch, settings, tmp_path):
+def test_an_existing_values_file_is_overwritten_only_after_asking(
+    monkeypatch, settings, tmp_path, capture_logs
+):
     path = _existing_values(settings, tmp_path)
+    logs = capture_logs(helm_ops)
     asked = []
     monkeypatch.setattr(helm_ops, "confirm", lambda s, q: asked.append(q) or False)
 
     with pytest.raises(Cancelled):
         helm_ops.settle_existing_installer_values(settings)
 
-    assert asked and str(path) in asked[0]
+    assert asked and any(str(path) in line for line in logs)
     assert path.read_text() == "global: {}\n"
+    assert not (tmp_path / "mlrun-ce-values.yaml.bak").exists()
+
+
+OLD_VALUES = """\
+global:
+  registry:
+    url: index.docker.io/old
+nuclio:
+  dashboard:
+    resources:
+      limits:
+        memory: 2Gi
+"""
+
+
+@pytest.mark.parametrize("answer", ["m", "merge"])
+def test_a_merge_keeps_the_old_only_keys_and_this_runs_values_win(
+    monkeypatch, settings, tmp_path, answer
+):
+    path = _existing_values(settings, tmp_path, OLD_VALUES)
+    monkeypatch.setattr("builtins.input", lambda: answer)
+
+    helm_ops.settle_existing_installer_values(settings)
+    helm_ops.write_installer_values(settings)
+
+    written = yaml.safe_load(path.read_text())
+    assert written["global"]["registry"]["url"] == "index.docker.io/me"
+    assert written["nuclio"]["dashboard"]["resources"]["limits"]["memory"] == "2Gi"
+    assert (tmp_path / "mlrun-ce-values.yaml.bak").read_text() == OLD_VALUES
+
+
+@pytest.mark.parametrize("answer", ["", "o", "override"])
+def test_an_override_drops_the_old_only_keys(monkeypatch, settings, tmp_path, answer):
+    path = _existing_values(settings, tmp_path, OLD_VALUES)
+    monkeypatch.setattr("builtins.input", lambda: answer)
+
+    helm_ops.settle_existing_installer_values(settings)
+    helm_ops.write_installer_values(settings)
+
+    written = yaml.safe_load(path.read_text())
+    assert "nuclio" not in written or "resources" not in written["nuclio"].get("dashboard", {})
+    assert (tmp_path / "mlrun-ce-values.yaml.bak").read_text() == OLD_VALUES
+
+
+@pytest.mark.parametrize("answer", ["c", "cancel", "x"])
+def test_a_cancel_leaves_the_old_values_file_alone(monkeypatch, settings, tmp_path, answer):
+    path = _existing_values(settings, tmp_path, OLD_VALUES)
+    monkeypatch.setattr("builtins.input", lambda: answer)
+
+    with pytest.raises(Cancelled):
+        helm_ops.settle_existing_installer_values(settings)
+
+    assert path.read_text() == OLD_VALUES
+    assert not (tmp_path / "mlrun-ce-values.yaml.bak").exists()
+
+
+def test_the_prompt_names_what_differs_and_what_a_merge_keeps(
+    monkeypatch, settings, tmp_path, capture_logs
+):
+    _existing_values(settings, tmp_path, OLD_VALUES)
+    logs = capture_logs(helm_ops)
+    monkeypatch.setattr("builtins.input", lambda: "c")
+
+    with pytest.raises(Cancelled):
+        helm_ops.settle_existing_installer_values(settings)
+
+    assert "  global.registry.url: index.docker.io/old -> index.docker.io/me" in logs
+    assert "  nuclio.dashboard.resources.limits.memory: 2Gi (only in the old file)" in logs
+
+
+def test_a_closed_stdin_cancels_the_choice(monkeypatch, settings):
+    def closed():
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", closed)
+
+    assert choose(settings, "Merge?", helm_ops.MERGE_CHOICES, "override") == "cancel"
+
+
+def test_an_unreadable_old_file_is_only_offered_an_override(monkeypatch, settings, tmp_path):
+    _existing_values(settings, tmp_path, "global: [unclosed\n")
+    asked = []
+    monkeypatch.setattr(helm_ops, "confirm", lambda s, q: asked.append(q) or True)
+    monkeypatch.setattr(helm_ops, "choose", lambda *a: pytest.fail("offered a merge"))
+
+    helm_ops.settle_existing_installer_values(settings)
+
+    assert asked == ["Override it with this run's values?"]
+    assert settings.kept_installer_values == {}
+
+
+def test_the_upgrade_change_report_sees_the_kept_keys(settings):
+    settings.registry_url = "index.docker.io/me"
+    settings.previous_values = {}
+    settings.kept_installer_values = {"nuclio": {"dashboard": {"replicas": 2}}}
+
+    changes = release_values.value_changes(settings)
+
+    assert {"key": "nuclio.dashboard.replicas", "previous": "(unset)", "new": 2} in changes
 
 
 def test_without_a_prompt_the_old_values_file_is_kept_as_bak(settings, tmp_path, capture_logs):

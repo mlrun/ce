@@ -188,6 +188,8 @@ class Settings:
     registry_secret_reused: bool = False
     # Upgrade only: what `helm get values` returns for the current release.
     previous_values: Optional[dict] = None
+    # Keys from an earlier installer values file that the user chose to merge into this one.
+    kept_installer_values: dict = field(default_factory=dict)
     # NodePort values keys this run sets: the current release's ports, and a free port in
     # place of a busy default.
     node_ports: Dict[str, int] = field(default_factory=dict)
@@ -274,6 +276,26 @@ def confirm(settings: Settings, question: str, default_yes: bool = True) -> bool
     if not answer:
         return default_yes
     return answer in ("y", "yes")
+
+
+def choose(settings: Settings, question: str, choices: List[str], default: str) -> str:
+    """Ask for one of `choices`, each answerable by its first letter. Enter takes the
+    default and --non-interactive never asks. A closed stdin or an unknown answer is
+    "cancel": nobody agreed to anything."""
+    if settings.non_interactive:
+        return default
+    options = " / ".join(f"[{c[0]}]{c[1:]}" for c in choices)
+    sys.stderr.write(f"{question} {options} (default: {default}): ")
+    sys.stderr.flush()
+    try:
+        answer = input().strip().lower()
+    except EOFError:
+        log_debug(f"Asked '{question}': stdin closed, treated as cancel")
+        return "cancel"
+    log_debug(f"Asked '{question}': {answer!r}")
+    if not answer:
+        return default
+    return next((c for c in choices if answer in (c, c[0])), "cancel")
 
 
 def _beside_generated_values(settings: Settings, label: str) -> Path:

@@ -357,8 +357,9 @@ def execute(settings: Settings) -> None:
         log_warn("  NodePorts are not checked: one already taken fails the install.")
     else:
         run_validators(settings)
-    report_value_changes(settings)
+    # Before the change report, which has to see the keys a merge keeps.
     settle_existing_installer_values(settings)
+    report_value_changes(settings)
 
     confirm_target(settings)
 
