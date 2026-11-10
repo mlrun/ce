@@ -23,7 +23,8 @@ is the source of truth for every option.
    that cluster ([Uninstalling](../../../scripts/README.md#uninstalling) says what each removes).
 4. Run with `--dry-run` first. You run the installer with `--non-interactive`.
 5. Read what is on disk and in the cluster before you ask the user anything it could answer:
-   config files, the password file, the running release's values.
+   config files, whether the password file exists (`test -s`; never read its contents), the
+   running release's values.
 6. Every run starts at step 1 and goes through the steps in order, even if this conversation
    already installed, detected or decided something. Re-detect, and carry over no answers,
    context, namespace or config from earlier in the chat: ask again.
