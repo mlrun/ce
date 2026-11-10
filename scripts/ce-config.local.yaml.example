@@ -47,13 +47,12 @@ installer:
     ingressControllerService: ""
 
   chartSource:
-    # repo: the published chart, optionally pinned to chartVersion (--ce-version).
-    # path: a chart directory, chartPath (--chart-path); ./charts/mlrun-ce is this repo's.
-    kind: repo
+    # The published chart, pinned by chartVersion (--ce-version), unless chartPath names a
+    # chart directory (--chart-path); ./charts/mlrun-ce is this repo's.
     chartVersion: ""
     chartPath: ""
     repoUrl: ""                  # HELM_REPO_URL; blank = https://mlrun.github.io/ce
-    skipDependencyUpdate: false  # --skip-dependency-update: with kind: path, charts/ is vendored
+    skipDependencyUpdate: false  # --skip-dependency-update: with chartPath, charts/ is vendored
 
   # Service image tags on top of the chart's (MLRUN_VERSION, NUCLIO_VERSION).
   versions:

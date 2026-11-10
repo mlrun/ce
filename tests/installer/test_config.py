@@ -141,10 +141,9 @@ def test_password_in_the_config_file_is_warned_about_and_ignored(settings, tmp_p
 # ------------------------------------------------------------------------------------------
 
 
-def test_chart_kind_path_sets_the_chart_path(settings, tmp_path):
+def test_a_chart_path_alone_selects_the_local_chart(settings, tmp_path):
     settings.config_file = write_config(
-        tmp_path,
-        "installer:\n  chartSource:\n    kind: path\n    chartPath: /some/chart/dir\n",
+        tmp_path, "installer:\n  chartSource:\n    chartPath: /some/chart/dir\n"
     )
 
     config.load_config(settings)
@@ -152,20 +151,24 @@ def test_chart_kind_path_sets_the_chart_path(settings, tmp_path):
     assert settings.chart_path == "/some/chart/dir"
 
 
-def test_chart_kind_path_without_a_chart_path_fails_even_interactively(settings, tmp_path):
-    settings.non_interactive = False
+def test_an_empty_chart_path_means_the_published_chart(settings, tmp_path):
+    settings.config_file = write_config(tmp_path, "installer:\n  chartSource:\n    chartPath: ''\n")
+
+    config.load_config(settings)
+
+    assert settings.chart_path == ""
+
+
+def test_the_removed_chart_source_kind_says_what_replaced_it(settings, tmp_path, capture_logs):
+    logs = capture_logs(config)
     settings.config_file = write_config(
-        tmp_path,
-        "installer:\n  chartSource:\n    kind: path\n",
+        tmp_path, "installer:\n  chartSource:\n    kind: path\n    chartPath: ./charts/mlrun-ce\n"
     )
 
-    with pytest.raises(InstallerError) as excinfo:
+    with pytest.raises(InstallerError):
         config.load_config(settings)
 
-    # Unlike every other field here, chartPath has no flag/env/prompt fallback, so there is
-    # nothing later in the run that could rescue it — interactive mode included.
-    assert excinfo.value.code == 1
-    assert "chartSource.chartPath" in str(excinfo.value)
+    assert any("chartSource.kind: removed" in line and "chartPath" in line for line in logs)
 
 
 # ------------------------------------------------------------------------------------------
@@ -280,7 +283,6 @@ def test_config_file_never_overrides_a_flag_or_env_value(settings, tmp_path):
         "installer:\n"
         "  kubeContext: from-config\n"
         "  chartSource:\n"
-        "    kind: path\n"
         "    chartPath: /from/config\n"
         "    chartVersion: 9.9.9\n",
     )
@@ -412,46 +414,6 @@ def test_otel_config_still_applies_when_no_otel_flag_was_passed(settings, tmp_pa
     config.load_config(settings)
 
     assert settings.enable_otel_operator is True
-
-
-# ------------------------------------------------------------------------------------------
-# chartSource.kind selects where the chart comes from, so a typo may not be ignored
-# ------------------------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("kind", ["pth", "Path", "local", "git"])
-def test_an_unrecognised_chart_source_kind_is_rejected(settings, tmp_path, kind):
-    # Falling through to repo mode would install the *published* chart while the file is
-    # plainly asking for the local one — the difference between testing your branch and
-    # testing whatever is on the chart repo, with nothing said either way.
-    settings.config_file = write_config(
-        tmp_path,
-        f"installer:\n  chartSource:\n    kind: {kind}\n    chartPath: ./charts/mlrun-ce\n",
-    )
-
-    with pytest.raises(InstallerError) as excinfo:
-        config.load_config(settings)
-    assert kind in excinfo.value.message
-
-
-@pytest.mark.parametrize("kind", ["repo", "path"])
-def test_the_documented_chart_source_kinds_are_accepted(settings, tmp_path, kind):
-    settings.config_file = write_config(
-        tmp_path,
-        f"installer:\n  chartSource:\n    kind: {kind}\n    chartPath: ./charts/mlrun-ce\n",
-    )
-
-    config.load_config(settings)
-
-    assert settings.chart_path == ("./charts/mlrun-ce" if kind == "path" else "")
-
-
-def test_an_omitted_chart_source_kind_still_means_repo(settings, tmp_path):
-    settings.config_file = write_config(tmp_path, "installer:\n  chartSource:\n    kind: ''\n")
-
-    config.load_config(settings)
-
-    assert settings.chart_path == ""
 
 
 def test_the_ingress_controller_service_can_come_from_the_config_file(settings, tmp_path):

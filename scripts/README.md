@@ -379,8 +379,8 @@ flag or variable it stands for.
 - **The password** is never read from the file. A `password` key is ignored with a
   warning. Use `REGISTRY_PASSWORD`, `REGISTRY_PASSWORD_FILE` (`registry.passwordFile`) or
   the prompt.
-- **`chartSource.kind`** accepts only `repo` (default) or `path`. With `path`,
-  `chartPath` is required.
+- **`chartSource.chartPath`**, when set, installs that chart directory instead of the
+  published chart, like `--chart-path`.
 - **`components.*`** set to `false` disables a component, like the matching `--disable-*`
   flag. The file cannot re-enable one disabled by a flag.
 - **`otel.*`** set to `true` enables a piece, like the matching `--enable-otel-*` flag. Any

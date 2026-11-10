@@ -27,10 +27,6 @@ import yaml
 from .console import InstallerError, die, log_error, log_warn
 from .settings import DEFAULT_INGRESS_CLASS, Settings, env_str
 
-# The only values installer.chartSource.kind may take; anything else is a config error
-# rather than a silent fall-back to the default.
-CHART_SOURCE_KINDS = ("repo", "path")
-
 EXAMPLES = ("ce-config.local.yaml.example", "ce-config.remote.yaml.example")
 EXAMPLES_URL = "https://github.com/mlrun/ce/blob/development/scripts/"
 
@@ -53,7 +49,6 @@ SCHEMA: Dict = {
         },
         "localRegistry": {"enabled": bool, "ingressControllerService": str},
         "chartSource": {
-            "kind": str,
             "chartVersion": str,
             "chartPath": str,
             "repoUrl": str,
@@ -102,6 +97,11 @@ FLAG_KEYS = {
 }
 FLAGS_WITHOUT_KEY = ("--version", "--config", "--uninstall", "--hard-clean", "--dry-run")
 
+# Keys earlier files may still hold, with what replaced them.
+REMOVED_KEYS = {
+    "installer.chartSource.kind": "removed; a non-empty chartPath selects a local chart",
+}
+
 
 def as_text(value) -> str:
     """Render a YAML scalar as the string the comparisons below read against."""
@@ -137,6 +137,8 @@ _KEY_HOMES = _schema_paths(SCHEMA)
 
 def _unknown_key(path: str, key: str, siblings: List[str]) -> str:
     where = f"{path}.{key}" if path else key
+    if where in REMOVED_KEYS:
+        return f"{where}: {REMOVED_KEYS[where]}"
     home = _KEY_HOMES.get(key)
     if home is not None:
         return f"{where}: not allowed here; it belongs under {home.rstrip('.') or 'the top level'}"
@@ -291,21 +293,11 @@ def _apply_flag_and_env_settings(data: Dict, settings: Settings) -> None:
 
 
 def _apply_chart_and_components(data: Dict, settings: Settings) -> None:
-    cfg_chart_kind = cfg(data, "installer", "chartSource", "kind")
     cfg_chart_version = cfg(data, "installer", "chartSource", "chartVersion")
     cfg_chart_path = cfg(data, "installer", "chartSource", "chartPath")
-    # Checked rather than defaulted: 'kind' selects where the chart comes from, so a typo
-    # like 'pth' would otherwise fall through to repo mode and quietly install the
-    # published chart instead of the local one the file is asking for.
-    if cfg_chart_kind and cfg_chart_kind not in CHART_SOURCE_KINDS:
-        expected = ", ".join(CHART_SOURCE_KINDS)
-        raise die(
-            f"ce-config.yaml sets installer.chartSource.kind: {cfg_chart_kind} — "
-            f"expected one of {expected}."
-        )
     if not settings.ce_version and cfg_chart_version:
         settings.ce_version = cfg_chart_version
-    if not settings.chart_path and cfg_chart_kind == "path" and cfg_chart_path:
+    if not settings.chart_path and cfg_chart_path:
         settings.chart_path = cfg_chart_path
 
     cfg_mlrun = cfg(data, "installer", "versions", "mlrun")
@@ -348,14 +340,6 @@ def _apply_chart_and_components(data: Dict, settings: Settings) -> None:
         ):
             if not getattr(settings, attr) and cfg(data, "installer", "otel", key) == "true":
                 setattr(settings, attr, True)
-
-    # chartPath is a pure config-authoring error with no flag/env/prompt fallback, so it is
-    # checked unconditionally rather than only in --non-interactive mode.
-    if cfg_chart_kind == "path" and not settings.chart_path:
-        raise die(
-            "ce-config.yaml sets installer.chartSource.kind: path but "
-            "installer.chartSource.chartPath is empty."
-        )
 
 
 def check_required_non_interactive(settings: Settings) -> None:
