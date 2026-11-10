@@ -2737,6 +2737,132 @@ def test_a_dry_run_uninstall_reports_no_leftovers(monkeypatch, settings, recorde
     assert not kube_rec.ran("app.kubernetes.io/instance=")
 
 
+# ------------------------------------------------------------------------------------------
+# --hard-clean left Nuclio functions and MLRun run pods running, and said nothing
+# ------------------------------------------------------------------------------------------
+
+
+def _hard_clean_with_functions(monkeypatch, settings, recorder, answers=None):
+    # One recorder for helm and kubectl, so the order between them is visible.
+    rec = recorder(
+        answers={
+            "get nucliofunctions.nuclio.io": Result(0, "nucliofunction.nuclio.io/demo-fn\n"),
+            "-l mlrun/class": Result(0, "pod/demo-job-x7k2p\n"),
+            **(answers or {}),
+        }
+    )
+    monkeypatch.setattr(helm_ops, "helm", rec)
+    monkeypatch.setattr(helm_ops, "kubectl", rec)
+    settings.uninstall = True
+    settings.hard_clean = True
+    return rec
+
+
+def test_nuclio_functions_are_deleted_while_nuclio_still_runs(monkeypatch, settings, recorder):
+    # helm uninstall removed the Nuclio controller and its CRDs together, so nothing was
+    # left to delete a function's Deployment, Service and HPA, which have no owner.
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder)
+
+    helm_ops.do_uninstall(settings)
+
+    joined = rec.joined
+    delete = joined.index(
+        "delete nucliofunction.nuclio.io/demo-fn --namespace mlrun --ignore-not-found"
+    )
+    wait = next(i for i, c in enumerate(joined) if c.startswith("wait --for=delete deployments"))
+    uninstall = next(i for i, c in enumerate(joined) if c.startswith("uninstall mlrun-ce"))
+    assert delete < wait < uninstall
+    assert "-l nuclio.io/function-name" in joined[wait]
+
+
+def test_the_run_time_sweep_matches_none_of_the_charts_own_nuclio_objects(
+    monkeypatch, settings, recorder
+):
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder)
+
+    helm_ops.do_hard_clean(settings)
+
+    selectors = [c[c.index("-l") + 1] for c in rec.calls if c[0] == "get" and "-l" in c]
+    assert selectors == ["nuclio.io/function-name", "mlrun/class", "mlrun/function"]
+    assert not rec.ran("nuclio.io/class"), "the chart's own Nuclio pods are class=service"
+    kinds = rec.argv_containing("-l mlrun/class")[0][1].split(",")
+    assert "pods" in kinds and all("." not in kind for kind in kinds)
+
+
+def test_run_time_leftovers_go_before_the_pvcs_and_only_once(monkeypatch, settings, recorder):
+    # A run's pod still mounting a PVC holds it on pvc-protection.
+    rec = _hard_clean_with_functions(
+        monkeypatch,
+        settings,
+        recorder,
+        answers={"-l mlrun/function": Result(0, "pod/demo-job-x7k2p\npod/build-abc\n")},
+    )
+
+    helm_ops.do_hard_clean(settings)
+
+    deletes = [c for c in rec.joined if c.startswith("delete pod/")]
+    assert deletes == [
+        "delete pod/demo-job-x7k2p pod/build-abc --namespace mlrun --ignore-not-found --timeout 60s"
+    ]
+    assert rec.joined.index(deletes[0]) < next(
+        i for i, c in enumerate(rec.joined) if c.startswith("get pvc")
+    )
+
+
+def test_a_plain_uninstall_leaves_functions_and_runs_alone(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder)
+    settings.hard_clean = False
+
+    helm_ops.do_uninstall(settings)
+
+    assert not rec.ran("nucliofunctions") and not rec.ran("mlrun/class")
+
+
+def test_a_dry_run_hard_clean_lists_functions_and_runs_without_deleting(
+    monkeypatch, settings, recorder
+):
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder)
+    logs = capture_by_level(monkeypatch, helm_ops)
+    settings.dry_run = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert not rec.ran("delete") and not rec.ran("wait") and not rec.ran("uninstall")
+    assert "  Dry-run: would delete nucliofunction.nuclio.io/demo-fn" in logs["info"]
+    assert "  Dry-run: would delete pod/demo-job-x7k2p" in logs["info"]
+
+
+def test_no_nuclio_crd_means_no_delete_and_no_wait(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(
+        monkeypatch,
+        settings,
+        recorder,
+        answers={"get nucliofunctions.nuclio.io": Result(1, "doesn't have a resource type")},
+    )
+
+    helm_ops.delete_nuclio_resources(settings)
+
+    assert not rec.ran("delete") and not rec.ran("wait")
+
+
+def test_the_chart_renders_none_of_the_run_time_labels():
+    chart_dir = Path(__file__).resolve().parents[2] / "charts" / "mlrun-ce"
+    if not glob.glob(str(chart_dir / "charts" / "*.tgz")):
+        pytest.skip("subcharts not vendored — run `make helm-update-dependencies` first")
+    rendered = subprocess.run(
+        ["helm", "template", "mlrun-ce", str(chart_dir)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    labels = [
+        line.strip()
+        for line in rendered.splitlines()
+        if any(line.strip().startswith(f"{label}:") for label in helm_ops.RUNTIME_LABELS)
+    ]
+    assert labels == []
+
+
 def test_the_migrations_job_carries_the_label_the_query_selects_on():
     helpers = (CHART / "templates" / "_helpers.tpl").read_text()
     selector = helpers[helpers.index('define "mlrun-ce.common.selectorLabels"') :]

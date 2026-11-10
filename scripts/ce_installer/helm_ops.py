@@ -552,12 +552,88 @@ def helm_install(settings: Settings) -> None:
         print_notes_table(settings)
 
 
+# Nuclio deletes a function's Deployment, Service, HPA, Ingress, Secrets and CronJobs when
+# its CR is deleted, but only while its controller runs, and helm uninstall removes the
+# controller and the CRDs together, which orphans all of them. The CRs carry no finalizer,
+# so the delete returns at once; the wait is on what the controller removes.
+NUCLIO_CRS = ("nucliofunctions.nuclio.io", "nuclioapigateways.nuclio.io")
+NUCLIO_FUNCTION_LABEL = "nuclio.io/function-name"
+
+
+def _names(settings: Settings, *args: str) -> List[str]:
+    """`kubectl get ... -o name` in the namespace; empty when the kind is unknown."""
+    result = kubectl(settings, "get", *args, "--namespace", settings.namespace, "-o", "name")
+    return [line.strip() for line in result.out.splitlines() if line.strip()] if result.ok else []
+
+
+def delete_nuclio_resources(settings: Settings) -> None:
+    """Delete the namespace's Nuclio functions and API gateways while Nuclio still runs."""
+    found = [name for crd in NUCLIO_CRS for name in _names(settings, crd)]
+    if not found:
+        return
+    if settings.dry_run:
+        for name in found:
+            log_info(f"  Dry-run: would delete {name}")
+        return
+    log_info(f"Deleting {len(found)} Nuclio function(s) and API gateway(s) while Nuclio runs...")
+    kubectl(settings, "delete", *found, "--namespace", settings.namespace, "--ignore-not-found")
+    kubectl(
+        settings,
+        "wait",
+        "--for=delete",
+        "deployments",
+        "-l",
+        NUCLIO_FUNCTION_LABEL,
+        "--namespace",
+        settings.namespace,
+        "--timeout",
+        "120s",
+    )
+
+
+# What Nuclio and MLRun create at run time, which helm never sees: what is left of a
+# function, and the pods of runs and image builds. The chart renders none of these labels;
+# its own Nuclio pods are nuclio.io/class=service.
+RUNTIME_LABELS = (NUCLIO_FUNCTION_LABEL, "mlrun/class", "mlrun/function")
+RUNTIME_KINDS = (
+    "cronjobs,jobs,deployments,pods,services,horizontalpodautoscalers,ingresses,configmaps,secrets"
+)
+
+
+def delete_runtime_leftovers(settings: Settings) -> None:
+    """Delete what Nuclio and MLRun created in the namespace and no controller is left to."""
+    found: List[str] = []
+    for label in RUNTIME_LABELS:
+        for name in _names(settings, RUNTIME_KINDS, "-l", label):
+            if name not in found:
+                found.append(name)
+    if not found:
+        return
+    if settings.dry_run:
+        for name in found:
+            log_info(f"  Dry-run: would delete {name}")
+        return
+    log_info(f"Deleting what Nuclio and MLRun created at run time: {', '.join(found)}")
+    kubectl(
+        settings,
+        "delete",
+        *found,
+        "--namespace",
+        settings.namespace,
+        "--ignore-not-found",
+        "--timeout",
+        "60s",
+    )
+
+
 def do_hard_clean(settings: Settings) -> List[str]:
     """Delete the namespace's PVCs and their released PVs; returns the PVCs that remain."""
     # The reads below run under --dry-run too: listing what would be destroyed is the whole
     # point of dry-running a hard clean, and neither `get` touches anything.
     if settings.dry_run:
         log_warn(f"Dry-run: listing what a hard clean would delete in '{settings.namespace}'.")
+    # Before the PVCs: a run's pod still mounting one would hold it on pvc-protection.
+    delete_runtime_leftovers(settings)
     log_warn(f"Hard clean: deleting all PVCs in namespace '{settings.namespace}'...")
     result = kubectl(
         settings,
@@ -967,7 +1043,11 @@ def do_uninstall(settings: Settings) -> None:
             f"Dry-run: would uninstall release '{settings.release_name}' "
             f"from namespace '{settings.namespace}'."
         )
+        if settings.hard_clean:
+            delete_nuclio_resources(settings)
     else:
+        if settings.hard_clean:
+            delete_nuclio_resources(settings)
         log_info(
             f"Uninstalling MLRun CE release '{settings.release_name}' "
             f"from namespace '{settings.namespace}'..."

@@ -167,6 +167,8 @@ def run_case(args, tmp_path):
                 "STUB_RELEASE_EXISTS": "1",
                 "STUB_PVCS": "data-mlrun-db-0\n",
                 "STUB_PVS": "pv-released mlrun Released\npv-live mlrun Bound\n",
+                "STUB_NUCLIO_FUNCTIONS": "nucliofunction.nuclio.io/demo-fn\n",
+                "STUB_RUNTIME_WORKLOADS": "pod/demo-job-x7k2p\n",
             }
         )
 

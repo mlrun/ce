@@ -122,6 +122,10 @@ def handle_kubectl(args):
             return 0, os.environ.get("STUB_PVCS", "")
         if what == "pv":
             return 0, os.environ.get("STUB_PVS", "")
+        if what == "nucliofunctions.nuclio.io":
+            return 0, os.environ.get("STUB_NUCLIO_FUNCTIONS", "")
+        if what.startswith("cronjobs,jobs,deployments,pods"):
+            return 0, os.environ.get("STUB_RUNTIME_WORKLOADS", "")
         if what in ("deployments", "statefulsets"):
             return 0, "NAME   READY   AGE\nmlrun-api   1/1   2m"
         return 0, ""
