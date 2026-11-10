@@ -1945,9 +1945,10 @@ def test_a_search_that_fails_does_not_block_the_install(
 def _record_execute_steps(monkeypatch, steps):
     for name in ("check_requirements", "refuse_a_second_release", "run_blocking_validators",
                  "resolve_chart_source", "resolve_external_host", "prepare_local_registry",
-                 "prepare_registry_secret", "gather_install_params", "run_validators",
-                 "confirm_target", "ensure_namespace", "deploy_local_registry",
-                 "apply_registry_secret", "helm_install"):  # fmt: skip
+                 "prepare_registry_secret", "gather_install_params", "load_previous_values",
+                 "run_validators", "confirm_target", "ensure_namespace",
+                 "deploy_local_registry", "apply_registry_secret",
+                 "helm_install"):  # fmt: skip
         monkeypatch.setattr(cli, name, lambda s, name=name: steps.append(name) or True)
     monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
 
@@ -1959,7 +1960,6 @@ def test_migrations_requested_on_a_first_install_are_dropped_with_a_warning(
     monkeypatch, settings, capture_logs
 ):
     _record_execute_steps(monkeypatch, [])
-    monkeypatch.setattr(cli, "load_previous_values", lambda s: None)
     monkeypatch.setattr(cli, "report_value_changes", lambda s: None)
     logs = capture_logs(cli)
     settings.trigger_migrations = True
@@ -1980,7 +1980,8 @@ def test_every_prompt_and_read_comes_before_the_first_write(monkeypatch, setting
     first_write = min(steps.index(step) for step in WRITES)
     assert steps.index("confirm_target") == first_write - 1, steps
     for step in ("resolve_chart_source", "prepare_registry_secret", "gather_install_params",
-                 "resolve_external_host", "prepare_local_registry"):  # fmt: skip
+                 "resolve_external_host", "prepare_local_registry",
+                 "load_previous_values"):  # fmt: skip
         assert steps.index(step) < first_write, f"{step} ran after a write: {steps}"
 
 

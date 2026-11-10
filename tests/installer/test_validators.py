@@ -610,6 +610,7 @@ def run_cli(monkeypatch, argv):
         "ensure_namespace",
         "gather_install_params",
         "resolve_chart_source",
+        "load_previous_values",
         "confirm_target",
     ):
         monkeypatch.setattr(cli, name, lambda _settings: None)

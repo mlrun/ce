@@ -646,6 +646,7 @@ def stub_cluster_checks(monkeypatch):
     monkeypatch.setattr(cli, "run_blocking_validators", lambda s: None)
     monkeypatch.setattr(cli, "run_validators", lambda s: None)
     monkeypatch.setattr(cli, "resolve_chart_source", lambda s: None)
+    monkeypatch.setattr(cli, "load_previous_values", lambda s: None)
     monkeypatch.setattr(cli, "confirm_target", lambda s: None)
 
 
@@ -766,6 +767,7 @@ def test_skip_validators_bypasses_the_checks(monkeypatch):
     monkeypatch.setattr(cli, "confirm_target", lambda s: None)
     monkeypatch.setattr(cli, "prepare_registry_secret", lambda s: False)
     monkeypatch.setattr(cli, "gather_install_params", lambda s: None)
+    monkeypatch.setattr(cli, "load_previous_values", lambda s: None)
     monkeypatch.setattr(cli, "helm_install", lambda s: None)
     monkeypatch.setattr(cli, "run_validators", lambda s: called.append("validators"))
 
