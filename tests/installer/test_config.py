@@ -624,7 +624,7 @@ def test_toggles_come_from_the_config_file(settings, tmp_path):
         "  valuesFile: my-values.yaml\n"
         "  registry:\n    skipSecret: true\n"
         "  localRegistry:\n    enabled: true\n"
-        "  chartSource:\n    skipDependencyUpdate: true\n"
+        "  chartSource:\n    skipDependencyUpdate: true\n    devel: true\n"
         "  ingress:\n    enabled: true\n    className: traefik\n"
         "  validators:\n    skip: true\n"
         "  progress:\n    show: true\n",
@@ -634,7 +634,7 @@ def test_toggles_come_from_the_config_file(settings, tmp_path):
 
     assert settings.non_interactive and settings.trigger_migrations
     assert settings.values_file == "my-values.yaml"
-    assert settings.skip_registry_secret and settings.local_registry
+    assert settings.skip_registry_secret and settings.local_registry and settings.devel
     assert settings.skip_dependency_update and settings.skip_validators and settings.show_progress
     assert (settings.enable_ingress, settings.ingress_class) == (True, "traefik")
 

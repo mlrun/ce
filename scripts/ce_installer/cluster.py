@@ -313,18 +313,22 @@ def _published_versions(
     ]
 
 
+def newest_kind(settings: Settings) -> str:
+    return "newest, prereleases included" if settings.devel else "newest stable"
+
+
 def pin_newest_chart_version(settings: Settings) -> None:
-    """Pin the newest stable chart, so the summary names the version helm will install.
+    """Pin the newest chart (stable unless --devel), so the summary names what helm installs.
 
     If the search cannot say, the run stays unpinned and helm picks the same chart itself.
     """
-    newest = _published_versions(settings, devel=False)
+    newest = _published_versions(settings, devel=settings.devel)
     if not newest:
-        log_warn("Could not find the newest chart version; helm installs the newest stable one.")
+        log_warn(f"Could not find the {newest_kind(settings)} chart version; helm picks it.")
         return
     settings.ce_version = newest[0]
     settings.ce_version_is_newest = True
-    log_info(f"Installing chart version {settings.ce_version}, the newest stable one.")
+    log_info(f"Installing chart version {settings.ce_version}, the {newest_kind(settings)}.")
 
 
 def verify_chart_version_published(settings: Settings) -> None:
@@ -352,6 +356,9 @@ def verify_chart_version_published(settings: Settings) -> None:
 
 
 def resolve_chart_source(settings: Settings) -> None:
+    if settings.devel and (settings.ce_version or settings.chart_path):
+        log_warn("--devel is ignored: --ce-version or --chart-path already names the chart.")
+        settings.devel = False
     if not settings.chart_path:
         isolate_helm_repo_config()
         log_info("Adding Helm repository...")

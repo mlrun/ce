@@ -673,6 +673,7 @@ else, `false` and `0` included, leaves it off.
 | `--chart-path DIR` | `CHART_PATH` | Install a local chart directory instead of the published chart |
 | `--skip-dependency-update` | `SKIP_DEPENDENCY_UPDATE` | With `--chart-path`: do not fetch chart dependencies |
 | `--ce-version VERSION` | `CE_VERSION` | Install this published chart version (default: the newest stable one) |
+| `--devel` | `DEVEL` | Without `--ce-version`: the newest chart, prereleases (rc) included |
 | `--skip-secret` | `SKIP_REGISTRY_SECRET` | Use an existing pull secret instead of creating one |
 | `--skip-validators` | `SKIP_VALIDATORS` | Skip the [pre-install checks](#pre-install-checks) |
 | `--local-registry` | `LOCAL_REGISTRY` | Run a registry in the cluster |

@@ -415,6 +415,8 @@ def build_helm_install_command(settings: Settings, installer_values: str = "") -
     cmd += migration_set_flags(settings)
     if settings.ce_version and not settings.chart_path:
         cmd += ["--version", settings.ce_version]
+    elif settings.devel and not settings.chart_path:
+        cmd.append("--devel")
     if settings.dry_run:
         # Server mode reads the cluster (API versions, CRDs, lookup(), existing resources)
         # without sending anything to it.

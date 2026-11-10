@@ -302,6 +302,7 @@ def test_values_file_rejects_a_flag_looking_value():
         ("--disable-model-monitoring", "disable_model_monitoring"),
         ("--skip-dependency-update", "skip_dependency_update"),
         ("--show-progress", "show_progress"),
+        ("--devel", "devel"),
     ],
 )
 def test_boolean_flags_set_their_field(ran, flag, attribute):
@@ -330,6 +331,7 @@ def test_boolean_flags_default_off(ran, flag, attribute):
         ("SKIP_VALIDATORS", "skip_validators"),
         ("SKIP_REGISTRY_SECRET", "skip_registry_secret"),
         ("LOCAL_REGISTRY", "local_registry"),
+        ("DEVEL", "devel"),
         ("DISABLE_SPARK", "disable_spark"),
     ],
 )

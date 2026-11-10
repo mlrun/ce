@@ -1437,6 +1437,45 @@ def test_a_failed_search_leaves_the_choice_to_helm(monkeypatch, settings, record
     assert any("newest stable" in line for line in logs)
 
 
+def test_devel_lets_a_prerelease_be_the_newest(monkeypatch, settings, recorder):
+    rec = _search(monkeypatch, recorder, pinned=[], newest="0.12.1-rc.8")
+    settings.devel = True
+
+    cluster.pin_newest_chart_version(settings)
+
+    [search] = [c for c in rec.calls if c[:1] == ["search"]]
+    assert "--devel" in search
+    assert settings.ce_version == "0.12.1-rc.8"
+
+
+def test_devel_reaches_helm_when_the_search_cannot_pin(monkeypatch, settings, recorder):
+    # Unpinned, helm would otherwise pick the newest stable chart.
+    monkeypatch.setattr(cluster, "helm", recorder(answers={"search": Result(1, "", "boom")}))
+    settings.devel = True
+
+    cluster.pin_newest_chart_version(settings)
+
+    assert "--devel" in helm_ops.build_helm_install_command(settings)
+
+
+@pytest.mark.parametrize("field, value", [("ce_version", "0.11.0"), ("chart_path", "/c")])
+def test_devel_is_ignored_when_the_chart_is_named(
+    monkeypatch, settings, recorder, capture_logs, field, value
+):
+    monkeypatch.setattr(cluster, "isolate_helm_repo_config", lambda: None)
+    monkeypatch.setattr(cluster, "validate_chart_path", lambda s: None)
+    monkeypatch.setattr(cluster, "chart_deps_satisfied", lambda d: True)
+    _search(monkeypatch, recorder, pinned=[{"name": "mlrun-ce/mlrun-ce", "version": "0.11.0"}])
+    logs = capture_logs(cluster)
+    settings.devel = True
+    setattr(settings, field, value)
+
+    cluster.resolve_chart_source(settings)
+
+    assert any("--devel is ignored" in line for line in logs)
+    assert "--devel" not in helm_ops.build_helm_install_command(settings)
+
+
 @pytest.mark.parametrize("field, value", [("ce_version", "0.11.0"), ("chart_path", "/c")])
 def test_an_explicit_chart_choice_is_not_overridden(monkeypatch, settings, recorder, field, value):
     monkeypatch.setattr(cluster, "isolate_helm_repo_config", lambda: None)

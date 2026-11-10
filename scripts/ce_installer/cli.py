@@ -525,6 +525,11 @@ def install(
         "./charts/mlrun-ce for this repo's own chart, on whatever branch is checked out. "
         "Resolves the chart's dependencies first (honouring requirements.lock).",
     ),
+    devel: bool = typer.Option(
+        False,
+        "--devel",
+        help="Without --ce-version: install the newest chart, prereleases (rc) included",
+    ),
     skip_dependency_update: bool = typer.Option(
         False,
         "--skip-dependency-update",
@@ -586,6 +591,7 @@ def install(
         )
         settings.local_registry = local_registry or env_true("LOCAL_REGISTRY")
         settings.dry_run = dry_run or env_true("DRY_RUN")
+        settings.devel = devel or env_true("DEVEL")
         settings.skip_dependency_update = skip_dependency_update or env_true(
             "SKIP_DEPENDENCY_UPDATE"
         )

@@ -164,6 +164,7 @@ class Settings:
     ce_version_is_newest: bool = False
     chart_path: str = ""
     skip_dependency_update: bool = False
+    devel: bool = False
     dry_run: bool = False
     non_interactive: bool = False
     trigger_migrations: bool = False

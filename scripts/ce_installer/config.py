@@ -53,6 +53,7 @@ SCHEMA: Dict = {
             "chartPath": str,
             "repoUrl": str,
             "skipDependencyUpdate": bool,
+            "devel": bool,
         },
         "versions": {"mlrun": str, "nuclio": str},
         "components": {"monitoring": bool, "spark": bool, "mpi": bool, "modelMonitoring": bool},
@@ -92,6 +93,7 @@ FLAG_KEYS = {
     "--ce-version": "chartSource.chartVersion",
     "--chart-path": "chartSource.chartPath",
     "--skip-dependency-update": "chartSource.skipDependencyUpdate",
+    "--devel": "chartSource.devel",
     "--non-interactive": "nonInteractive",
     "--trigger-migrations": "triggerMigrations",
 }
@@ -273,6 +275,7 @@ def _apply_flag_and_env_settings(data: Dict, settings: Settings) -> None:
         ("skip_registry_secret", ("registry", "skipSecret")),
         ("local_registry", ("localRegistry", "enabled")),
         ("skip_dependency_update", ("chartSource", "skipDependencyUpdate")),
+        ("devel", ("chartSource", "devel")),
         ("non_interactive", ("nonInteractive",)),
         ("skip_validators", ("validators", "skip")),
         ("show_progress", ("progress", "show")),
