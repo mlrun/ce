@@ -162,6 +162,8 @@ class Settings:
     ce_version: str = ""
     # True when ce_version is the newest stable chart rather than --ce-version.
     ce_version_is_newest: bool = False
+    # The chart version of the release being upgraded; "" on a first install.
+    installed_chart_version: str = ""
     chart_path: str = ""
     update_dependencies: bool = False
     devel: bool = False

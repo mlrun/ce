@@ -51,6 +51,7 @@ from .helm_ops import (
     do_uninstall,
     helm_install,
     refuse_a_second_release,
+    refuse_an_unasked_downgrade,
     refuse_values_file_collision,
     settle_existing_installer_values,
 )
@@ -318,6 +319,7 @@ def execute(settings: Settings) -> None:
     if not settings.skip_validators:
         run_blocking_validators(settings)
     resolve_chart_source(settings)
+    refuse_an_unasked_downgrade(settings)
 
     if settings.local_registry or settings.enable_ingress:
         resolve_external_host(settings)

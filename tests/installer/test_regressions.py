@@ -2784,3 +2784,93 @@ def test_an_unchanged_values_file_is_not_asked_about(monkeypatch, settings, tmp_
 
     assert not (tmp_path / "mlrun-ce-values.yaml.bak").exists()
     assert path.exists()
+
+
+# ------------------------------------------------------------------------------------------
+# An upgrade without --ce-version moved a release installed from an rc to an older chart
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "installed, target, downgrade",
+    [
+        ("0.12.1-rc.8", "0.12.0", True),
+        ("0.12.0-rc.8", "0.12.0", False),  # a release is newer than its rc
+        ("0.12.0-rc.10", "0.12.0-rc.9", True),  # numerically, not as text
+        ("0.12.0", "0.12.0", False),
+        ("0.11.3", "0.12.0", False),
+        ("not-a-version", "0.12.0", False),
+        ("", "0.12.0", False),
+    ],
+)
+def test_is_downgrade_follows_semver(installed, target, downgrade):
+    assert helm_ops.is_downgrade(installed, target) is downgrade
+
+
+def _downgrade(settings, *, newest=True):
+    settings.installed_chart_version = "0.12.1-rc.8"
+    settings.ce_version = "0.12.0"
+    settings.ce_version_is_newest = newest
+
+
+def test_an_unasked_downgrade_stops_a_non_interactive_run(settings):
+    _downgrade(settings)
+    settings.non_interactive = True
+
+    with pytest.raises(InstallerError) as excinfo:
+        helm_ops.refuse_an_unasked_downgrade(settings)
+
+    assert "--ce-version 0.12.1-rc.8" in excinfo.value.message
+    assert "--devel" in excinfo.value.message
+
+
+@pytest.mark.parametrize("answer", [True, False])
+def test_an_unasked_downgrade_is_asked_about(monkeypatch, settings, answer):
+    _downgrade(settings)
+    asked = []
+    monkeypatch.setattr(
+        helm_ops, "confirm", lambda s, q, default_yes: asked.append(default_yes) or answer
+    )
+
+    if answer:
+        helm_ops.refuse_an_unasked_downgrade(settings)
+    else:
+        with pytest.raises(Cancelled):
+            helm_ops.refuse_an_unasked_downgrade(settings)
+    assert asked == [False], "the default must be no"
+
+
+def test_a_dry_run_only_warns_about_the_downgrade(monkeypatch, settings, capture_logs):
+    _downgrade(settings)
+    settings.dry_run = True
+    monkeypatch.setattr(helm_ops, "confirm", lambda *a, **k: pytest.fail("asked"))
+    logs = capture_logs(helm_ops)
+
+    helm_ops.refuse_an_unasked_downgrade(settings)
+
+    assert any("0.12.0 is older" in line for line in logs)
+
+
+def test_a_downgrade_named_by_ce_version_is_only_warned_about(settings, capture_logs):
+    _downgrade(settings, newest=False)
+    settings.non_interactive = True
+    logs = capture_logs(helm_ops)
+
+    helm_ops.refuse_an_unasked_downgrade(settings)
+
+    assert any("downgrades the release" in line for line in logs)
+
+
+def test_the_installed_chart_version_comes_from_the_release_listing(
+    monkeypatch, settings, recorder
+):
+    listing = [
+        {"name": "mlrun-ce", "chart": "mlrun-ce-0.12.1-rc.8"},
+        {"name": "other-app", "chart": "redis-1.0.0"},
+    ]
+    answers = {"list": Result(0, json.dumps(listing))}
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers=answers))
+
+    helm_ops.refuse_a_second_release(settings)
+
+    assert settings.installed_chart_version == "0.12.1-rc.8"

@@ -23,10 +23,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import yaml
 
+from .cluster import newest_kind
 from .console import (
     InstallerError,
     cancel,
@@ -793,10 +794,10 @@ def remove_installer_resources(settings: Settings) -> None:
 RELEASE_STATUS_FLAGS = ("--deployed", "--failed", "--pending", "--superseded", "--uninstalling")
 
 
-def other_mlrun_ce_releases(settings: Settings) -> List[str]:
-    """`name (chart)` for every mlrun-ce release in the namespace not named RELEASE_NAME.
+def _mlrun_ce_releases(settings: Settings) -> List[Dict]:
+    """Every mlrun-ce release in the namespace, as `helm list -o json` reports it.
 
-    A listing that fails is an error, not an empty namespace: both callers guard against
+    A listing that fails is an error, not an empty namespace: the callers guard against
     damaging another release, and an empty answer would switch the guard off.
     """
     args = ["list", "--namespace", settings.namespace, *RELEASE_STATUS_FLAGS, "-o", "json"]
@@ -809,12 +810,61 @@ def other_mlrun_ce_releases(settings: Settings) -> List[str]:
         releases = json.loads(listed.out) if listed.out.strip() else []
     except ValueError:
         raise die(f"'{command}' did not return JSON: {listed.out.strip()[:200]}") from None
+    return [r for r in releases if re.match(r"mlrun-ce-\d", str(r.get("chart", "")))]
+
+
+def other_mlrun_ce_releases(settings: Settings) -> List[str]:
+    """`name (chart)` for every mlrun-ce release in the namespace not named RELEASE_NAME."""
     return [
         f"{release.get('name')} ({release.get('chart')})"
-        for release in releases
-        if re.match(r"mlrun-ce-\d", str(release.get("chart", "")))
-        and release.get("name") != settings.release_name
+        for release in _mlrun_ce_releases(settings)
+        if release.get("name") != settings.release_name
     ]
+
+
+def _semver_key(version: str) -> Optional[Tuple]:
+    """A sort key for X.Y.Z[-prerelease], or None for anything else. A prerelease sorts
+    before its release; numeric identifiers before text ones, as semver orders them."""
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.*)?", version)
+    if not match:
+        return None
+    core = tuple(int(part) for part in match.group(1, 2, 3))
+    if not match.group(4):
+        return (*core, 1, ())
+    pre = tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in match.group(4).split("."))
+    return (*core, 0, pre)
+
+
+def is_downgrade(installed: str, target: str) -> bool:
+    old, new = _semver_key(installed), _semver_key(target)
+    return old is not None and new is not None and new < old
+
+
+def refuse_an_unasked_downgrade(settings: Settings) -> None:
+    """Stop an upgrade that would move the release to an older chart nobody named.
+
+    Without --ce-version the run installs the newest stable chart, which is older than a
+    release installed from an rc or a local chart. Helm would downgrade it silently, while
+    MLRun's database may already have been migrated by the newer one.
+    """
+    installed, target = settings.installed_chart_version, settings.ce_version
+    if settings.chart_path or not is_downgrade(installed, target):
+        return
+    older = f"Release '{settings.release_name}' runs chart {installed}; {target} is older"
+    if not settings.ce_version_is_newest:
+        log_warn(f"{older}. --ce-version asks for it, so this run downgrades the release.")
+        return
+    ways_out = f"--ce-version {installed} keeps it" + (
+        "" if settings.devel else ", --devel takes the newest prerelease"
+    )
+    log_warn(f"{older}, yet it is the {newest_kind(settings)} chart, which this run would install.")
+    if settings.dry_run:
+        log_warn(f"  A real run asks before downgrading. {ways_out}.")
+        return
+    if settings.non_interactive:
+        raise die(f"Refusing to downgrade unasked. {ways_out}; --ce-version {target} downgrades.")
+    if not confirm(settings, f"Downgrade it from {installed} to {target}?", default_yes=False):
+        raise cancel(f"Nothing on the cluster was changed. {ways_out}.")
 
 
 def refuse_a_second_release(settings: Settings) -> None:
@@ -824,7 +874,15 @@ def refuse_a_second_release(settings: Settings) -> None:
     `mlrun-ce`. A second release collides with the first on the fixed NodePorts and the
     cluster-scoped resources, and helm only finds out halfway through.
     """
-    others = other_mlrun_ce_releases(settings)
+    releases = _mlrun_ce_releases(settings)
+    for release in releases:
+        if release.get("name") == settings.release_name:
+            settings.installed_chart_version = str(release.get("chart", ""))[len("mlrun-ce-") :]
+    others = [
+        f"{release.get('name')} ({release.get('chart')})"
+        for release in releases
+        if release.get("name") != settings.release_name
+    ]
     if others:
         raise die(
             f"Namespace '{settings.namespace}' already has MLRun CE installed as "

@@ -544,6 +544,10 @@ Run the same command again: the installer always runs `helm upgrade --install`, 
 upgrades the release in place. Use it to change a setting, move to another chart with
 `--ce-version`, or retry an install that timed out.
 
+- **No unasked downgrade.** Without `--ce-version` the upgrade takes the newest stable
+  chart, which is older than a release installed from an rc. The installer then asks
+  (default no), and under `--non-interactive` stops: `--ce-version <installed>` keeps the
+  release's chart, `--devel` takes the newest prerelease.
 - A re-run offers to reuse the pull secret the first run created, so the password is not
   needed again. Credentials passed in the environment replace it.
 - The release keeps its NodePorts, including ports moved on an earlier run, unless `-f`
