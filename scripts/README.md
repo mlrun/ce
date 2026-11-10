@@ -155,14 +155,15 @@ asks before its first write:
 [INFO]   Cluster:   docker-desktop (https://127.0.0.1:6443)
 [INFO]   Namespace: mlrun
 [INFO]   Release:   mlrun-ce
-[INFO]   Chart:     mlrun-ce/mlrun-ce 0.12.1
+[INFO]   Chart:     mlrun-ce/mlrun-ce 0.12.0 (newest stable)
 [INFO]   Registry:  index.docker.io/myuser (pull secret 'registry-credentials')
 [INFO]   Address:   host.docker.internal
 Proceed? [Y/n]:
 ```
 
 Check the cluster line: it is your kubeconfig's current context, or `--kube-context`.
-Answering `n` or pressing Ctrl-C leaves the cluster untouched (exit 1).
+Answering `n` leaves the cluster untouched (exit 1), and so does Ctrl-C at any prompt
+(exit 130).
 
 ### Non-interactive (CI)
 

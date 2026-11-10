@@ -840,3 +840,16 @@ def test_help_draws_every_option_in_the_one_help_colour(monkeypatch, capsys):
     assert "\x1b[1;38;5;36mCONTEXT" in out
     for default in ("\x1b[1;36m", "\x1b[1;32m", "\x1b[1;35m", "\x1b[1;33m", "\x1b[33m"):
         assert default not in out, repr(default)
+
+
+@pytest.mark.parametrize(
+    "interrupt, code", [(KeyboardInterrupt, 130), (lambda: console.cancel("Cancelled"), 1)]
+)
+def test_ctrl_c_at_a_prompt_exits_130_and_a_no_exits_1(monkeypatch, interrupt, code):
+    # scripts/README.md documents both; a wrapper running `install && next` relies on them.
+    def execute(settings):
+        raise interrupt()
+
+    monkeypatch.setattr(cli, "execute", execute)
+
+    assert cli.main([]) == code
