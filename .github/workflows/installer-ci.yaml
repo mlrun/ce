@@ -141,10 +141,12 @@ jobs:
 
       - name: Install MLRun CE from the in-repo chart
         # --local-registry deploys a registry in-cluster and derives the pull
-        # secret from it, so no external registry credentials are needed.
+        # secret from it, so no external registry credentials are needed. The sub-charts
+        # are not in git, so --update-dependencies fetches them.
         run: |
           ./scripts/install.py \
             --chart-path ./charts/mlrun-ce \
+            --update-dependencies \
             --local-registry \
             --non-interactive
 
