@@ -54,9 +54,10 @@ jobs:
       # Release tags are cut on merge from Chart.yaml's version, and the documented install
       # command pins that tag. A version some other PR already released means this merge
       # cuts no tag, and the pinned command points at a tree without this change (or,
-      # for the first installer release, without scripts/ at all).
+      # for the first installer release, without scripts/ at all). PRs only: a dispatch runs
+      # on whatever revision it is given, released ones included.
       - name: Check the chart version is not already released
-        if: matrix.python == '3.9'
+        if: matrix.python == '3.9' && github.event_name == 'pull_request'
         run: |
           version=$(sed -n 's/^version:[[:space:]]*//p' charts/mlrun-ce/Chart.yaml)
           if git ls-remote --exit-code --tags https://github.com/mlrun/ce "refs/tags/mlrun-ce-${version}" >/dev/null; then
