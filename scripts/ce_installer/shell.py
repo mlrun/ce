@@ -159,22 +159,24 @@ def _tee(source: IO[str], sink: Optional[IO[str]]) -> None:
         log_debug(safe)
 
 
-def stream(cmd: Sequence[str]) -> int:
+def stream(cmd: Sequence[str], show_stdout: bool = True) -> int:
     """Run a command with its output going to the terminal, and to the debug log if open.
 
     Each stream keeps its own destination, so a helm error still reaches stderr for anyone
-    piping stdout. At the warning log level stdout goes to the debug log only.
+    piping stdout. Without `show_stdout`, and at the warning log level, stdout goes to the
+    debug log only, where rendered Secrets are redacted.
     """
+    show_stdout = show_stdout and not quiet()
     log_debug(f"$ {' '.join(redact(cmd))}  (output follows as it streams)")
     started = time.monotonic()
     try:
         if not debug_log_path():
-            code = subprocess.call(list(cmd), stdout=subprocess.DEVNULL if quiet() else None)
+            code = subprocess.call(list(cmd), stdout=None if show_stdout else subprocess.DEVNULL)
         else:
             proc = subprocess.Popen(
                 list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
             )
-            stdout_sink = None if quiet() else sys.stdout
+            stdout_sink = sys.stdout if show_stdout else None
             threads = [
                 threading.Thread(target=_tee, args=(proc.stdout, stdout_sink), daemon=True),
                 threading.Thread(target=_tee, args=(proc.stderr, sys.stderr), daemon=True),

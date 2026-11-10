@@ -602,7 +602,9 @@ def helm_install(settings: Settings) -> None:
     if settings.show_progress and not settings.dry_run and out.is_terminal:
         _install_with_progress_ui(settings, cmd)
     else:
-        helm_exit = stream(cmd)
+        # A dry run's stdout is the rendered chart, Secret data included; the terminal and
+        # whatever records it (CI logs, `| tee`) must not get it unredacted.
+        helm_exit = stream(cmd, show_stdout=not settings.dry_run)
         if helm_exit != 0:
             log_error(f"Helm installation failed (exit code {helm_exit}).")
             print_failure_hints(settings)

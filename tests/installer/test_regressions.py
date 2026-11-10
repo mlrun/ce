@@ -1316,12 +1316,54 @@ def test_show_progress_off_a_terminal_falls_back_to_helm_output(monkeypatch, set
         helm_ops, "_install_with_progress_ui", lambda s, cmd: pytest.fail("used the progress UI")
     )
     streamed = []
-    monkeypatch.setattr(helm_ops, "stream", lambda cmd: streamed.append(cmd) or 0)
+    monkeypatch.setattr(helm_ops, "stream", lambda cmd, **_: streamed.append(cmd) or 0)
     monkeypatch.setattr(helm_ops, "helm", lambda *a, **k: Result(1, ""))
 
     helm_ops.helm_install(settings)
 
     assert streamed, "helm was never streamed to the terminal"
+
+
+# ------------------------------------------------------------------------------------------
+# A dry run printed the chart's Secrets, unredacted, to the terminal
+# ------------------------------------------------------------------------------------------
+
+SECRET_RENDER = (
+    "---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: grafana\n"
+    "data:\n  admin-password: c3VwZXItc2VjcmV0\n"
+)
+
+
+def test_a_stream_without_stdout_keeps_it_redacted_in_the_log(debug_log, capsys, tmp_path):
+    render = tmp_path / "render.yaml"
+    render.write_text(SECRET_RENDER)
+    script = (
+        f"import sys; sys.stdout.write(open({str(render)!r}).read()); "
+        "sys.stderr.write('a warning\\n')"
+    )
+    shell.stream([sys.executable, "-c", script], show_stdout=False)
+    console.close_debug_log()
+
+    captured = capsys.readouterr()
+    assert "kind: Secret" not in captured.out and "a warning" in captured.err
+    text = debug_log.read_text()
+    assert "name: grafana" in text and "<redacted>" in text
+    assert "c3VwZXItc2VjcmV0" not in text
+
+
+@pytest.mark.parametrize(("dry_run", "shown"), [(True, False), (False, True)])
+def test_only_a_dry_run_keeps_helm_stdout_off_the_terminal(monkeypatch, settings, dry_run, shown):
+    settings.dry_run = dry_run
+    streamed = []
+    monkeypatch.setattr(
+        helm_ops, "stream", lambda cmd, show_stdout=True: streamed.append(show_stdout) or 0
+    )
+    monkeypatch.setattr(helm_ops, "helm", lambda *a, **k: Result(1, ""))
+    monkeypatch.setattr(helm_ops, "kubectl", lambda *a, **k: Result(1, ""))
+
+    helm_ops.helm_install(settings)
+
+    assert streamed == [shown]
 
 
 # ------------------------------------------------------------------------------------------
@@ -1989,7 +2031,7 @@ def test_an_explicit_remote_context_suggests_its_node_ip(monkeypatch, settings, 
 
 def test_a_failed_install_says_where_to_look_next(monkeypatch, settings, capture_logs):
     settings.kube_context = "lab"
-    monkeypatch.setattr(helm_ops, "stream", lambda cmd: 1)
+    monkeypatch.setattr(helm_ops, "stream", lambda cmd, **_: 1)
     monkeypatch.setattr(helm_ops, "helm", lambda *a, **k: Result(0, "v3.14.0"))
     logs = capture_logs(helm_ops)
 
@@ -2278,7 +2320,7 @@ def test_the_exclusion_reaches_the_dry_run_but_not_the_printed_equivalent(
     monkeypatch.setattr(helm_ops, "helm", helm)
     monkeypatch.setattr(helm_ops, "kubectl", recorder(answers={"get crd": Result(1, "")}))
     streamed = []
-    monkeypatch.setattr(helm_ops, "stream", lambda cmd: streamed.append(cmd) or 0)
+    monkeypatch.setattr(helm_ops, "stream", lambda cmd, **_: streamed.append(cmd) or 0)
     logs = capture_logs(helm_ops)
 
     helm_ops.helm_install(settings)

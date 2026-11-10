@@ -323,8 +323,10 @@ versions, CRDs, existing resources) but sends nothing to it, so admission webhoo
 exercised. A first install on a cluster without the Prometheus Operator CRDs is rendered
 without the monitoring stack ([why](#--dry-run-fails-with-no-matches-for-kind)).
 
-The run ends by listing the files to review: the [debug log](#the-debug-log) with the
-rendered manifests (Secret values redacted), `mlrun-ce-values.yaml`, and on an upgrade the
+The rendered manifests are not printed, since they hold the chart's Secrets; helm's errors
+and warnings still are. The run ends by listing the files to review: the
+[debug log](#the-debug-log) with the rendered manifests (Secret values redacted),
+`mlrun-ce-values.yaml`, and on an upgrade the
 release's current values and the values the upgrade changes ([Upgrading](#upgrading)).
 
 ### Pre-install checks
