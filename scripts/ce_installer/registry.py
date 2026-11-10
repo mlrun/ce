@@ -443,8 +443,6 @@ def prepare_registry_secret(settings: Settings) -> bool:
         )
         settings.registry_secret_reused = True
         return False
-    if missing:
-        report_missing_configuration(missing)
 
     if owner == SECRET_FOREIGN:
         log_warn(f"Secret '{name}' already exists and was not created by this installer.")
@@ -454,6 +452,8 @@ def prepare_registry_secret(settings: Settings) -> bool:
             "Pass --skip-secret to silence this."
         )
         return False
+    if missing:
+        report_missing_configuration(missing)
 
     if settings.local_registry:
         return True

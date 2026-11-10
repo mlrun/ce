@@ -2272,13 +2272,21 @@ def test_a_non_interactive_rerun_reuses_the_installers_secret(monkeypatch, setti
     assert settings.registry_secret_reused
 
 
-@pytest.mark.parametrize("owner", [registry.SECRET_ABSENT, registry.SECRET_FOREIGN])
-def test_any_other_secret_still_needs_credentials(monkeypatch, settings, owner):
+def test_without_a_secret_credentials_are_still_needed(monkeypatch, settings):
     _non_interactive_without_credentials(monkeypatch, settings)
-    monkeypatch.setattr(registry, "registry_secret_owner", lambda s: owner)
+    monkeypatch.setattr(registry, "registry_secret_owner", lambda s: registry.SECRET_ABSENT)
 
     with pytest.raises(InstallerError):
         registry.prepare_registry_secret(settings)
+
+
+def test_a_foreign_secret_is_used_without_credentials(monkeypatch, settings):
+    # It is used as it stands, so nothing is asked for it, in CI either.
+    _non_interactive_without_credentials(monkeypatch, settings)
+    monkeypatch.setattr(registry, "registry_secret_owner", lambda s: registry.SECRET_FOREIGN)
+    monkeypatch.setattr(registry, "collect_registry_credentials", pytest.fail)
+
+    assert registry.prepare_registry_secret(settings) is False
 
 
 def test_supplied_credentials_still_replace_the_installers_secret(monkeypatch, settings):
