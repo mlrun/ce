@@ -40,7 +40,7 @@ from .console import (
 from .registry import MANAGED_BY_LABEL, hosts_file_ip
 from .secret_data import redact_secret_data
 from .settings import NODEPORTS, Settings, previous_values_file, value_changes_file
-from .shell import check_requirements, helm, helm_cmd, kubectl, kubectl_cmd, stream
+from .shell import helm, helm_cmd, kubectl, kubectl_cmd, stream
 from .ui import print_notes_table, run_deployment_progress_ui
 
 README_URL = "https://github.com/mlrun/ce/blob/development/scripts/README.md"
@@ -804,8 +804,6 @@ def confirm_hard_clean_without_release(settings: Settings) -> None:
 
 
 def do_uninstall(settings: Settings) -> None:
-    check_requirements(settings)
-
     if not helm(settings, "status", settings.release_name, "--namespace", settings.namespace).ok:
         log_warn(
             f"Release '{settings.release_name}' not found in namespace "

@@ -187,7 +187,6 @@ def test_uninstall_honours_the_same_timeout_setting(monkeypatch, settings):
     recorder = Recorder()
     monkeypatch.setattr(helm_ops, "helm", recorder)
     monkeypatch.setattr(helm_ops, "kubectl", Recorder())
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
 
     helm_ops.do_uninstall(settings)
 
@@ -659,7 +658,6 @@ def test_a_dry_run_uninstall_reports_instead_of_uninstalling(monkeypatch, settin
     helm_rec = recorder(answers={"status": Result(0, "STATUS: deployed")})
     monkeypatch.setattr(helm_ops, "helm", helm_rec)
     monkeypatch.setattr(helm_ops, "kubectl", recorder())
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
     settings.uninstall = True
     settings.dry_run = True
 
@@ -691,7 +689,6 @@ def _uninstall_without_release(monkeypatch, settings, recorder):
     kube_rec = recorder(answers={"get pvc": Result(0, "someone-elses-data\n")})
     monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(1, "not found")}))
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
     settings.uninstall = True
     settings.hard_clean = True
     return kube_rec
@@ -759,7 +756,6 @@ def test_uninstall_removes_only_what_the_installer_labelled(monkeypatch, setting
     )
     monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
 
     helm_ops.do_uninstall(settings)
 
@@ -777,7 +773,6 @@ def test_a_dry_run_uninstall_lists_the_installer_resources_without_deleting(
     )
     monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
     settings.dry_run = True
 
     helm_ops.do_uninstall(settings)
@@ -797,7 +792,6 @@ def test_a_mistyped_release_name_does_not_clean_up_a_live_install(monkeypatch, s
     )
     monkeypatch.setattr(helm_ops, "helm", helm_rec)
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
     settings.release_name = "typo"
 
     with pytest.raises(InstallerError):
@@ -815,7 +809,6 @@ def test_leftovers_are_still_cleaned_when_no_release_remains(monkeypatch, settin
     helm_rec = recorder(answers={"status": Result(1, "", "not found"), "list": Result(0, "[]")})
     monkeypatch.setattr(helm_ops, "helm", helm_rec)
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
 
     helm_ops.do_uninstall(settings)
 
@@ -964,7 +957,6 @@ def test_a_non_interactive_uninstall_does_not_demand_registry_credentials(
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
     monkeypatch.setattr(helm_ops, "kubectl", recorder())
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
     settings.non_interactive = True
     settings.uninstall = True
     settings.dry_run = True
@@ -1591,15 +1583,16 @@ def test_a_values_file_that_is_the_generated_file_is_refused_up_front(
     settings.values_file = str(generated)
     settings.generated_values_file = str(generated)
     touched = []
-    monkeypatch.setattr(cli, "check_requirements", lambda s: touched.append("cluster"))
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
     monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
+    monkeypatch.setattr(cli, "refuse_a_second_release", lambda s: touched.append("cluster"))
 
     with pytest.raises(InstallerError) as excinfo:
         cli.execute(settings)
 
     assert "GENERATED_VALUES_FILE" in str(excinfo.value)
-    assert touched == [], "refused only after reaching the cluster"
+    assert touched == [], "refused only after querying the release"
     assert generated.read_text() == "mine: true\n", "the user's file was rewritten"
 
 
@@ -2127,7 +2120,6 @@ def test_a_failed_release_listing_stops_an_uninstall_cleanup(monkeypatch, settin
     helm_rec = recorder(answers={"status": Result(1, "", "not found"), "list": HELM_4_LIST_ERROR})
     monkeypatch.setattr(helm_ops, "helm", helm_rec)
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
     settings.release_name = "typo"
 
     with pytest.raises(InstallerError):
@@ -2530,7 +2522,6 @@ def _uninstall_with_release(monkeypatch, settings, recorder, labelled=LABELLED_O
     kube_rec = recorder(answers={"app.kubernetes.io/instance=": Result(0, labelled)})
     monkeypatch.setattr(helm_ops, "helm", recorder())
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
-    monkeypatch.setattr(helm_ops, "check_requirements", lambda s: None)
     settings.uninstall = True
     return kube_rec, capture_by_level(monkeypatch, helm_ops)
 

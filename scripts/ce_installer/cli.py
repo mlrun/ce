@@ -304,6 +304,10 @@ def normalize_argv(args: Sequence[str]) -> List[str]:
 
 
 def execute(settings: Settings) -> None:
+    # First, for install and uninstall alike: without helm, kubectl and a reachable cluster
+    # nothing below can do anything, and every later failure would only be a symptom.
+    check_requirements(settings)
+
     if settings.hard_clean and not settings.uninstall:
         raise die("--hard-clean requires --uninstall.")
 
@@ -326,7 +330,6 @@ def execute(settings: Settings) -> None:
     refuse_values_file_collision(settings)
     validate_chart_path(settings)
 
-    check_requirements(settings)
     # Not a validator: --skip-validators must not wave through a release that collides.
     refuse_a_second_release(settings)
     if not settings.skip_validators:

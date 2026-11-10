@@ -563,9 +563,10 @@ def test_hard_clean_without_uninstall_is_refused(monkeypatch):
     # On its own it reads like a cleanup flag; requiring --uninstall keeps a destructive
     # PVC deletion from being one typo away.
     settings = Settings(hard_clean=True, uninstall=False)
-    monkeypatch.setattr(cli, "load_config", lambda s: None)
-    with pytest.raises(InstallerError):
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
+    with pytest.raises(InstallerError) as excinfo:
         cli.execute(settings)
+    assert "--hard-clean requires --uninstall" in excinfo.value.message
 
 
 def test_uninstall_skips_every_install_step(monkeypatch):
@@ -577,7 +578,21 @@ def test_uninstall_skips_every_install_step(monkeypatch):
 
     cli.execute(Settings(uninstall=True))
 
-    assert called == ["uninstall"]
+    # Uninstall needs helm, kubectl and the cluster as much as an install does.
+    assert called == ["requirements", "uninstall"]
+
+
+def test_the_prerequisites_are_checked_before_anything_else(monkeypatch):
+    called = []
+    monkeypatch.setattr(cli, "check_requirements", lambda s: called.append("requirements"))
+    monkeypatch.setattr(
+        cli, "check_required_non_interactive", lambda s: called.append("required values")
+    )
+
+    with pytest.raises(InstallerError):
+        cli.execute(Settings(values_file="/nonexistent/values.yaml"))
+
+    assert called[0] == "requirements"
 
 
 def stub_cluster_checks(monkeypatch):
@@ -639,7 +654,7 @@ def test_a_values_file_with_config_still_creates_the_secret(monkeypatch, tmp_pat
 def test_a_missing_values_file_is_refused_before_anything_runs(monkeypatch):
     called = []
     monkeypatch.setattr(cli, "load_config", lambda s: None)
-    monkeypatch.setattr(cli, "check_requirements", lambda s: called.append("requirements"))
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "ensure_namespace", lambda s: called.append("namespace"))
     monkeypatch.setattr(cli, "deploy_local_registry", lambda s: called.append("registry"))
     monkeypatch.setattr(cli, "resolve_external_host", lambda s: None)
@@ -650,7 +665,7 @@ def test_a_missing_values_file_is_refused_before_anything_runs(monkeypatch):
     # The check used to sit after ensure_namespace and deploy_local_registry, so a mistyped
     # -f created a namespace and a running registry Deployment on the way to reporting that
     # the file does not exist — cluster state left behind by a run that never installed.
-    assert called == [], f"cluster was touched before the path was validated: {called}"
+    assert called == [], f"cluster was changed before the path was validated: {called}"
 
 
 def test_skip_secret_verifies_the_existing_one_instead(monkeypatch):

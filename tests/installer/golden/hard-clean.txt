@@ -1,2 +1,5 @@
 exit: 1
 ---
+["helm", "version", "--short"]
+["kubectl", "cluster-info"]
+["docker", "info"]
