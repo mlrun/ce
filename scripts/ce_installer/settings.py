@@ -143,6 +143,8 @@ class Settings:
     skip_validators: bool = False
     values_file: str = ""
     show_progress: bool = False
+    # "info" or "warning"; empty until the flag, LOG_LEVEL or the config file sets it.
+    log_level: str = ""
     uninstall: bool = False
     hard_clean: bool = False
     delete_namespace: bool = False

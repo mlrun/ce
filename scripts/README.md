@@ -678,6 +678,10 @@ contains the registry password. Values under `data:`/`stringData:` of rendered S
 replaced with `<redacted>`, but values the chart puts in ConfigMaps, pod `env:` or its NOTES
 are not, so check for your own before sharing the log.
 
+`--log-level warning` (`LOG_LEVEL`, or `logLevel` in the config file) keeps the terminal to
+warnings, errors, prompts and how the run ended (the access table, or where a dry run left
+its files); the `[INFO]` lines and helm's standard output go to this log only.
+
 ### An install failed or timed out
 
 ```
@@ -828,6 +832,7 @@ else, `false` and `0` included, leaves it off.
 | `--disable-mpi` | `DISABLE_MPI` | Leave out the MPI operator |
 | `--disable-model-monitoring` | `DISABLE_MODEL_MONITORING` | Leave out Kafka and TimescaleDB |
 | `--show-progress` | `SHOW_PROGRESS` | Show a live table of rollouts while helm runs (terminals only) |
+| `--log-level LEVEL` | `LOG_LEVEL` | `info` (the default) or `warning`; see [the debug log](#the-debug-log) |
 | `--trigger-migrations` | `TRIGGER_MIGRATIONS` | On an upgrade, run the MLRun DB migrations; see [Upgrading](#upgrading) |
 
 ### Environment variables

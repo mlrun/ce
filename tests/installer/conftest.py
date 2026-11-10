@@ -56,6 +56,8 @@ INSTALLER_ENV_VARS = (
     "SHOW_PROGRESS",
     "UNINSTALL",
     "HARD_CLEAN",
+    "DELETE_NAMESPACE",
+    "LOG_LEVEL",
     "DISABLE_SYSTEM_MONITORING",
     "DISABLE_SPARK",
     "DISABLE_MPI",
@@ -90,6 +92,8 @@ def clean_env(monkeypatch, tmp_path):
         monkeypatch.delenv(name, raising=False)
     # Module state in console: a password one test registered must not mask another's log.
     monkeypatch.setattr(console, "_secrets", [])
+    monkeypatch.setattr(console, "_level", "info")
+    monkeypatch.setattr(console, "_hidden_headline", "")
     # helm_install writes the installer's values file and every run its debug log; never
     # into the checkout.
     monkeypatch.setenv("GENERATED_VALUES_FILE", str(tmp_path / "mlrun-ce-values.yaml"))
@@ -159,14 +163,15 @@ def recorder():
 
 @pytest.fixture
 def capture_logs(monkeypatch):
-    """Collect log_info/log_warn/log_error text from a module, without rich formatting.
+    """Collect log_info/log_result/log_warn/log_error text from a module, without rich
+    formatting.
 
     Returns a callable: `logs = capture_logs(validators)` then assert over `logs`.
     """
 
     def install(module):
         messages = []
-        for name in ("log_info", "log_warn", "log_error"):
+        for name in ("log_info", "log_result", "log_warn", "log_error"):
             if hasattr(module, name):
                 monkeypatch.setattr(module, name, messages.append)
         return messages

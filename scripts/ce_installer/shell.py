@@ -23,7 +23,16 @@ import time
 from dataclasses import dataclass
 from typing import IO, List, Optional, Sequence
 
-from .console import InstallerError, debug_log_path, die, err, log_debug, log_error, log_info
+from .console import (
+    InstallerError,
+    debug_log_path,
+    die,
+    err,
+    log_debug,
+    log_error,
+    log_info,
+    quiet,
+)
 from .secret_data import SecretDataRedactor, redact_secret_data
 from .settings import Settings
 
@@ -138,11 +147,12 @@ def run(
     return result
 
 
-def _tee(source: IO[str], sink: IO[str]) -> None:
+def _tee(source: IO[str], sink: Optional[IO[str]]) -> None:
     redactor = SecretDataRedactor()
     for line in source:
-        sink.write(line)
-        sink.flush()
+        if sink is not None:
+            sink.write(line)
+            sink.flush()
         for safe in redactor.feed(line):
             log_debug(safe)
     for safe in redactor.flush():
@@ -153,19 +163,20 @@ def stream(cmd: Sequence[str]) -> int:
     """Run a command with its output going to the terminal, and to the debug log if open.
 
     Each stream keeps its own destination, so a helm error still reaches stderr for anyone
-    piping stdout.
+    piping stdout. At the warning log level stdout goes to the debug log only.
     """
     log_debug(f"$ {' '.join(redact(cmd))}  (output follows as it streams)")
     started = time.monotonic()
     try:
         if not debug_log_path():
-            code = subprocess.call(list(cmd))
+            code = subprocess.call(list(cmd), stdout=subprocess.DEVNULL if quiet() else None)
         else:
             proc = subprocess.Popen(
                 list(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
             )
+            stdout_sink = None if quiet() else sys.stdout
             threads = [
-                threading.Thread(target=_tee, args=(proc.stdout, sys.stdout), daemon=True),
+                threading.Thread(target=_tee, args=(proc.stdout, stdout_sink), daemon=True),
                 threading.Thread(target=_tee, args=(proc.stderr, sys.stderr), daemon=True),
             ]
             for thread in threads:

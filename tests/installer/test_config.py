@@ -645,6 +645,18 @@ def test_toggles_come_from_the_config_file(settings, tmp_path):
     assert (settings.enable_ingress, settings.ingress_class) == (True, "traefik")
 
 
+@pytest.mark.parametrize(("already", "expected"), [("", "warning"), ("info", "info")])
+def test_the_log_level_comes_from_the_config_file_unless_flag_or_env_set_it(
+    settings, tmp_path, already, expected
+):
+    settings.log_level = already
+    settings.config_file = write_config(tmp_path, "installer:\n  logLevel: warning\n")
+
+    config.load_config(settings)
+
+    assert settings.log_level == expected
+
+
 def test_the_config_file_cannot_turn_off_a_toggle_set_by_flag(settings, tmp_path):
     settings.skip_validators = True
     settings.trigger_migrations = True

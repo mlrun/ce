@@ -2110,6 +2110,97 @@ def test_streamed_helm_output_reaches_both_the_terminal_and_the_log(debug_log, c
     assert "to-out" in text and "to-err" in text and "exit 2" in text
 
 
+# ------------------------------------------------------------------------------------------
+# Only warnings on the terminal: --log-level warning
+# ------------------------------------------------------------------------------------------
+
+
+def test_at_the_warning_level_helm_stdout_goes_to_the_log_only(debug_log, capsys):
+    console.set_log_level("warning")
+    script = "import sys; print('to-out'); sys.stderr.write('to-err\\n')"
+    shell.stream([sys.executable, "-c", script])
+    console.close_debug_log()
+
+    captured = capsys.readouterr()
+    assert "to-out" not in captured.out and "to-err" in captured.err
+    assert "to-out" in debug_log.read_text()
+
+
+def test_at_the_warning_level_info_lines_go_to_the_log_only(debug_log, capsys):
+    console.set_log_level("warning")
+    console.log_info("routine detail")
+    console.log_warn("worth a look")
+    console.log_result("Installation complete.")
+    console.close_debug_log()
+
+    shown = capsys.readouterr().out
+    assert "routine detail" not in shown
+    assert "worth a look" in shown and "Installation complete." in shown
+    assert "[INFO] routine detail" in debug_log.read_text()
+
+
+def test_at_the_warning_level_an_indented_warning_keeps_its_headline(capsys):
+    console.set_log_level("warning")
+    console.log_info("Checking the StorageClass...")
+    console.log_info("  found: standard")
+    console.log_warn("  it is not the default")
+    console.log_info("Checking the NodePorts...")
+    console.log_warn("Port 30060 is taken.")
+
+    shown = capsys.readouterr().out
+    assert "Checking the StorageClass..." in shown and "found: standard" not in shown
+    assert shown.index("StorageClass") < shown.index("not the default")
+    assert "Checking the NodePorts" not in shown and "30060" in shown
+
+
+@pytest.mark.parametrize(("non_interactive", "shown"), [(False, True), (True, False)])
+def test_at_the_warning_level_the_summary_shows_only_when_it_asks(
+    monkeypatch, settings, recorder, capsys, non_interactive, shown
+):
+    _target(monkeypatch, recorder, settings)
+    monkeypatch.setattr(ui, "confirm", lambda s, q: True)
+    settings.non_interactive = non_interactive
+    console.set_log_level("warning")
+
+    ui.confirm_target(settings)
+
+    assert ("Namespace: mlrun" in capsys.readouterr().out) is shown
+
+
+def _level_of_a_run(monkeypatch, tmp_path, argv):
+    seen = []
+    monkeypatch.setattr(cli, "execute", lambda settings: seen.append(console.quiet()))
+    monkeypatch.setenv("INSTALL_LOG_FILE", str(tmp_path / "run.log"))
+    code = cli.main([*argv, "--non-interactive"])
+    return code, seen
+
+
+@pytest.mark.parametrize(
+    ("argv", "env", "quiet"),
+    [
+        ([], "", False),
+        (["--log-level", "warning"], "", True),
+        (["--log-level", "WARNING"], "", True),
+        ([], "warning", True),
+        (["--log-level", "info"], "warning", False),
+    ],
+)
+def test_the_log_level_comes_from_the_flag_before_the_environment(
+    monkeypatch, tmp_path, argv, env, quiet
+):
+    if env:
+        monkeypatch.setenv("LOG_LEVEL", env)
+
+    assert _level_of_a_run(monkeypatch, tmp_path, argv) == (0, [quiet])
+
+
+def test_an_unknown_log_level_stops_the_run(monkeypatch, tmp_path, capsys):
+    code, seen = _level_of_a_run(monkeypatch, tmp_path, ["--log-level", "loud"])
+
+    assert (code, seen) == (1, [])
+    assert "Unknown log level 'loud'" in capsys.readouterr().err
+
+
 def _main_failing_with(monkeypatch, tmp_path, error):
     def execute(settings):
         raise error
@@ -2301,11 +2392,14 @@ def test_helm_41_and_later_pass_without_a_warning(monkeypatch, settings, recorde
 
 
 def capture_by_level(monkeypatch, module):
-    """Like the capture_logs fixture, but keeps info, warn and error apart."""
+    """Like the capture_logs fixture, but keeps info, warn and error apart. log_result
+    counts as info."""
     logs = {"info": [], "warn": [], "error": []}
     for level, messages in logs.items():
         if hasattr(module, f"log_{level}"):
             monkeypatch.setattr(module, f"log_{level}", messages.append)
+    if hasattr(module, "log_result"):
+        monkeypatch.setattr(module, "log_result", logs["info"].append)
     return logs
 
 

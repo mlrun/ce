@@ -24,6 +24,7 @@ installer:
   valuesFile: ""               # -f/--values: your own helm values file, read before this one
   nonInteractive: false        # --non-interactive: never prompt (set by CI=true)
   triggerMigrations: false     # --trigger-migrations: run the MLRun DB migrations on this upgrade
+  logLevel: info               # --log-level/LOG_LEVEL: info, or warning for warnings only
 
   registry:
     # Where function images are pushed and pulled (global.registry.url). Not needed with

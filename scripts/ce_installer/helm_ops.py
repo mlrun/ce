@@ -37,6 +37,7 @@ from .console import (
     log_debug,
     log_error,
     log_info,
+    log_result,
     log_warn,
     out,
 )
@@ -436,10 +437,10 @@ def report_dry_run_files(settings: Settings) -> None:
         files.append(("The current release's values", str(previous_values_file(settings))))
     if settings.value_changes:
         files.append(("The values this upgrade changes", str(value_changes_file(settings))))
-    log_info("Review the dry run in these files:")
+    log_result("Review the dry run in these files:")
     for label, path in files:
         if path and Path(path).is_file():
-            log_info(f"  {label}: {path}")
+            log_result(f"  {label}: {path}")
 
 
 def plain_helm_equivalent(settings: Settings, cmd: List[str]) -> List[str]:
@@ -610,11 +611,11 @@ def helm_install(settings: Settings) -> None:
     report_ingress_hosts(settings)
     report_unresolved_host(settings)
     if settings.dry_run:
-        log_info("Dry-run complete (no resources deployed).")
+        log_result("Dry-run complete (no resources deployed).")
         report_dry_run_files(settings)
         return
 
-    log_info("Installation complete.")
+    log_result("Installation complete.")
     if settings.trigger_migrations:
         log_info(
             "MLRun DB migrations run in a Job of their own; follow it with: kubectl -n "
@@ -879,7 +880,7 @@ def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
             f"{', '.join(kept)}"
         )
     if settings.hard_clean and not pvcs and not others:
-        log_info("Hard clean complete.")
+        log_result("Hard clean complete.")
         return
     if settings.hard_clean:
         log_warn(f"Hard clean finished with leftovers: {', '.join(pvcs + others)}")
@@ -1158,7 +1159,7 @@ def do_uninstall(settings: Settings) -> None:
             settings.helm_timeout,
             check=True,
         )
-        log_info("Uninstall complete.")
+        log_result("Uninstall complete.")
 
     remove_installer_resources(settings)
 
@@ -1200,7 +1201,7 @@ def delete_namespace_if_asked(settings: Settings) -> bool:
             return False
     log_warn(f"Deleting namespace '{namespace}'...")
     if kubectl(settings, "delete", "namespace", namespace, "--timeout", "120s").ok:
-        log_info(f"Namespace '{namespace}' deleted. Hard clean complete.")
+        log_result(f"Namespace '{namespace}' deleted. Hard clean complete.")
         return True
     log_warn(
         f"Namespace '{namespace}' is still terminating; check it with: "

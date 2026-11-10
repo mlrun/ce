@@ -110,17 +110,56 @@ def log_debug(message: str) -> None:
         _debug_log.flush()
 
 
-def _emit(console: Console, tag: str, style: str, message: str) -> None:
+def _print(console: Console, tag: str, style: str, message: str) -> None:
     # Built as a Text rather than markup: log messages routinely contain square brackets
     # (jsonpath expressions, arrays, "[ERROR]") that rich would try to parse as tags.
     line = Text()
     line.append(tag, style=style)
     line.append(" " + message)
     console.print(line)
+
+
+def _emit(console: Console, tag: str, style: str, message: str) -> None:
+    global _hidden_headline  # noqa: PLW0603
+    # An indented line continues the headline above it, which a warning must not lose.
+    if _hidden_headline and message.startswith(" "):
+        _print(out, "[INFO]", "green", _hidden_headline)
+    _hidden_headline = ""
+    _print(console, tag, style, message)
     log_debug(f"{tag} {message}")
 
 
+LOG_LEVELS = ("info", "warning")
+# At "warning" an info line goes to the debug log only. Warnings, errors, prompts and the
+# lines that say how the run ended (log_result) still reach the terminal.
+_level = "info"
+# The last info headline the warning level hid, shown after all if an indented line below
+# it reaches the terminal.
+_hidden_headline = ""
+
+
+def set_log_level(level: str) -> None:
+    global _level, _hidden_headline  # noqa: PLW0603
+    _level = level
+    _hidden_headline = ""
+
+
+def quiet() -> bool:
+    return _level == "warning"
+
+
 def log_info(message: str) -> None:
+    global _hidden_headline  # noqa: PLW0603
+    if quiet():
+        if not message.startswith(" "):
+            _hidden_headline = message
+        log_debug(f"[INFO] {message}")
+        return
+    _emit(out, "[INFO]", "green", message)
+
+
+def log_result(message: str) -> None:
+    """An info line shown at every log level: how the run ended, or what a prompt is about."""
     _emit(out, "[INFO]", "green", message)
 
 
@@ -139,5 +178,5 @@ def die(message: str, code: int = 1) -> InstallerError:
 
 
 def cancel(message: str) -> Cancelled:
-    log_info(message)
+    log_result(message)
     return Cancelled(message)

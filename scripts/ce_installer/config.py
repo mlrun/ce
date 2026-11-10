@@ -39,6 +39,7 @@ SCHEMA: Dict = {
         "externalHostAddress": str,
         "valuesFile": str,
         "nonInteractive": bool,
+        "logLevel": str,
         "triggerMigrations": bool,
         "registry": {
             "url": str,
@@ -96,6 +97,7 @@ FLAG_KEYS = {
     "--update-dependencies": "chartSource.updateDependencies",
     "--devel": "chartSource.devel",
     "--non-interactive": "nonInteractive",
+    "--log-level": "logLevel",
     "--trigger-migrations": "triggerMigrations",
 }
 FLAGS_WITHOUT_KEY = (
@@ -297,6 +299,8 @@ def _apply_flag_and_env_settings(data: Dict, settings: Settings) -> None:
 
     if not settings.values_file:
         settings.values_file = cfg(data, "installer", "valuesFile")
+    if not settings.log_level:
+        settings.log_level = cfg(data, "installer", "logLevel")
 
     if not settings.enable_ingress and cfg(data, "installer", "ingress", "enabled") == "true":
         settings.enable_ingress = True

@@ -35,6 +35,7 @@ from .cluster import (
 )
 from .config import check_required_non_interactive, load_config
 from .console import (
+    LOG_LEVELS,
     Cancelled,
     InstallerError,
     close_debug_log,
@@ -46,6 +47,7 @@ from .console import (
     log_warn,
     open_debug_log,
     out,
+    set_log_level,
 )
 from .helm_ops import (
     do_uninstall,
@@ -157,6 +159,7 @@ VALUE_REQUIRED = {
     "--ce-version": "Option {opt} requires a version value (e.g. --ce-version 0.11.0).",
     "--config": "Option {opt} requires a file path (e.g. --config ce-config.yaml).",
     "--kube-context": "Option {opt} requires a context name (e.g. --kube-context kind-ce).",
+    "--log-level": "Option {opt} requires a level: info or warning.",
 }
 
 
@@ -464,6 +467,13 @@ def install(
         "--show-progress",
         help="Show a live-updating UI with each deployment/statefulset progress during install",
     ),
+    log_level: Optional[str] = typer.Option(
+        None,
+        "--log-level",
+        metavar="LEVEL",
+        help="info (the default) or warning: only warnings, errors, prompts and the result "
+        "reach the terminal; the debug log still has everything",
+    ),
     disable_system_monitoring: bool = typer.Option(
         False, "--disable-system-monitoring", help="Disable Grafana/Prometheus stack"
     ),
@@ -611,6 +621,7 @@ def install(
         settings.non_interactive = settings.non_interactive or env_true("CI")
 
         settings.values_file = values or ""
+        settings.log_level = log_level or env_str("LOG_LEVEL")
         settings.kube_context = kube_context or env_str("KUBE_CONTEXT")
         settings.ce_version = ce_version or env_str("CE_VERSION")
         settings.chart_path = chart_path or env_str("CHART_PATH")
@@ -661,11 +672,23 @@ def install(
 
 
 def run(settings: Settings) -> None:
-    # The config file goes first: it can set the log's path and the version floors.
+    # The config file goes first: it can set the log's path and level, and the version floors.
     load_config(settings)
+    apply_log_level(settings)
     open_debug_log(settings.install_log_file, debug_log_header())
     apply_version_floors(settings)
     execute(settings)
+
+
+def apply_log_level(settings: Settings) -> None:
+    level = (settings.log_level or "info").lower()
+    if level not in LOG_LEVELS:
+        raise die(
+            f"Unknown log level '{settings.log_level}' (from --log-level, LOG_LEVEL or "
+            "installer.logLevel); expected info or warning."
+        )
+    settings.log_level = level
+    set_log_level(level)
 
 
 def debug_log_header() -> List[str]:

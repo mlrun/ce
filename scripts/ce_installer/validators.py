@@ -450,6 +450,7 @@ def run_blocking_validators(settings: Settings) -> None:
 def run_validators(settings: Settings) -> None:
     """The checks that need the run's values resolved: registry auth needs the credentials,
     the NodePorts the -f file. All warn and continue, except a busy NodePort set in -f."""
+    log_info("Running the remaining pre-install validators...")
     validate_k8s_version(settings)
     validate_registry_auth(settings)
     validate_ingress_controller(settings)

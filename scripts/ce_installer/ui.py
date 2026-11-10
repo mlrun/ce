@@ -23,7 +23,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .cluster import api_server, effective_context, newest_kind
-from .console import cancel, log_info, log_warn, out
+from .console import cancel, log_info, log_result, log_warn, out
 from .settings import NODEPORTS, Settings, confirm, value_changes_file
 from .shell import helm, kubectl
 
@@ -97,8 +97,9 @@ def confirm_target(settings: Settings) -> None:
     """Show where the install is about to land, and ask before the first write.
 
     A kubeconfig left pointing at the wrong cluster is the costliest mistake an installer
-    can make, and nothing else in the run names the cluster. Printed every time; asked only
-    when someone is there to answer and something would actually change.
+    can make, and nothing else in the run names the cluster. Printed every time (at the
+    warning log level, only when it asks); asked only when someone is there to answer and
+    something would actually change.
     """
     context = effective_context(settings) or "(none)"
     server = api_server(settings)
@@ -113,14 +114,16 @@ def confirm_target(settings: Settings) -> None:
     else:
         registry = f"{settings.registry_url} (pull secret '{settings.registry_secret_name}')"
 
-    log_info("Dry run of:" if settings.dry_run else "About to install:")
-    log_info(f"  Cluster:   {context}" + (f" ({server})" if server else ""))
-    log_info(f"  Namespace: {settings.namespace}")
-    log_info(f"  Release:   {settings.release_name}")
-    log_info(f"  Chart:     {chart}")
-    log_info(f"  Registry:  {registry}")
+    asks = not (settings.dry_run or settings.non_interactive)
+    show = log_result if asks else log_info
+    show("Dry run of:" if settings.dry_run else "About to install:")
+    show(f"  Cluster:   {context}" + (f" ({server})" if server else ""))
+    show(f"  Namespace: {settings.namespace}")
+    show(f"  Release:   {settings.release_name}")
+    show(f"  Chart:     {chart}")
+    show(f"  Registry:  {registry}")
     if settings.external_host_address:
-        log_info(f"  Address:   {settings.external_host_address}")
+        show(f"  Address:   {settings.external_host_address}")
     moved = [f"{port} ({key})" for key, port in settings.node_ports.items()
              if port != NODEPORTS[key]]  # fmt: skip
     if moved:
@@ -133,7 +136,7 @@ def confirm_target(settings: Settings) -> None:
             f"see {value_changes_file(settings)}"
         )
 
-    if settings.dry_run or settings.non_interactive:
+    if not asks:
         return
     if not confirm(settings, "Proceed?"):
         raise cancel("Cancelled; nothing on the cluster was changed.")
