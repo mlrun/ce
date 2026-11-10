@@ -33,7 +33,9 @@ kubectl get pvc -n mlrun
 test -f scripts/install.py && echo clone || echo "no clone"
 ```
 
-Pass `--context`/`--kube-context` once the user names another cluster. A node named
+Once the user names another cluster, pass it to every tool: `--context <ctx>` to kubectl,
+`--kube-context <ctx>` to helm and to the installer (or `KUBE_CONTEXT=<ctx>` for the
+installer alone). A node named
 `desktop-control-plane` is Docker Desktop in kind mode, `docker-desktop` is its kubeadm
 mode, `kind-*` is plain kind.
 
@@ -55,12 +57,13 @@ add `--update-dependencies` unless `charts/mlrun-ce/charts/` is already filled.
 ## 3. Cluster
 
 **Local.** Docker Desktop: Kubernetes on, at least 10 GB of memory, and
-`EXTERNAL_HOST_ADDRESS=localhost` ([Local install on Docker Desktop](../../../scripts/README.md#local-install-on-docker-desktop)).
+`EXTERNAL_HOST_ADDRESS=localhost` with a registry account, or `host.docker.internal` with
+`--local-registry --enable-ingress` ([Local install on Docker Desktop](../../../scripts/README.md#local-install-on-docker-desktop)).
 minikube and kind: the suggested address is usually right ([External host address](../../../scripts/README.md#external-host-address)).
 
 **Remote.** Ask how the API is reached:
-- a context that already works: `KUBE_CONTEXT=<name>`;
-- a kubeconfig file from an admin: `KUBECONFIG=<file>`, then `KUBE_CONTEXT`;
+- a context that already works: `--kube-context <name>`;
+- a kubeconfig file from an admin: `KUBECONFIG=<file>`, then `--kube-context`;
 - only over SSH: ask for the jump host, the API server's IP and port, and the CA, client
   certificate and key (or a kubeconfig to take them from), then run the tunnel recipe in
   [Targeting another cluster](../../../scripts/README.md#targeting-another-cluster). Stop it
@@ -94,8 +97,18 @@ Ask which registry MLRun pushes function images to ([Choosing a registry](../../
 |---|---|
 | Docker Hub | `REGISTRY_URL=index.docker.io/<user>`, `REGISTRY_USERNAME=<user>`, token in the password file |
 | Another registry | `REGISTRY_SERVER=<host>`, `REGISTRY_URL=<host>/<prefix>`, `REGISTRY_USERNAME` |
-| None | `--local-registry`; read [Local registry](../../../scripts/README.md#local-registry) with the user, it needs ingress and a CoreDNS entry for builds to pull |
+| None | `--local-registry --enable-ingress`; see the prerequisites below |
 | A secret already in the namespace | `--skip-secret` (`REGISTRY_SECRET_NAME` if not `registry-credentials`) |
+
+`--local-registry` needs, before function builds work ([Local registry](../../../scripts/README.md#local-registry)):
+- an ingress controller in the cluster ([Ingress](../../../scripts/README.md#ingress));
+- a CoreDNS entry for `registry.<address>`, so the builder can push;
+- an `/etc/hosts` line for it on the user's machine, which Docker Desktop's nodes pull through;
+- the host in Docker's `insecure-registries`, because the registry serves plain HTTP;
+- on Docker Desktop, `EXTERNAL_HOST_ADDRESS=host.docker.internal`, not `localhost`.
+
+The installer prints each entry and edits none of them. CoreDNS is shared by the whole
+cluster and `/etc/hosts` needs sudo: show the user the command and ask before running either.
 
 For the password, have the user run `read -s P && printf '%s' "$P" > ~/.ce-registry-pw &&
 chmod 600 ~/.ce-registry-pw` in their own terminal, and set `REGISTRY_PASSWORD_FILE` to it.
@@ -126,8 +139,8 @@ From the detect step:
 ## 7. Install
 
 ```bash
-KUBE_CONTEXT=<ctx> REGISTRY_PASSWORD_FILE=~/.ce-registry-pw <other variables> \
-  ce [--chart-path ./charts/mlrun-ce] [--config ce-config.yaml] --non-interactive --dry-run
+REGISTRY_PASSWORD_FILE=~/.ce-registry-pw <other variables> \
+  ce --kube-context <ctx> [--chart-path ./charts/mlrun-ce] [--config ce-config.yaml] --non-interactive --dry-run
 ```
 
 Read the warnings with the user, then run it again without `--dry-run`. A cold install takes
@@ -157,9 +170,13 @@ Then match the symptom:
 | Symptom | Next step |
 |---|---|
 | A pre-install check blocked | The message names it: StorageClass or Helm version |
-| `not published` / `No such option` | [Troubleshooting](../../../scripts/README.md#troubleshooting) |
+| `not published` | `--ce-version` names a chart the repo lacks; the message names the newest stable one |
+| `No such option` | [Troubleshooting](../../../scripts/README.md#no-such-option-exit-2) |
+| `chart dependencies ... are missing` | Add `--update-dependencies`, or run `make helm-update-dependencies` |
 | Dry run: `no matches for kind` | [Why](../../../scripts/README.md#--dry-run-fails-with-no-matches-for-kind); a real install is fine |
 | `ErrImagePull` with 401/403 | The pull secret: credentials, `REGISTRY_SERVER` |
+| Function pod `ImagePullBackOff` with `--local-registry` | The event names the registry and the cause: [the step it maps to](../../../scripts/README.md#function-pod-imagepullbackoff-with---local-registry) |
+| A function still builds or pulls from the old registry after a registry change | It keeps the registry it was created with; delete it and create it again |
 | Timeout or `ProgressDeadlineExceeded` | Usually a slow pull: rerun, it upgrades in place ([An install failed or timed out](../../../scripts/README.md#an-install-failed-or-timed-out)) |
 | `mlrun-api-chief` restarts with `Can't connect to MySQL` | Normal on a first start; wait |
 | Hard clean ends with leftovers | [A hard clean left a Kafka pod and its PVC](../../../scripts/README.md#a-hard-clean-left-a-kafka-pod-and-its-pvc) |
