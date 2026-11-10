@@ -20,8 +20,12 @@ is the source of truth for every option.
 2. Never ask for the registry password in chat or put it on a command line. The user writes
    it to a file (`REGISTRY_PASSWORD_FILE`), or runs the interactive installer themselves.
 3. Never uninstall, `--hard-clean`, or delete PVCs or namespaces without an explicit OK for
-   that cluster.
+   that cluster ([Uninstalling](../../../scripts/README.md#uninstalling) says what each removes).
 4. Run with `--dry-run` first. You run the installer with `--non-interactive`.
+5. Read what is on disk and in the cluster before you ask the user anything it could answer:
+   config files, the password file, the running release's values.
+
+Paths below are relative to the repo root; `cd` there first if the session started in `scripts/`.
 
 ## 1. Detect
 
@@ -30,8 +34,16 @@ kubectl config current-context; echo "KUBE_CONTEXT=${KUBE_CONTEXT:-<unset>}"
 kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name} {.status.nodeInfo.architecture} {.status.nodeInfo.kubeletVersion}{"\n"}{end}'
 helm list -n mlrun --deployed --failed --pending --superseded --uninstalling   # Helm 4 has no --all
 kubectl get pvc -n mlrun
+helm list -A                                           # a CE release in another namespace also blocks
 test -f scripts/install.py && echo clone || echo "no clone"
+# Existing config and state (find, not a bare glob: zsh errors when nothing matches)
+find . scripts -maxdepth 1 \( -name 'ce-config*.yaml' -o -name 'config.yaml' -o -name '*values*.yaml*' \) 2>/dev/null
+test -s "${REGISTRY_PASSWORD_FILE:-$HOME/.ce-registry-pw}" && echo "password file present" || echo "no password file"
+helm get values mlrun-ce -n mlrun 2>/dev/null          # what the running release was installed with
 ```
+
+An `arm64` node means MLRun's amd64-only images must be loaded before the install
+([Apple Silicon](../../../scripts/README.md#apple-silicon-arm64)).
 
 Once the user names another cluster, pass it to every tool: `--context <ctx>` to kubectl,
 `--kube-context <ctx>` to helm and to the installer (or `KUBE_CONTEXT=<ctx>` for the
@@ -87,7 +99,9 @@ Cluster checks:
   created ([Precedence](../../../scripts/README.md#precedence)). Not tested with the installer;
   say so.
 - One MLRun CE release per cluster ([Known issues](../../../scripts/README.md#known-issues)).
-  On a shared cluster, check `helm list -A` for another one.
+  On a shared cluster, check `helm list -A`. If a CE release runs in another namespace, stop and
+  ask the user whether to use that namespace or remove it first: the installer refuses to
+  install beside it ([Upgrading](../../../scripts/README.md#upgrading)).
 
 ## 4. Registry and secret
 
@@ -113,9 +127,32 @@ cluster and `/etc/hosts` needs sudo: show the user the command and ask before ru
 
 For the password, have the user run `read -s P && printf '%s' "$P" > ~/.ce-registry-pw &&
 chmod 600 ~/.ce-registry-pw` in their own terminal, and set `REGISTRY_PASSWORD_FILE` to it.
-A re-run reuses the secret the first run created.
+A re-run reuses the secret the first run created. Before the dry run, check
+`test -s "$REGISTRY_PASSWORD_FILE"`; if it fails, stop and ask the user to write the file.
+Do not create it yourself.
 
 ## 5. Configuration
+
+Look first. If the detect step found config files (`ce-config*.yaml`, `config.yaml`), read
+each one, then ask the user whether to use one:
+- one file: show its path and the main settings (context, namespace, registry, chart source),
+  and ask whether to use it;
+- several files: list them with those settings and ask which one, or whether the user wants
+  to give another path;
+- none, or the user declines: ask whether they have a file elsewhere and want to give its
+  path, otherwise continue with variables and flags.
+
+Pass the chosen file as `--config <file>`. Then check it against what the cluster shows (the
+dry run catches unknown keys):
+- `namespace` and `releaseName` against the release from step 1;
+- `skipSecret` against the secret actually in that namespace;
+- registry `url` and `localRegistry.enabled`: with both set, the local registry is used and
+  `url` is ignored;
+- `chartPath`, which resolves from the directory the installer runs in;
+- the file is only read when you pass `--config <file>` (or set `CONFIG_FILE`); the installer
+  does not look for one by itself, whatever it is named.
+
+Show the user what disagrees and ask only about that. Do not edit their file without their OK.
 
 - One-off: environment variables and flags.
 - Repeatable: copy `scripts/ce-config.local.yaml.example` (a local cluster) or
@@ -129,13 +166,26 @@ A re-run reuses the secret the first run created.
 ## 6. Existing state
 
 From the detect step:
-- no release: continue.
-- `deployed`: the same command upgrades in place ([Upgrading](../../../scripts/README.md#upgrading)).
-- `failed` or `pending-*`: rerunning usually recovers it. If it does not, ask, then
-  `ce uninstall`.
-- PVCs the user wants gone: `uninstall --hard-clean`, after an explicit OK. With no release in
-  the namespace it refuses `--non-interactive`, so the user runs it
-  ([Uninstalling](../../../scripts/README.md#uninstalling)).
+- no release: continue. If PVCs are left over from an earlier install and the user wants them
+  gone, see the `--hard-clean` bullet below.
+- a release exists (any status: `deployed`, `failed`, `pending-*`, `superseded`): say its
+  namespace, chart version and status, then **ask the user which of these they want**:
+  1. **Upgrade in place**: the same command ([Upgrading](../../../scripts/README.md#upgrading)).
+     Without `--ce-version` (or `CE_VERSION`) it moves to the newest stable
+     chart: compare `helm list -n mlrun` with the version the run will use, tell the user
+     both, and confirm before going on. For `failed` or `pending-*`, rerunning usually
+     recovers it.
+  2. **`ce uninstall`, then install**: removes the release and what the installer created
+     outside the chart. Keeps the namespace, CRDs and every PVC, so the data survives.
+  3. **`ce uninstall --hard-clean`, then install**: also deletes every PVC in the namespace
+     (MySQL, the registry's images, Kafka, ...) and the Nuclio functions and run pods. This is
+     irreversible; name what the PVC list from the detect step holds.
+
+  Do not pick for the user, and do not default to 2 or 3. Rule 3 applies: run an uninstall
+  only after an explicit OK for that cluster, and run `ce uninstall --dry-run` first to show
+  what it removes.
+- `--hard-clean` with no release in the namespace refuses `--non-interactive` (it asks the user
+  to type the namespace name), so the user runs it ([Uninstalling](../../../scripts/README.md#uninstalling)).
 
 ## 7. Install
 
@@ -148,8 +198,9 @@ Read the warnings with the user, then run it again without `--dry-run`. A cold i
 5-15 minutes; raise `HELM_TIMEOUT` on a slow network. Afterwards:
 
 ```bash
-kubectl -n mlrun port-forward svc/mlrun-api 30070:8080 &
-curl -s localhost:30070/api/v1/healthz   # {"version":"…","status":"ok"}
+kubectl -n mlrun port-forward svc/mlrun-api 30070:8080 & PF=$!
+sleep 3; curl -s localhost:30070/api/v1/healthz   # {"version":"…","status":"ok"}
+kill $PF
 ```
 
 Show the access table. If its addresses do not open, port-forward each UI
@@ -176,7 +227,7 @@ Then match the symptom:
 | `chart dependencies ... are missing` | Add `--update-dependencies`, or run `make helm-update-dependencies` |
 | Dry run: `no matches for kind` | [Why](../../../scripts/README.md#--dry-run-fails-with-no-matches-for-kind); a real install is fine |
 | `ErrImagePull` with 401/403 | The pull secret: credentials, `REGISTRY_SERVER` |
-| `ImagePullBackOff` with `no match for platform in manifest` (arm64 node, e.g. Apple Silicon) | MLRun's images are amd64-only: [load them first](../../../scripts/README.md#apple-silicon-arm64) |
+| `ImagePullBackOff` with `no match for platform in manifest` (arm64 node, e.g. Apple Silicon) | MLRun's images are amd64-only: [load them first](../../../scripts/README.md#imagepullbackoff-no-match-for-platform-in-manifest) |
 | Function pod `ImagePullBackOff` with `--local-registry` | The event names the registry and the cause: [the step it maps to](../../../scripts/README.md#function-pod-imagepullbackoff-with---local-registry) |
 | A function still builds or pulls from the old registry after a registry change | It keeps the registry it was created with; delete it and create it again |
 | Timeout or `ProgressDeadlineExceeded` | Usually a slow pull: rerun, it upgrades in place ([An install failed or timed out](../../../scripts/README.md#an-install-failed-or-timed-out)) |
