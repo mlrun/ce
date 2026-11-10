@@ -351,6 +351,12 @@ def execute(settings: Settings) -> None:
             f"Using values file: {settings.values_file} "
             "(skipping secret creation and install prompts)"
         )
+        # --local-registry names the registry, so it wins over the file's: otherwise the
+        # registry is deployed, nothing uses it, and the builder talks plain HTTP to the
+        # file's registry instead.
+        if settings.local_registry:
+            settings.registry_url = settings.local_registry_url
+            write_secret = prepare_registry_secret(settings)
     else:
         write_secret = prepare_registry_secret(settings)
         gather_install_params(settings)

@@ -25,7 +25,7 @@ import hatch_build
 import pytest
 import typer
 
-from ce_installer import cli, console, registry
+from ce_installer import cli, console, helm_ops, registry
 from ce_installer.console import InstallerError
 from ce_installer.settings import UNKNOWN_VERSION, Settings, env_str, prompt_or_env
 
@@ -626,6 +626,33 @@ def test_a_values_file_alone_skips_secret_creation(monkeypatch, tmp_path):
 
     # -f alone is self-contained: the file must already reference an existing secret.
     assert called == []
+
+
+def test_a_local_registry_wins_over_the_values_files_registry(monkeypatch, tmp_path):
+    values = tmp_path / "my-values.yaml"
+    values.write_text("global:\n  registry:\n    url: index.docker.io/someone\n")
+    called = []
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
+    monkeypatch.setattr(cli, "ensure_namespace", lambda s: None)
+    stub_cluster_checks(monkeypatch)
+    monkeypatch.setattr(cli, "resolve_external_host", lambda s: None)
+    monkeypatch.setattr(cli, "prepare_local_registry", lambda s: None)
+    monkeypatch.setattr(cli, "deploy_local_registry", lambda s: None)
+    monkeypatch.setattr(cli, "helm_install", lambda s: None)
+    monkeypatch.setattr(cli, "prepare_registry_secret", lambda s: called.append("secret") or True)
+    monkeypatch.setattr(cli, "apply_registry_secret", lambda s: called.append("apply"))
+    settings = Settings(
+        values_file=str(values),
+        local_registry=True,
+        local_registry_url="local-registry.mlrun.svc.cluster.local:5000",
+    )
+
+    cli.execute(settings)
+
+    # Otherwise the registry is deployed and unused, and MLRun keeps the file's registry.
+    assert called == ["secret", "apply"]
+    flags = helm_ops.build_set_flags(settings)
+    assert "global.registry.url=local-registry.mlrun.svc.cluster.local:5000" in flags
 
 
 def test_a_values_file_with_config_still_creates_the_secret(monkeypatch, tmp_path):

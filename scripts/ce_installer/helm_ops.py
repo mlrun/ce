@@ -56,10 +56,11 @@ def build_set_flags(settings: Settings) -> List[str]:
     flags: List[str] = []
 
     # Pure -f-only mode (no --config) stays fully self-contained — the run never resolved
-    # REGISTRY_URL/EXTERNAL_HOST_ADDRESS in that case. Every other mode (--config alone, or
-    # -f + --config together) sets these as --set, which helm applies after --values, so a
-    # config-resolved value always wins over the same key in a -f file.
-    if not settings.values_file or settings.config_file:
+    # REGISTRY_URL/EXTERNAL_HOST_ADDRESS in that case — unless --local-registry names the
+    # registry. Every other mode (--config alone, or -f + --config together) sets these as
+    # --set, which helm applies after --values, so a config-resolved value always wins over
+    # the same key in a -f file.
+    if settings.local_registry or not settings.values_file or settings.config_file:
         flags += ["--set", f"global.registry.url={settings.registry_url}"]
         flags += ["--set", f"global.registry.secretName={settings.registry_secret_name}"]
         flags += [

@@ -87,6 +87,8 @@ CASES = [
     "--dry-run --config tests/installer/fixtures/ce-config.yaml "
     "-f tests/installer/fixtures/values.yaml",
     "--dry-run --config tests/installer/fixtures/nonexistent.yaml",
+    # --local-registry names the registry, so it wins over the values file's.
+    "--dry-run --local-registry -f tests/installer/fixtures/values.yaml",
     # Uninstall, including the destructive path and its dry runs. The dry-run pair is the
     # point of the group: --dry-run was read only on the install path, so these two used to
     # record a real `helm uninstall` and real PVC/PV deletes.

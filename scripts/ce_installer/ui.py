@@ -106,7 +106,7 @@ def confirm_target(settings: Settings) -> None:
         chart = f"{settings.chart_path} (local chart)"
     else:
         chart = f"{settings.chart_ref or 'mlrun-ce/mlrun-ce'} {settings.ce_version or '(newest)'}"
-    if settings.values_file and not settings.config_file:
+    if settings.values_file and not settings.config_file and not settings.local_registry:
         registry = f"from {settings.values_file}"
     else:
         registry = f"{settings.registry_url} (pull secret '{settings.registry_secret_name}')"
