@@ -18,7 +18,10 @@ click equivalent — optional option values and order-sensitive otel folding —
 most of the risk here.
 """
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import hatch_build
@@ -826,16 +829,18 @@ def test_every_readme_link_in_the_install_skill_lands_on_a_heading():
     assert not broken, f"install-ce links to missing scripts/README.md headings: {broken}"
 
 
-def test_help_draws_every_option_in_the_one_help_colour(monkeypatch, capsys):
+def test_help_draws_every_option_in_the_one_help_colour():
     # typer's defaults mix bold cyan, green, magenta and yellow; yellow on a light
     # terminal is barely readable.
-    monkeypatch.delenv("NO_COLOR", raising=False)
-    monkeypatch.setattr(typer.rich_utils, "FORCE_TERMINAL", True)
-    monkeypatch.setattr(typer.rich_utils, "COLOR_SYSTEM", "256")
+    # A fresh interpreter: rich keeps a style's first ANSI codes whatever the colour system,
+    # and under GITHUB_ACTIONS an earlier in-process --help renders in standard colours.
+    env = {k: v for k, v in os.environ.items() if k not in ("NO_COLOR", "COLORTERM")}
+    env.update(FORCE_COLOR="1", TERM="xterm-256color")
+    code = "import sys; from ce_installer import cli; sys.exit(cli.main(['--help']))"
 
-    assert cli.main(["--help"]) == 0
-
-    out = capsys.readouterr().out
+    out = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True
+    ).stdout
     assert "\x1b[1;38;5;36m-kube\x1b[0m\x1b[1;38;5;36m-context" in out
     assert "\x1b[1;38;5;36mCONTEXT" in out
     for default in ("\x1b[1;36m", "\x1b[1;32m", "\x1b[1;35m", "\x1b[1;33m", "\x1b[33m"):
