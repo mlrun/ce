@@ -132,7 +132,18 @@ def build_set_flags(settings: Settings) -> List[str]:
         if key in settings.node_ports:
             flags += ["--set", f"{key}={settings.node_ports[key]}"]
 
+    # Off in the saved file, so a later plain `helm upgrade -f` with it does not run the
+    # migrations again; migration_set_flags turns them on for the one run that asks.
+    flags += ["--set", "mlrunMigrations.enabled=false"]
+
     return flags
+
+
+def migration_set_flags(settings: Settings) -> List[str]:
+    """The --set that runs the MLRun DB migrations Job on this upgrade only."""
+    if not settings.trigger_migrations:
+        return []
+    return ["--set", "mlrunMigrations.enabled=true"]
 
 
 def ingress_set_flags(settings: Settings) -> List[str]:
@@ -350,6 +361,7 @@ def build_helm_install_command(settings: Settings, installer_values: str = "") -
         cmd += ["--values", settings.values_file]
     if installer_values:
         cmd += ["--values", installer_values]
+    cmd += migration_set_flags(settings)
     if settings.ce_version and not settings.chart_path:
         cmd += ["--version", settings.ce_version]
     if settings.dry_run:
@@ -471,6 +483,11 @@ def helm_install(settings: Settings) -> None:
         return
 
     log_info("Installation complete.")
+    if settings.trigger_migrations:
+        log_info(
+            "MLRun DB migrations run in a Job of their own; follow it with: kubectl -n "
+            f"{settings.namespace} get jobs -l app.kubernetes.io/component=mlrun-migrations"
+        )
     if helm(settings, "status", settings.release_name, "--namespace", settings.namespace).ok:
         print_notes_table(settings)
 

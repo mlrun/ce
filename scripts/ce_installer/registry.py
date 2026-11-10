@@ -541,8 +541,8 @@ def collect_registry_credentials(settings: Settings) -> None:
         settings.config_registry_username,
     )
 
-    # REGISTRY_PASSWORD (env) > REGISTRY_PASSWORD_FILE > interactive masked prompt. Never
-    # settable via ce-config.yaml — env, file or prompt only.
+    # REGISTRY_PASSWORD (env) > REGISTRY_PASSWORD_FILE > interactive masked prompt. The
+    # config file may name the password file, never the password.
     password = env_str("REGISTRY_PASSWORD")
     if not password and settings.registry_password_file:
         password_path = Path(settings.registry_password_file)

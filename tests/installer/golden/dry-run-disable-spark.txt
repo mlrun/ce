@@ -32,3 +32,5 @@ global:
   externalHostAddress: localhost
 spark-operator:
   enabled: false
+mlrunMigrations:
+  enabled: false

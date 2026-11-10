@@ -26,6 +26,7 @@ PREVIOUS = {
     "global": {"registry": {"url": "index.docker.io/old", "secretName": "registry-credentials"}},
     "jupyterNotebook": {"service": {"nodePort": 30041}},
     "storage": {"s3": {"secretKey": "hunter2"}},
+    "mlrunMigrations": {"enabled": False},
 }
 
 
@@ -147,7 +148,9 @@ def test_an_upgrade_that_changes_nothing_removes_a_stale_changes_file(
     settings.values_file = str(values)
     stale = release_values.value_changes_file(settings)
     stale.write_text("changes: []\n")
-    upgrade({"jupyterNotebook": {"service": {"nodePort": 30041}}})
+    upgrade(
+        {"jupyterNotebook": {"service": {"nodePort": 30041}}, "mlrunMigrations": {"enabled": False}}
+    )
     logs = capture_logs(release_values)
 
     release_values.load_previous_values(settings)
@@ -156,3 +159,32 @@ def test_an_upgrade_that_changes_nothing_removes_a_stale_changes_file(
     assert not stale.exists()
     assert any("no change" in line for line in logs)
     assert settings.value_changes == 0
+
+
+def test_migrations_run_on_the_upgrade_that_asks_and_are_off_in_the_saved_file(
+    upgrade, settings, capture_logs
+):
+    settings.trigger_migrations = True
+    upgrade()
+    logs = capture_logs(release_values)
+
+    release_values.load_previous_values(settings)
+    release_values.report_value_changes(settings)
+    saved = helm_ops.write_installer_values(settings)
+    cmd = helm_ops.build_helm_install_command(settings, saved)
+
+    assert "mlrunMigrations.enabled: false -> true" in "\n".join(logs)
+    # A later plain `helm upgrade -f mlrun-ce-values.yaml` must not run them again.
+    assert yaml.safe_load(open(saved))["mlrunMigrations"] == {"enabled": False}
+    assert cmd[cmd.index(saved) + 1 : cmd.index(saved) + 3] == [
+        "--set",
+        "mlrunMigrations.enabled=true",
+    ]
+
+
+def test_migrations_stay_off_unless_asked(settings):
+    flags = helm_ops.build_set_flags(settings)
+    cmd = helm_ops.build_helm_install_command(settings, "values.yaml")
+
+    assert flags[-2:] == ["--set", "mlrunMigrations.enabled=false"]
+    assert "mlrunMigrations.enabled=true" not in cmd

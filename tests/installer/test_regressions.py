@@ -1695,6 +1695,21 @@ def _record_execute_steps(monkeypatch, steps):
 WRITES = {"ensure_namespace", "deploy_local_registry", "apply_registry_secret", "helm_install"}
 
 
+def test_migrations_requested_on_a_first_install_are_dropped_with_a_warning(
+    monkeypatch, settings, capture_logs
+):
+    _record_execute_steps(monkeypatch, [])
+    monkeypatch.setattr(cli, "load_previous_values", lambda s: None)
+    monkeypatch.setattr(cli, "report_value_changes", lambda s: None)
+    logs = capture_logs(cli)
+    settings.trigger_migrations = True
+
+    cli.execute(settings)
+
+    assert settings.trigger_migrations is False
+    assert any("no release to upgrade" in line for line in logs)
+
+
 def test_every_prompt_and_read_comes_before_the_first_write(monkeypatch, settings):
     steps = []
     _record_execute_steps(monkeypatch, steps)

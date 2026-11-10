@@ -184,11 +184,12 @@ reaches the environment of the helm and kubectl processes. The pull secret is pa
 
 ### From a config file
 
-A `ce-config.yaml` holds the stable settings (registry, chart source, components) so every
-run is the same:
+A `ce-config.yaml` holds the settings of a run (registry, chart source, components) so every
+run is the same. Start from the example for your cluster:
 
 ```bash
-cp scripts/ce-config.yaml.example ce-config.yaml   # then edit it
+cp scripts/ce-config.local.yaml.example ce-config.yaml    # Docker Desktop, kind, minikube
+cp scripts/ce-config.remote.yaml.example ce-config.yaml   # any other cluster
 ./scripts/install.py --config ce-config.yaml
 ```
 
@@ -202,8 +203,9 @@ used directly. The password is never read from the file. See
 ./scripts/install.py -f my-values.yaml
 ```
 
-Used alone, `-f` is passed to helm as is, no pull secret is created, and no registry or
-address questions are asked. The file must set `global.registry.*` itself, and the secret
+Used alone, `-f` is passed to helm as is (the installer adds only
+`mlrunMigrations.enabled: false`, see [Upgrading](#upgrading)), no pull secret is created,
+and no registry or address questions are asked. The file must set `global.registry.*` itself, and the secret
 it names must already exist, or pods fail to pull images when helm waits for them. Combined with `--config`, the secret
 and the registry settings are handled as usual. See [Precedence](#precedence).
 
@@ -345,15 +347,32 @@ from your `-f` file.
 
 ### The config file
 
-`--config FILE` (or `CONFIG_FILE`) reads the `installer:` block of a YAML file; anything else
-in the file is ignored. [`ce-config.yaml.example`](ce-config.yaml.example) lists every key,
-with the flag or variable each one stands for.
+`--config FILE` (or `CONFIG_FILE`) reads the `installer:` block of a YAML file. Every flag
+has a key except the per-run actions (`--uninstall`, `--hard-clean`, `--dry-run`), and so
+does every environment variable except the registry password. Both examples,
+[`ce-config.local.yaml.example`](ce-config.local.yaml.example) and
+[`ce-config.remote.yaml.example`](ce-config.remote.yaml.example), list every key with the
+flag or variable it stands for.
 
+- **The file is checked before anything runs.** A key the installer does not know, one in
+  the wrong block, or a value of the wrong type stops the run with every problem listed and
+  where each key belongs:
+
+  ```text
+  [ERROR] ce-config.yaml does not match the installer's config format:
+  [ERROR]   - installer.secret: not allowed here; it belongs under installer.registry
+  [ERROR]   - installer.components.sprak: unknown key; did you mean spark?
+  ```
+
+  Quote versions (`minK8sVersion: "1.30"`): YAML reads an unquoted `1.30` as the number 1.3.
+- **A toggle** (`skipSecret`, `components.*`, `otel.*` and the rest) set by a flag or a
+  variable is never turned back by the file.
 - **Required in non-interactive runs**, unless the matching variable is set:
   `registry.url` (not with `--local-registry`) and `registry.secret.username` (not with
   `--skip-secret` or `--local-registry`). Missing fields are reported together.
 - **The password** is never read from the file. A `password` key is ignored with a
-  warning. Use `REGISTRY_PASSWORD`, `REGISTRY_PASSWORD_FILE` or the prompt.
+  warning. Use `REGISTRY_PASSWORD`, `REGISTRY_PASSWORD_FILE` (`registry.passwordFile`) or
+  the prompt.
 - **`chartSource.kind`** accepts only `repo` (default) or `path`. With `path`,
   `chartPath` is required.
 - **`components.*`** set to `false` disables a component, like the matching `--disable-*`
@@ -468,6 +487,12 @@ upgrades the release in place. Use it to change a setting, move to another chart
   value the upgrade changes or resets to the chart default is printed as a warning and
   written to `mlrun-ce-values.changes.yaml`, with secret-like values redacted. To keep a
   value, pass it again.
+- **MLRun DB migrations** run only when asked: `--trigger-migrations` (or
+  `TRIGGER_MIGRATIONS`, or `triggerMigrations` in the config file) runs the migrations Job
+  with this upgrade. `mlrun-ce-values.yaml` always sets `mlrunMigrations.enabled: false`,
+  so the request does not outlive the run, and a later plain `helm upgrade` with that file
+  does not run them again. On a first install there is nothing to migrate, and the request
+  is ignored with a warning.
 - Keep `mlrun-ce-values.yaml` if you upgrade with plain helm. The run prints the
   equivalent helm commands; a `helm upgrade` without that file (and without
   `--reuse-values`) resets those values to the chart defaults.
@@ -658,6 +683,7 @@ else, `false` and `0` included, leaves it off.
 | `--disable-mpi` | `DISABLE_MPI` | Leave out the MPI operator |
 | `--disable-model-monitoring` | `DISABLE_MODEL_MONITORING` | Leave out Kafka and TimescaleDB |
 | `--show-progress` | `SHOW_PROGRESS` | Show a live table of rollouts while helm runs (terminals only) |
+| `--trigger-migrations` | `TRIGGER_MIGRATIONS` | On an upgrade, run the MLRun DB migrations; see [Upgrading](#upgrading) |
 
 ### Environment variables
 

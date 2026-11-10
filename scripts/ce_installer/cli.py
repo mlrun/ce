@@ -304,8 +304,6 @@ def normalize_argv(args: Sequence[str]) -> List[str]:
 
 
 def execute(settings: Settings) -> None:
-    load_config(settings)
-
     if settings.hard_clean and not settings.uninstall:
         raise die("--hard-clean requires --uninstall.")
 
@@ -355,6 +353,9 @@ def execute(settings: Settings) -> None:
         gather_install_params(settings)
 
     load_previous_values(settings)
+    if settings.trigger_migrations and settings.previous_values is None:
+        log_warn("MLRun DB migrations were requested, but there is no release to upgrade; ignored.")
+        settings.trigger_migrations = False
     if settings.skip_validators:
         log_info("Skipping pre-install validators (--skip-validators or SKIP_VALIDATORS)")
         log_warn("  NodePorts are not checked: one already taken fails the install.")
@@ -534,8 +535,17 @@ def install(
         None,
         "--config",
         metavar="FILE",
-        help="Read defaults from a ce-config.yaml file's 'installer:' block. Flag/env values "
-        "always win over the file. Can be combined with -f/--values.",
+        help="Read defaults from a ce-config.yaml file's 'installer:' block; any key it does "
+        "not know stops the run. Flag/env values always win over the file. Can be combined "
+        "with -f/--values. Examples: scripts/ce-config.local.yaml.example and "
+        "scripts/ce-config.remote.yaml.example.",
+    ),
+    trigger_migrations: bool = typer.Option(
+        False,
+        "--trigger-migrations",
+        help="On an upgrade, run the MLRun DB migrations Job for this run only "
+        "(mlrunMigrations.enabled=true). The installer's values file always keeps it false, "
+        "so a later plain helm upgrade does not run them again.",
     ),
 ) -> None:
     if version:
@@ -598,9 +608,9 @@ def install(
         )
         settings.otel_set_by_cli = otel_flags_present(_RAW_ARGS)
 
-        open_debug_log(settings.install_log_file, debug_log_header())
-        apply_version_floors(settings)
-        execute(settings)
+        settings.trigger_migrations = trigger_migrations or env_true("TRIGGER_MIGRATIONS")
+
+        run(settings)
     except InstallerError as exc:
         point_at_debug_log(exc)
         raise typer.Exit(exc.code) from None
@@ -617,6 +627,14 @@ def install(
         raise typer.Exit(1) from None
     finally:
         close_debug_log()
+
+
+def run(settings: Settings) -> None:
+    # The config file goes first: it can set the log's path and the version floors.
+    load_config(settings)
+    open_debug_log(settings.install_log_file, debug_log_header())
+    apply_version_floors(settings)
+    execute(settings)
 
 
 def debug_log_header() -> List[str]:

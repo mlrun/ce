@@ -73,6 +73,7 @@ INSTALLER_ENV_VARS = (
     "SKIP_DEPENDENCY_UPDATE",
     "DRY_RUN",
     "NON_INTERACTIVE",
+    "TRIGGER_MIGRATIONS",
     "CONFIG_FILE",
     "CI",
     # Set by isolate_helm_repo_config straight into os.environ; listing them here has

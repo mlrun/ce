@@ -28,7 +28,11 @@ One bash case is deliberately not ported. `load_config exits 1 when yq is not in
 with pyyaml, so there is no yq to be missing and no exit to assert.
 """
 
+from pathlib import Path
+
 import pytest
+import typer
+import yaml
 
 from ce_installer import cli, config
 from ce_installer.console import InstallerError
@@ -451,3 +455,233 @@ def test_the_ingress_controller_service_can_come_from_the_config_file(settings, 
     config.load_config(settings)
 
     assert settings.ingress_controller_service == "ingress-nginx/custom"
+
+
+# ------------------------------------------------------------------------------------------
+# Structure: a key in the wrong place, misspelt or mistyped stops the run before it starts
+# ------------------------------------------------------------------------------------------
+
+
+def _config_errors(settings, tmp_path, capture_logs, body):
+    logs = capture_logs(config)
+    settings.config_file = write_config(tmp_path, body)
+    with pytest.raises(InstallerError) as excinfo:
+        config.load_config(settings)
+    assert excinfo.value.code == 1
+    return "\n".join([*logs, excinfo.value.message])
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        # A block one level too high: read silently, the registry would come from the prompt.
+        (
+            "installer:\n  secret:\n    username: me\n",
+            "installer.secret: not allowed here; it belongs under installer.registry",
+        ),
+        (
+            "registry:\n  url: index.docker.io/me\n",
+            "registry: not allowed here; it belongs under installer",
+        ),
+        (
+            "installer:\n  components:\n    sprak: false\n",
+            "installer.components.sprak: unknown key; did you mean spark?",
+        ),
+        (
+            "nstaller:\n  kubeContext: kind-ce\n",
+            "nstaller: unknown top-level key; only installer: is allowed; did you mean installer?",
+        ),
+        (
+            "installer:\n  registry:\n    skipSecret: 'true'\n",
+            "installer.registry.skipSecret: expected true or false, got 'true'",
+        ),
+        (
+            "installer:\n  validators:\n    minK8sVersion: 1.30\n",
+            "installer.validators.minK8sVersion: expected text, got 1.3; put the value in quotes",
+        ),
+        (
+            "installer:\n  progress:\n    intervalSeconds: soon\n",
+            "installer.progress.intervalSeconds: expected a whole number, got 'soon'",
+        ),
+        (
+            "installer:\n  registry: index.docker.io/me\n",
+            "installer.registry: expected a block of keys, got 'index.docker.io/me'",
+        ),
+    ],
+)
+def test_a_wrongly_scoped_or_typed_key_stops_the_run_and_says_where_it_belongs(
+    settings, tmp_path, capture_logs, body, expected
+):
+    reported = _config_errors(settings, tmp_path, capture_logs, body)
+
+    assert expected in reported
+    assert "ce-config.local.yaml.example" in reported
+    assert "ce-config.remote.yaml.example" in reported
+
+
+def test_every_structure_problem_is_reported_in_one_run(settings, tmp_path, capture_logs):
+    reported = _config_errors(
+        settings,
+        tmp_path,
+        capture_logs,
+        "installer:\n  kubeContxt: kind-ce\n  secret: {}\n  components:\n    spark: no-thanks\n",
+    )
+
+    assert "installer.kubeContxt" in reported
+    assert "installer.secret" in reported
+    assert "installer.components.spark" in reported
+
+
+def test_a_rejected_file_changes_no_setting(settings, tmp_path, capture_logs):
+    settings.config_file = write_config(
+        tmp_path, "installer:\n  kubeContext: kind-ce\n  namespace: other\n  bogus: 1\n"
+    )
+    before = dict(vars(settings))
+
+    with pytest.raises(InstallerError):
+        config.load_config(settings)
+
+    assert vars(settings) == before
+
+
+def test_an_empty_installer_block_is_valid(settings, tmp_path):
+    settings.config_file = write_config(tmp_path, "installer:\n")
+
+    config.load_config(settings)
+
+
+# ------------------------------------------------------------------------------------------
+# The examples and the flags: every key documented, every flag configurable
+# ------------------------------------------------------------------------------------------
+
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+
+
+def _leaf_paths(node, prefix=""):
+    paths = set()
+    for key, value in node.items():
+        if isinstance(value, dict):
+            paths |= _leaf_paths(value, f"{prefix}{key}.")
+        else:
+            paths.add(f"{prefix}{key}")
+    return paths
+
+
+@pytest.mark.parametrize("example", config.EXAMPLES)
+def test_each_example_is_valid_and_lists_every_key(settings, example):
+    data = yaml.safe_load((SCRIPTS / example).read_text())
+
+    assert config.validate_structure(data) == []
+    # password is in the schema only so a file holding one gets the warning.
+    assert _leaf_paths(data) == _leaf_paths(config.SCHEMA) - {"installer.registry.secret.password"}
+
+
+@pytest.mark.parametrize("example", config.EXAMPLES)
+def test_each_example_loads(settings, example):
+    settings.config_file = str(SCRIPTS / example)
+
+    config.load_config(settings)
+
+    assert settings.config_registry_url
+
+
+@pytest.mark.parametrize("example", config.EXAMPLES)
+def test_no_example_carries_a_password(example):
+    data = yaml.safe_load((SCRIPTS / example).read_text())
+
+    assert "password" not in data["installer"]["registry"]["secret"]
+
+
+def test_every_flag_has_a_config_key_unless_it_is_a_per_run_action():
+    command = typer.main.get_command(cli.app)
+    flags = {
+        opt
+        for param in command.params
+        for opt in param.opts
+        if opt.startswith("--") and opt != "--help"
+    }
+
+    assert flags == set(config.FLAG_KEYS) | set(config.FLAGS_WITHOUT_KEY)
+    keys = _leaf_paths(config.SCHEMA["installer"]) | set(config.SCHEMA["installer"])
+    for flag, key in config.FLAG_KEYS.items():
+        assert key in keys, f"{flag} maps to {key}, which the schema does not have"
+
+
+# ------------------------------------------------------------------------------------------
+# Settings that had only a flag or an environment variable
+# ------------------------------------------------------------------------------------------
+
+
+def test_env_only_settings_come_from_the_config_file(settings, tmp_path):
+    settings.config_file = write_config(
+        tmp_path,
+        "installer:\n"
+        "  namespace: ml\n"
+        "  releaseName: ce\n"
+        "  registry:\n    secretName: pull\n    passwordFile: /run/pw\n"
+        "  chartSource:\n    repoUrl: https://charts.example.com\n"
+        "  helm:\n    timeout: 1800s\n"
+        "  validators:\n    minK8sVersion: '1.30'\n"
+        "  progress:\n    intervalSeconds: 5\n",
+    )
+
+    config.load_config(settings)
+
+    assert (settings.namespace, settings.release_name) == ("ml", "ce")
+    assert (settings.registry_secret_name, settings.registry_password_file) == ("pull", "/run/pw")
+    assert settings.helm_repo_url == "https://charts.example.com"
+    assert settings.helm_timeout == "1800s"
+    assert settings.min_k8s_version == "1.30"
+    assert settings.progress_interval_sec == "5"
+
+
+def test_an_environment_variable_wins_over_the_config_file(monkeypatch, settings, tmp_path):
+    monkeypatch.setenv("NAMESPACE", "from-env")
+    settings.namespace = "from-env"
+    settings.config_file = write_config(tmp_path, "installer:\n  namespace: from-config\n")
+
+    config.load_config(settings)
+
+    assert settings.namespace == "from-env"
+
+
+def test_toggles_come_from_the_config_file(settings, tmp_path):
+    settings.config_file = write_config(
+        tmp_path,
+        "installer:\n"
+        "  nonInteractive: true\n"
+        "  triggerMigrations: true\n"
+        "  valuesFile: my-values.yaml\n"
+        "  registry:\n    skipSecret: true\n"
+        "  localRegistry:\n    enabled: true\n"
+        "  chartSource:\n    skipDependencyUpdate: true\n"
+        "  ingress:\n    enabled: true\n    className: traefik\n"
+        "  validators:\n    skip: true\n"
+        "  progress:\n    show: true\n",
+    )
+
+    config.load_config(settings)
+
+    assert settings.non_interactive and settings.trigger_migrations
+    assert settings.values_file == "my-values.yaml"
+    assert settings.skip_registry_secret and settings.local_registry
+    assert settings.skip_dependency_update and settings.skip_validators and settings.show_progress
+    assert (settings.enable_ingress, settings.ingress_class) == (True, "traefik")
+
+
+def test_the_config_file_cannot_turn_off_a_toggle_set_by_flag(settings, tmp_path):
+    settings.skip_validators = True
+    settings.trigger_migrations = True
+    settings.ingress_class = "haproxy"
+    settings.config_file = write_config(
+        tmp_path,
+        "installer:\n"
+        "  triggerMigrations: false\n"
+        "  validators:\n    skip: false\n"
+        "  ingress:\n    className: traefik\n",
+    )
+
+    config.load_config(settings)
+
+    assert settings.skip_validators and settings.trigger_migrations
+    assert settings.ingress_class == "haproxy"

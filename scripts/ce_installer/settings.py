@@ -166,6 +166,7 @@ class Settings:
     skip_dependency_update: bool = False
     dry_run: bool = False
     non_interactive: bool = False
+    trigger_migrations: bool = False
     config_file: str = ""
 
     # Resolved during the run.

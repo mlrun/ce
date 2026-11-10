@@ -77,6 +77,8 @@ CASES = [
     "--dry-run --skip-secret --skip-validators",
     # Chart selection
     "--dry-run --ce-version 0.11.0",
+    # A first install has nothing to migrate, so the request is dropped with a warning.
+    "--dry-run --trigger-migrations",
     # Config file and values file. The combined case is the one worth having: --config
     # resolves to --set and -f to --values, helm applies --set last, so the config's values
     # must win over the same keys in the values file.

@@ -30,3 +30,5 @@ global:
     url: index.docker.io/someone
     secretName: registry-credentials
   externalHostAddress: localhost
+mlrunMigrations:
+  enabled: false

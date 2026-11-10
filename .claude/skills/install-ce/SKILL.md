@@ -103,8 +103,10 @@ A re-run reuses the secret the first run created.
 ## 5. Configuration
 
 - One-off: environment variables and flags.
-- Repeatable: copy `scripts/ce-config.yaml.example` (in the clone, or from the same tag on
-  GitHub) to `ce-config.yaml` and fill it in, with no password ([From a config file](../../../scripts/README.md#from-a-config-file)).
+- Repeatable: copy `scripts/ce-config.local.yaml.example` (a local cluster) or
+  `scripts/ce-config.remote.yaml.example` (a remote one), in the clone or from the same tag on
+  GitHub, to `ce-config.yaml` and fill it in, with no password. A key the installer does not
+  know stops the run and names where it belongs ([From a config file](../../../scripts/README.md#from-a-config-file)).
 - Chart values the installer does not manage (resources, replicas): `-f my-values.yaml`
   ([From a values file](../../../scripts/README.md#from-a-values-file)).
 - Fewer components on a small cluster: [Optional components](../../../scripts/README.md#optional-components).

@@ -13,29 +13,97 @@
 # limitations under the License.
 """The ce-config.yaml 'installer:' block.
 
-Reading this with pyyaml rather than shelling out to `yq` is what removes yq from the
-installer's prerequisites.
+Every key is declared in SCHEMA and checked before anything else runs: a key in the wrong
+place, a misspelt one or a value of the wrong type stops the run with every problem listed
+at once. Read silently, any of those would install with a default the file meant to change.
 """
 
+import difflib
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import yaml
 
 from .console import InstallerError, die, log_error, log_warn
-from .settings import Settings, env_str
+from .settings import DEFAULT_INGRESS_CLASS, Settings, env_str
 
 # The only values installer.chartSource.kind may take; anything else is a config error
 # rather than a silent fall-back to the default.
 CHART_SOURCE_KINDS = ("repo", "path")
 
+EXAMPLES = ("ce-config.local.yaml.example", "ce-config.remote.yaml.example")
+EXAMPLES_URL = "https://github.com/mlrun/ce/blob/development/scripts/"
+
+# Every key the file may hold, by its type. A nested dict is a block.
+SCHEMA: Dict = {
+    "installer": {
+        "kubeContext": str,
+        "namespace": str,
+        "releaseName": str,
+        "externalHostAddress": str,
+        "valuesFile": str,
+        "nonInteractive": bool,
+        "triggerMigrations": bool,
+        "registry": {
+            "url": str,
+            "secretName": str,
+            "skipSecret": bool,
+            "passwordFile": str,
+            "secret": {"username": str, "password": str, "server": str, "email": str},
+        },
+        "localRegistry": {"enabled": bool, "ingressControllerService": str},
+        "chartSource": {
+            "kind": str,
+            "chartVersion": str,
+            "chartPath": str,
+            "repoUrl": str,
+            "skipDependencyUpdate": bool,
+        },
+        "versions": {"mlrun": str, "nuclio": str},
+        "components": {"monitoring": bool, "spark": bool, "mpi": bool, "modelMonitoring": bool},
+        "ingress": {"enabled": bool, "className": str},
+        "otel": {
+            "operator": bool,
+            "collector": bool,
+            "namespaceLabel": bool,
+            "instrumentation": bool,
+        },
+        "helm": {"timeout": str},
+        "validators": {"skip": bool, "minK8sVersion": str},
+        "progress": {"show": bool, "intervalSeconds": int},
+        "files": {"generatedValues": str, "installLog": str},
+    }
+}
+
+# The config key behind each flag. --version, --config and the per-run actions (--uninstall,
+# --hard-clean, --dry-run) have none: a file left saying `hardClean: true` would be a trap.
+FLAG_KEYS = {
+    "--skip-secret": "registry.skipSecret",
+    "--skip-validators": "validators.skip",
+    "--values": "valuesFile",
+    "--show-progress": "progress.show",
+    "--disable-system-monitoring": "components.monitoring",
+    "--disable-spark": "components.spark",
+    "--disable-mpi": "components.mpi",
+    "--disable-model-monitoring": "components.modelMonitoring",
+    "--enable-ingress": "ingress.enabled",
+    "--enable-otel": "otel",
+    "--enable-otel-operator": "otel.operator",
+    "--enable-otel-collector": "otel.collector",
+    "--enable-otel-namespace-label": "otel.namespaceLabel",
+    "--enable-otel-instrumentation": "otel.instrumentation",
+    "--local-registry": "localRegistry.enabled",
+    "--ce-version": "chartSource.chartVersion",
+    "--chart-path": "chartSource.chartPath",
+    "--skip-dependency-update": "chartSource.skipDependencyUpdate",
+    "--non-interactive": "nonInteractive",
+    "--trigger-migrations": "triggerMigrations",
+}
+FLAGS_WITHOUT_KEY = ("--version", "--config", "--uninstall", "--hard-clean", "--dry-run")
+
 
 def as_text(value) -> str:
-    """Render a YAML scalar the way `yq eval` would.
-
-    Keeps the comparisons below reading against the literals 'true'/'false' the bash
-    version used, whether the file spells them as YAML booleans or as quoted strings.
-    """
+    """Render a YAML scalar as the string the comparisons below read against."""
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -52,6 +120,94 @@ def cfg(data: Dict, *path: str) -> str:
     return as_text(node)
 
 
+def _schema_paths(schema: Dict, prefix: str = "") -> Dict[str, str]:
+    """Every key's name, mapped to the dotted path of the block it belongs to."""
+    paths: Dict[str, str] = {}
+    for key, kind in schema.items():
+        paths.setdefault(key, prefix)
+        if isinstance(kind, dict):
+            for name, parent in _schema_paths(kind, f"{prefix}{key}.").items():
+                paths.setdefault(name, parent)
+    return paths
+
+
+_KEY_HOMES = _schema_paths(SCHEMA)
+
+
+def _unknown_key(path: str, key: str, siblings: List[str]) -> str:
+    where = f"{path}.{key}" if path else key
+    home = _KEY_HOMES.get(key)
+    if home is not None:
+        return f"{where}: not allowed here; it belongs under {home.rstrip('.') or 'the top level'}"
+    close = difflib.get_close_matches(key, siblings, n=1)
+    hint = f"; did you mean {close[0]}?" if close else ""
+    if not path:
+        return f"{where}: unknown top-level key; only installer: is allowed{hint}"
+    return f"{where}: unknown key{hint}"
+
+
+def _type_error(where: str, kind: type, value) -> Optional[str]:
+    if value is None:
+        return None
+    if kind is bool and not isinstance(value, bool):
+        return f"{where}: expected true or false, got {value!r}"
+    if kind is int and (isinstance(value, bool) or not isinstance(value, int)):
+        return f"{where}: expected a whole number, got {value!r}"
+    if kind is str and not isinstance(value, str):
+        # A number here is almost always a version YAML read as a float: 1.30 becomes 1.3.
+        return f"{where}: expected text, got {value!r}; put the value in quotes"
+    return None
+
+
+def validate_structure(data, schema: Dict = SCHEMA, path: str = "") -> List[str]:
+    """Every misplaced, unknown or mistyped key in `data`, as one message each."""
+    if data is None:
+        return []
+    if not isinstance(data, dict):
+        return [f"{path or 'the file'}: expected a block of keys, got {data!r}"]
+    errors: List[str] = []
+    for key, value in data.items():
+        where = f"{path}.{key}" if path else str(key)
+        kind = schema.get(key)
+        if kind is None:
+            errors.append(_unknown_key(path, str(key), list(schema)))
+        elif isinstance(kind, dict):
+            errors.extend(validate_structure(value, kind, where))
+        else:
+            error = _type_error(where, kind, value)
+            if error:
+                errors.append(error)
+    return errors
+
+
+def examples_hint() -> str:
+    names = " or ".join(f"scripts/{name}" for name in EXAMPLES)
+    return f"See {names} ({EXAMPLES_URL})."
+
+
+def _read(settings: Settings) -> Dict:
+    path = Path(settings.config_file)
+    if not path.is_file():
+        raise die(f"Config file not found: {settings.config_file}. {examples_hint()}")
+    try:
+        data = yaml.safe_load(path.read_text())
+    except yaml.YAMLError as exc:
+        raise die(f"Could not parse config file {settings.config_file}: {exc}") from exc
+    errors = validate_structure(data)
+    if errors:
+        log_error(f"{settings.config_file} does not match the installer's config format:")
+        for error in errors:
+            log_error(f"  - {error}")
+        raise die(examples_hint())
+    return data or {}
+
+
+def _from_file_unless_env(data: Dict, env_var: str, *path: str) -> Tuple[bool, str]:
+    """The file's value for a setting an environment variable would otherwise supply."""
+    value = cfg(data, "installer", *path)
+    return (bool(value) and not env_str(env_var)), value
+
+
 def load_config(settings: Settings) -> None:
     """Fill in anything flag/env did not already set from a ce-config.yaml.
 
@@ -60,17 +216,7 @@ def load_config(settings: Settings) -> None:
     """
     if not settings.config_file:
         return
-
-    path = Path(settings.config_file)
-    if not path.is_file():
-        raise die(f"Config file not found: {settings.config_file}")
-
-    try:
-        data = yaml.safe_load(path.read_text()) or {}
-    except yaml.YAMLError as exc:
-        raise die(f"Could not parse config file {settings.config_file}: {exc}") from exc
-    if not isinstance(data, dict):
-        data = {}
+    data = _read(settings)
 
     if cfg(data, "installer", "registry", "secret", "password"):
         log_warn("ce-config.yaml has 'installer.registry.secret.password' set — ignored.")
@@ -96,6 +242,54 @@ def load_config(settings: Settings) -> None:
             data, "installer", "localRegistry", "ingressControllerService"
         )
 
+    _apply_flag_and_env_settings(data, settings)
+    _apply_chart_and_components(data, settings)
+
+
+def _apply_flag_and_env_settings(data: Dict, settings: Settings) -> None:
+    # Settings an environment variable supplies, and no flag.
+    for attr, env_var, path in (
+        ("namespace", "NAMESPACE", ("namespace",)),
+        ("release_name", "RELEASE_NAME", ("releaseName",)),
+        ("registry_secret_name", "REGISTRY_SECRET_NAME", ("registry", "secretName")),
+        ("registry_password_file", "REGISTRY_PASSWORD_FILE", ("registry", "passwordFile")),
+        ("helm_repo_url", "HELM_REPO_URL", ("chartSource", "repoUrl")),
+        ("helm_timeout", "HELM_TIMEOUT", ("helm", "timeout")),
+        ("min_k8s_version", "MIN_K8S_VERSION", ("validators", "minK8sVersion")),
+        ("progress_interval_sec", "PROGRESS_INTERVAL_SEC", ("progress", "intervalSeconds")),
+        ("generated_values_file", "GENERATED_VALUES_FILE", ("files", "generatedValues")),
+        ("install_log_file", "INSTALL_LOG_FILE", ("files", "installLog")),
+    ):
+        applies, value = _from_file_unless_env(data, env_var, *path)
+        if applies:
+            setattr(settings, attr, value)
+
+    # A flag or env var that turned a toggle on is never turned off by the file; the file
+    # can only turn one on.
+    for attr, path in (
+        ("skip_registry_secret", ("registry", "skipSecret")),
+        ("local_registry", ("localRegistry", "enabled")),
+        ("skip_dependency_update", ("chartSource", "skipDependencyUpdate")),
+        ("non_interactive", ("nonInteractive",)),
+        ("skip_validators", ("validators", "skip")),
+        ("show_progress", ("progress", "show")),
+        ("trigger_migrations", ("triggerMigrations",)),
+    ):
+        if not getattr(settings, attr) and cfg(data, "installer", *path) == "true":
+            setattr(settings, attr, True)
+
+    if not settings.values_file:
+        settings.values_file = cfg(data, "installer", "valuesFile")
+
+    if not settings.enable_ingress and cfg(data, "installer", "ingress", "enabled") == "true":
+        settings.enable_ingress = True
+    cfg_ingress_class = cfg(data, "installer", "ingress", "className")
+    # `--enable-ingress CLASS` and INGRESS_CLASS both leave a class other than the default.
+    if cfg_ingress_class and settings.ingress_class == DEFAULT_INGRESS_CLASS:
+        settings.ingress_class = cfg_ingress_class
+
+
+def _apply_chart_and_components(data: Dict, settings: Settings) -> None:
     cfg_chart_kind = cfg(data, "installer", "chartSource", "kind")
     cfg_chart_version = cfg(data, "installer", "chartSource", "chartVersion")
     cfg_chart_path = cfg(data, "installer", "chartSource", "chartPath")
@@ -200,8 +394,8 @@ def check_required_non_interactive(settings: Settings) -> None:
             password_file and Path(password_file).is_file()
         ):
             credentials.append(
-                "REGISTRY_PASSWORD or REGISTRY_PASSWORD_FILE "
-                "(env/file only — never set via ce-config.yaml)"
+                "REGISTRY_PASSWORD, REGISTRY_PASSWORD_FILE or installer.registry.passwordFile "
+                "(the password itself is never read from ce-config.yaml)"
             )
 
     if missing:

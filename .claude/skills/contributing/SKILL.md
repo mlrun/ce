@@ -47,7 +47,8 @@ released; merge `development` and bump again.
 | added a component, changed a version, changed install | `charts/mlrun-ce/README.md` |
 | added a component | `templates/NOTES.txt`, and a section in `AGENTS.md` |
 | an installer flag or environment variable | the Reference tables in `scripts/README.md` (a test fails otherwise) |
-| an installer `ce-config.yaml` key | `scripts/ce-config.yaml.example` |
+| an installer `ce-config.yaml` key | `SCHEMA` in `config.py`, and both `scripts/ce-config.local.yaml.example` and `scripts/ce-config.remote.yaml.example` (a test fails otherwise) |
+| an installer flag | its key in `FLAG_KEYS` in `config.py`, or `FLAGS_WITHOUT_KEY` for a per-run action (a test fails otherwise) |
 | a message the installer prints with a README anchor | the heading in `scripts/README.md` (a test fails otherwise) |
 | the PEP 723 header in `scripts/install.py` | `uv lock --script scripts/install.py`, same commit |
 
@@ -96,8 +97,9 @@ new code in the lowest layer that fits.
   before it, a step that mutates the cluster after it.
 - **Values go through a file, not `--set`.** `build_set_flags` composes `--set`-style pairs,
   `set_flags_to_values` folds them into `GENERATED_VALUES_FILE`, passed to helm after the
-  user's `-f`. The only `--set` on helm's command line is the dry-run-only
-  `kube-prometheus-stack.enabled=false` from `dry_run_exclusions`. The file is dumped in
+  user's `-f`. The only `--set`s on helm's command line are the dry-run-only
+  `kube-prometheus-stack.enabled=false` from `dry_run_exclusions` and the one-run
+  `mlrunMigrations.enabled=true` from `migration_set_flags`. The file is dumped in
   insertion order and recorded by the golden suite, so append to `build_set_flags` rather
   than reordering it.
 - **The registry password never reaches argv or the logs.** The pull secret goes to
@@ -129,8 +131,9 @@ Say `--disable-jupyter`:
 1. `settings.py`: add `disable_jupyter: bool = False` to `Settings`.
 2. `cli.py`: add the `typer.Option` to `install()` and merge it with its variable:
    `settings.disable_jupyter = disable_jupyter or env_true("DISABLE_JUPYTER")`.
-3. `config.py`: if it has a `ce-config.yaml` key, add it to the `components.*` loop.
-   `components.*` keys disable with `"false"`; `otel.*` keys enable with `"true"`.
+3. `config.py`: declare its key in `SCHEMA` and `FLAG_KEYS`, and add it to the
+   `components.*` loop. `components.*` keys disable with `"false"`; `otel.*` keys enable with
+   `"true"`. Add the key to both example files.
 4. `helm_ops.py`: append the pair in `build_set_flags`:
    `flags += ["--set", "jupyterNotebook.enabled=false"]`.
 5. Add a golden case, a unit test, and the README row (see the definition of done).
@@ -156,7 +159,7 @@ them at once. `run()` returns a `Result` rather than raising, so check `.ok`.
       or kubectl, recorded with `make installer-test-golden-update`, and every line of
       `git diff tests/installer/golden/` read and explained in the PR.
 - [ ] The flag or variable in `scripts/README.md`'s Reference; a `ce-config.yaml` key in
-      `scripts/ce-config.yaml.example`.
+      `SCHEMA` and both `scripts/ce-config.*.yaml.example` files.
 - [ ] `uv lock --script scripts/install.py` if the PEP 723 header changed.
 - [ ] `Chart.yaml` bumped.
 - [ ] If the change touches uninstall, PVCs or hooks, say so in the PR so someone runs it on

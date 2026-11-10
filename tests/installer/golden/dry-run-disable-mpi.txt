@@ -40,3 +40,5 @@ mpi-operator:
       create: false
     namespaced:
       create: false
+mlrunMigrations:
+  enabled: false

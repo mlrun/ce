@@ -30,3 +30,5 @@ global:
   externalHostAddress: localhost
 kube-prometheus-stack:
   enabled: false
+mlrunMigrations:
+  enabled: false

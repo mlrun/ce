@@ -123,6 +123,8 @@ def confirm_target(settings: Settings) -> None:
              if port != NODEPORTS[key]]  # fmt: skip
     if moved:
         log_warn(f"  NodePorts: {', '.join(moved)}")
+    if settings.trigger_migrations:
+        log_warn("  Migrations: the MLRun DB migrations Job runs with this upgrade")
     if settings.value_changes:
         log_warn(
             f"  Changes:   {settings.value_changes} value(s) differ from the current release; "

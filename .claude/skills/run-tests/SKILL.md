@@ -48,7 +48,7 @@ them.
 | Unit file | Covers |
 |---|---|
 | `test_cli.py` | commands, flag parsing, the argv pre-parse, precedence, run order, the README Reference |
-| `test_config.py` | `ce-config.yaml` parsing and required fields |
+| `test_config.py` | `ce-config.yaml` parsing, the strict key check, both example files, a key per flag, and required fields |
 | `test_validators.py` | each pre-install check, and whether it blocks or warns |
 | `test_cluster.py` | chart source, dependencies, namespaces, `KUBE_CONTEXT` |
 | `test_registry.py` | the pull secret and password handling |

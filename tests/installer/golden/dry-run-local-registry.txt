@@ -41,3 +41,5 @@ nuclio:
     kaniko:
       insecurePushRegistry: true
       insecurePullRegistry: true
+mlrunMigrations:
+  enabled: false

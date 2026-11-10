@@ -36,3 +36,5 @@ kafka:
   enabled: false
 timescaledb:
   enabled: false
+mlrunMigrations:
+  enabled: false

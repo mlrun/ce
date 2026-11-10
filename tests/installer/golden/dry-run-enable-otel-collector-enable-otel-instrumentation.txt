@@ -39,3 +39,5 @@ opentelemetry:
     enabled: false
   instrumentation:
     enabled: true
+mlrunMigrations:
+  enabled: false

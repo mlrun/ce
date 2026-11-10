@@ -29,7 +29,13 @@ from typing import Dict, List
 import yaml
 
 from .console import log_debug, log_info, log_warn
-from .helm_ops import _lookup, _values_file_contents, build_set_flags, set_flags_to_values
+from .helm_ops import (
+    _lookup,
+    _values_file_contents,
+    build_set_flags,
+    migration_set_flags,
+    set_flags_to_values,
+)
 from .settings import NODEPORTS, Settings, previous_values_file, value_changes_file
 from .shell import helm
 
@@ -125,14 +131,15 @@ def _shown(key: str, value: object) -> object:
 
 
 def _inline(value: object) -> str:
-    return json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+    return json.dumps(value) if isinstance(value, (dict, list, bool)) else str(value)
 
 
 def value_changes(settings: Settings) -> List[dict]:
     """Every value that differs between the current release and this run, by dotted key."""
     if settings.previous_values is None:
         return []
-    new = _merge(_values_file_contents(settings), set_flags_to_values(build_set_flags(settings)))
+    flags = build_set_flags(settings) + migration_set_flags(settings)
+    new = _merge(_values_file_contents(settings), set_flags_to_values(flags))
     before, after = _flatten(settings.previous_values), _flatten(new)
     changes = []
     for key in sorted(set(before) | set(after)):

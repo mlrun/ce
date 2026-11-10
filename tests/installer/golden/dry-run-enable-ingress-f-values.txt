@@ -57,3 +57,5 @@ mlrun:
         paths:
         - path: /
           pathType: ImplementationSpecific
+mlrunMigrations:
+  enabled: false
