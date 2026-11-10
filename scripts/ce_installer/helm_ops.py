@@ -261,19 +261,26 @@ GENERATED_VALUES_HEADER = """\
 
 
 def refuse_values_file_collision(settings: Settings) -> None:
-    """Stop when -f names the file the installer writes its own values into.
+    """Stop when -f names a file the installer writes: its values, or an upgrade's snapshot
+    of the current values and its list of changes.
 
-    The installer rewrites that file on every run, so the user's values would be replaced
-    before helm read them, and the file they wrote would be gone.
+    The installer rewrites those files, so the user's values would be replaced before helm
+    read them, and the file they wrote would be gone. Restoring a snapshot by passing it
+    back with -f is the likely way in.
     """
     if not settings.values_file:
         return
-    generated = Path(settings.generated_values_file).resolve()
-    if Path(settings.values_file).resolve() != generated:
+    user_file = Path(settings.values_file).resolve()
+    written = (
+        Path(settings.generated_values_file).resolve(),
+        previous_values_file(settings),
+        value_changes_file(settings),
+    )
+    if user_file not in written:
         return
     raise die(
-        f"-f {settings.values_file} is the file the installer writes its own values to "
-        f"({generated}), and would be overwritten. Rename your file, or set "
+        f"-f {settings.values_file} is a file the installer writes ({user_file}), and would "
+        "be overwritten. Copy it to another name and pass that, or set "
         "GENERATED_VALUES_FILE to another path."
     )
 

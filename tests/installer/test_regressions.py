@@ -1775,6 +1775,30 @@ def test_a_values_file_that_is_the_generated_file_is_refused_up_front(
     assert generated.read_text() == "mine: true\n", "the user's file was rewritten"
 
 
+@pytest.mark.parametrize("written", ["previous", "changes"])
+def test_a_values_file_that_an_upgrade_writes_is_refused_up_front(
+    monkeypatch, settings, tmp_path, written
+):
+    # Restoring the snapshot with `-f mlrun-ce-values.previous.yaml` had the upgrade
+    # overwrite it with the current release's values before reading it.
+    settings.generated_values_file = str(tmp_path / "mlrun-ce-values.yaml")
+    snapshot = tmp_path / f"mlrun-ce-values.{written}.yaml"
+    snapshot.write_text("mine: true\n")
+    settings.values_file = str(snapshot)
+    touched = []
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
+    monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
+    monkeypatch.setattr(cli, "refuse_a_second_release", lambda s: touched.append("cluster"))
+    monkeypatch.setattr(cli, "load_previous_values", lambda s: touched.append("snapshot"))
+
+    with pytest.raises(InstallerError) as excinfo:
+        cli.execute(settings)
+
+    assert "Copy it to another name" in str(excinfo.value)
+    assert touched == []
+    assert snapshot.read_text() == "mine: true\n"
+
+
 def test_writing_the_installer_values_never_replaces_the_users_file(settings, tmp_path):
     generated = tmp_path / "values.yaml"
     generated.write_text("mine: true\n")
