@@ -57,6 +57,15 @@ from ce_installer.shell import Result
 
 from .conftest import Recorder
 
+# `helm list` in the namespace, holding the release an uninstall test removes: uninstall
+# refuses a release that is not MLRun CE.
+CE_RELEASE_LISTED = {
+    "list --namespace": Result(
+        0, json.dumps([{"name": "mlrun-ce", "namespace": "mlrun", "chart": "mlrun-ce-0.11.0"}])
+    )
+}
+CE_RELEASE_DEPLOYED = {"status": Result(0, "deployed"), **CE_RELEASE_LISTED}
+
 # ------------------------------------------------------------------------------------------
 # The access-URL table put the wrong text in the URL column
 # ------------------------------------------------------------------------------------------
@@ -186,7 +195,7 @@ def test_install_timeout_is_overridable(settings):
 
 def test_uninstall_honours_the_same_timeout_setting(monkeypatch, settings):
     settings.helm_timeout = "1800s"
-    recorder = Recorder()
+    recorder = Recorder(answers=CE_RELEASE_LISTED)
     monkeypatch.setattr(helm_ops, "helm", recorder)
     monkeypatch.setattr(helm_ops, "kubectl", Recorder())
 
@@ -194,7 +203,7 @@ def test_uninstall_honours_the_same_timeout_setting(monkeypatch, settings):
 
     # The follow-up to the install fix: uninstall kept a literal 960s, so raising
     # HELM_TIMEOUT reached install but not uninstall.
-    uninstall = recorder.argv_containing("uninstall")
+    uninstall = recorder.argv_containing("uninstall mlrun-ce")
     assert uninstall, "expected a helm uninstall call"
     assert "1800s" in uninstall[0]
 
@@ -715,7 +724,7 @@ def deep_merge(base: dict, over: dict) -> dict:
 def test_a_dry_run_uninstall_reports_instead_of_uninstalling(monkeypatch, settings, recorder):
     # execute() routed to do_uninstall before anything considered dry_run, and neither it
     # nor do_hard_clean read the flag — so this combination really removed the release.
-    helm_rec = recorder(answers={"status": Result(0, "STATUS: deployed")})
+    helm_rec = recorder(answers={"status": Result(0, "STATUS: deployed"), **CE_RELEASE_LISTED})
     monkeypatch.setattr(helm_ops, "helm", helm_rec)
     monkeypatch.setattr(helm_ops, "kubectl", recorder())
     settings.uninstall = True
@@ -723,7 +732,7 @@ def test_a_dry_run_uninstall_reports_instead_of_uninstalling(monkeypatch, settin
 
     helm_ops.do_uninstall(settings)
 
-    assert not helm_rec.ran("uninstall")
+    assert not helm_rec.ran("uninstall mlrun-ce")
     assert helm_rec.ran("status"), "the read that reports what would go should still run"
 
 
@@ -814,7 +823,7 @@ def test_uninstall_removes_only_what_the_installer_labelled(monkeypatch, setting
     kube_rec = recorder(
         answers={"get deployment,service,ingress,secret": Result(0, "deployment.apps/x\n")}
     )
-    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers=CE_RELEASE_DEPLOYED))
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
 
     helm_ops.do_uninstall(settings)
@@ -831,7 +840,7 @@ def test_a_dry_run_uninstall_lists_the_installer_resources_without_deleting(
     kube_rec = recorder(
         answers={"get deployment,service,ingress,secret": Result(0, "deployment.apps/x\n")}
     )
-    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers=CE_RELEASE_DEPLOYED))
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
     settings.dry_run = True
 
@@ -859,6 +868,64 @@ def test_a_mistyped_release_name_does_not_clean_up_a_live_install(monkeypatch, s
 
     # The cleanup label names the installer, not a release: going on would delete the live
     # install's pull secret and registry.
+    assert not kube_rec.ran("delete")
+
+
+@pytest.mark.parametrize("hard_clean", [False, True])
+def test_a_release_name_that_is_not_mlrun_ce_is_not_uninstalled(
+    monkeypatch, settings, recorder, hard_clean
+):
+    # RELEASE_NAME=metrics next to CE as mlrun-ce passed the status check, removed
+    # `metrics`, then deleted CE's labelled registry and pull secret (and with
+    # --hard-clean, every PVC in the namespace).
+    kube_rec = recorder(
+        answers={"get deployment,service,ingress,secret": Result(0, "secret/registry\n")}
+    )
+    helm_rec = recorder(
+        answers={"status": Result(0, "STATUS: deployed"), "list": Result(0, LIVE_OTHER_RELEASE)}
+    )
+    monkeypatch.setattr(helm_ops, "helm", helm_rec)
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+    settings.release_name = "metrics"
+    settings.hard_clean = hard_clean
+    settings.non_interactive = True
+
+    with pytest.raises(InstallerError) as excinfo:
+        helm_ops.do_uninstall(settings)
+
+    assert "'metrics' in namespace 'mlrun' is not MLRun CE" in str(excinfo.value)
+    assert not helm_rec.ran("uninstall metrics")
+    assert not kube_rec.ran("delete")
+
+
+def test_a_dry_run_uninstall_of_a_release_that_is_not_mlrun_ce_is_refused(
+    monkeypatch, settings, recorder
+):
+    helm_rec = recorder(
+        answers={"status": Result(0, "STATUS: deployed"), "list": Result(0, LIVE_OTHER_RELEASE)}
+    )
+    monkeypatch.setattr(helm_ops, "helm", helm_rec)
+    monkeypatch.setattr(helm_ops, "kubectl", recorder())
+    settings.release_name = "metrics"
+    settings.dry_run = True
+
+    with pytest.raises(InstallerError):
+        helm_ops.do_uninstall(settings)
+
+
+def test_a_release_list_that_fails_stops_the_uninstall(monkeypatch, settings, recorder):
+    # An unreadable list is not proof the release is MLRun CE.
+    kube_rec = recorder()
+    helm_rec = recorder(
+        answers={"status": Result(0, "STATUS: deployed"), "list": Result(1, "", "forbidden")}
+    )
+    monkeypatch.setattr(helm_ops, "helm", helm_rec)
+    monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
+
+    with pytest.raises(InstallerError):
+        helm_ops.do_uninstall(settings)
+
+    assert not helm_rec.ran("uninstall mlrun-ce")
     assert not kube_rec.ran("delete")
 
 
@@ -1015,7 +1082,7 @@ def test_a_non_interactive_uninstall_does_not_demand_registry_credentials(
     for var in ("REGISTRY_URL", "REGISTRY_USERNAME", "REGISTRY_PASSWORD"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
-    monkeypatch.setattr(helm_ops, "helm", recorder(answers={"status": Result(0, "deployed")}))
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers=CE_RELEASE_DEPLOYED))
     monkeypatch.setattr(helm_ops, "kubectl", recorder())
     settings.non_interactive = True
     settings.uninstall = True
@@ -2822,7 +2889,7 @@ ConfigMap/being-deleted||2026-11-04T12:00:00Z|
 
 def _uninstall_with_release(monkeypatch, settings, recorder, labelled=LABELLED_OBJECTS):
     kube_rec = recorder(answers={"app.kubernetes.io/instance=": Result(0, labelled)})
-    monkeypatch.setattr(helm_ops, "helm", recorder())
+    monkeypatch.setattr(helm_ops, "helm", recorder(answers=CE_RELEASE_LISTED))
     monkeypatch.setattr(helm_ops, "kubectl", kube_rec)
     settings.uninstall = True
     settings.non_interactive = True
@@ -2910,6 +2977,7 @@ def _hard_clean_with_functions(monkeypatch, settings, recorder, answers=None):
         answers={
             "get nucliofunctions.nuclio.io": Result(0, "nucliofunction.nuclio.io/demo-fn\n"),
             "-l mlrun/class": Result(0, "pod/demo-job-x7k2p\n"),
+            **CE_RELEASE_LISTED,
             **(answers or {}),
         }
     )
@@ -2990,7 +3058,7 @@ def test_a_dry_run_hard_clean_lists_functions_and_runs_without_deleting(
 
     helm_ops.do_uninstall(settings)
 
-    assert not rec.ran("delete") and not rec.ran("wait") and not rec.ran("uninstall")
+    assert not rec.ran("delete") and not rec.ran("wait") and not rec.ran("uninstall mlrun-ce")
     assert "  Dry-run: would delete nucliofunction.nuclio.io/demo-fn" in logs["info"]
     assert "  Dry-run: would delete pod/demo-job-x7k2p" in logs["info"]
 

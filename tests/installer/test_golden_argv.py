@@ -32,6 +32,7 @@ and read the diff as the reviewable part of your PR — every changed line is a 
 the installer does to somebody's cluster.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -166,6 +167,9 @@ def run_case(args, tmp_path):
         env.update(
             {
                 "STUB_RELEASE_EXISTS": "1",
+                "STUB_HELM_LIST": json.dumps(
+                    [{"name": "mlrun-ce", "namespace": "mlrun", "chart": "mlrun-ce-0.11.0"}]
+                ),
                 "STUB_PVCS": "data-mlrun-db-0\n",
                 "STUB_PVS": "pv-released mlrun Released\npv-live mlrun Bound\n",
                 "STUB_NUCLIO_FUNCTIONS": "nucliofunction.nuclio.io/demo-fn\n",

@@ -4,6 +4,7 @@ exit: 0
 ["kubectl", "cluster-info"]
 ["docker", "info"]
 ["helm", "status", "mlrun-ce", "--namespace", "mlrun"]
+["helm", "list", "--namespace", "mlrun", "--deployed", "--failed", "--pending", "--superseded", "--uninstalling", "-o", "json"]
 ["kubectl", "get", "nucliofunctions.nuclio.io", "--namespace", "mlrun", "-o", "name"]
 ["kubectl", "get", "nuclioapigateways.nuclio.io", "--namespace", "mlrun", "-o", "name"]
 ["kubectl", "get", "deployment,service,ingress,secret", "--namespace", "mlrun", "-l", "app.kubernetes.io/managed-by=mlrun-ce-installer", "--no-headers", "-o", "name"]

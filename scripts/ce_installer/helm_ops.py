@@ -1121,8 +1121,26 @@ def confirm_hard_clean_without_release(settings: Settings) -> None:
         raise cancel("Hard clean cancelled; nothing on the cluster was changed.")
 
 
+def refuse_a_release_that_is_not_mlrun_ce(settings: Settings) -> None:
+    """The teardown after `helm uninstall` deletes the installer's registry and pull secret,
+    and a hard clean every PVC in the namespace: a RELEASE_NAME that names some other
+    chart's release would take those from the MLRun CE installed beside it."""
+    names = {release.get("name") for release in _mlrun_ce_releases(settings)}
+    if settings.release_name in names:
+        return
+    raise die(
+        f"Release '{settings.release_name}' in namespace '{settings.namespace}' is not "
+        "MLRun CE, and uninstalling it would also delete the MLRun CE installer's registry "
+        "and pull secret there. Set RELEASE_NAME to the MLRun CE release, or uninstall "
+        f"'{settings.release_name}' with helm."
+    )
+
+
 def do_uninstall(settings: Settings) -> None:
-    if not helm(settings, "status", settings.release_name, "--namespace", settings.namespace).ok:
+    released = helm(settings, "status", settings.release_name, "--namespace", settings.namespace)
+    if released.ok:
+        refuse_a_release_that_is_not_mlrun_ce(settings)
+    if not released.ok:
         log_warn(
             f"Release '{settings.release_name}' not found in namespace "
             f"'{settings.namespace}' (already uninstalled?)."
