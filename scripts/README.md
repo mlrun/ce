@@ -572,9 +572,10 @@ upgrades the release in place. Use it to change a setting, move to another chart
 - Keep `mlrun-ce-values.yaml` if you upgrade with plain helm. The run prints the
   equivalent helm commands; a `helm upgrade` without that file (and without
   `--reuse-values`) resets those values to the chart defaults.
-- An MLRun CE release under another name in the namespace (`my-mlrun` from the chart
-  README, say) is refused rather than installed beside it. Set `RELEASE_NAME` to that name
-  to upgrade it.
+- Any other MLRun CE release in the cluster (`my-mlrun` from the chart README, say, or one
+  in another namespace) is refused rather than installed beside it. Set `NAMESPACE` and
+  `RELEASE_NAME` to its namespace and name to upgrade it. A user who can't list other
+  namespaces gets a warning, and only their namespace is checked.
 - Kafka can crash-loop after upgrading a release whose Kafka volume predates the pinned
   `kafka.clusterId`, with `Invalid cluster.id in: .../meta.properties`. Delete the Kafka
   PVC (`data-kafka-stream-kafka-stream-pool-<n>`) and its pod; Strimzi recreates them. Only
@@ -725,7 +726,8 @@ the right one, it asks you to type the namespace name, and refuses under
 - **`mlrun-api-chief` restarts once or twice on a fresh install** while `mlrun-db` starts
   (`Can't connect to MySQL server on 'mlrun-db'`). It recovers by itself.
 - **One MLRun CE release per cluster.** The chart's `workflow-controller` PriorityClass is
-  cluster-scoped, so a second release fails even in another namespace.
+  cluster-scoped, so a second release fails even in another namespace. The installer
+  refuses one up front (see [Upgrading](#upgrading)).
 
 ---
 

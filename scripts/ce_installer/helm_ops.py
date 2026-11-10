@@ -794,23 +794,35 @@ def remove_installer_resources(settings: Settings) -> None:
 RELEASE_STATUS_FLAGS = ("--deployed", "--failed", "--pending", "--superseded", "--uninstalling")
 
 
+def _list_mlrun_ce_releases(
+    settings: Settings, all_namespaces: bool = False
+) -> Tuple[Optional[List[Dict]], str]:
+    """The mlrun-ce releases `helm list -o json` reports, or None and why it could not."""
+    scope = ["--all-namespaces"] if all_namespaces else ["--namespace", settings.namespace]
+    args = ["list", *scope, *RELEASE_STATUS_FLAGS, "-o", "json"]
+    listed = helm(settings, *args)
+    command = " ".join(helm_cmd(settings, *args))
+    where = "the cluster" if all_namespaces else f"'{settings.namespace}'"
+    if not listed.ok:
+        detail = (listed.err or listed.out).strip()
+        return None, f"Could not list the releases in {where} ({command}): {detail}"
+    try:
+        releases = json.loads(listed.out) if listed.out.strip() else []
+    except ValueError:
+        return None, f"'{command}' did not return JSON: {listed.out.strip()[:200]}"
+    return [r for r in releases if re.match(r"mlrun-ce-\d", str(r.get("chart", "")))], ""
+
+
 def _mlrun_ce_releases(settings: Settings) -> List[Dict]:
-    """Every mlrun-ce release in the namespace, as `helm list -o json` reports it.
+    """Every mlrun-ce release in the namespace.
 
     A listing that fails is an error, not an empty namespace: the callers guard against
     damaging another release, and an empty answer would switch the guard off.
     """
-    args = ["list", "--namespace", settings.namespace, *RELEASE_STATUS_FLAGS, "-o", "json"]
-    listed = helm(settings, *args)
-    command = " ".join(helm_cmd(settings, *args))
-    if not listed.ok:
-        detail = (listed.err or listed.out).strip()
-        raise die(f"Could not list the releases in '{settings.namespace}' ({command}): {detail}")
-    try:
-        releases = json.loads(listed.out) if listed.out.strip() else []
-    except ValueError:
-        raise die(f"'{command}' did not return JSON: {listed.out.strip()[:200]}") from None
-    return [r for r in releases if re.match(r"mlrun-ce-\d", str(r.get("chart", "")))]
+    releases, error = _list_mlrun_ce_releases(settings)
+    if releases is None:
+        raise die(error)
+    return releases
 
 
 def other_mlrun_ce_releases(settings: Settings) -> List[str]:
@@ -868,26 +880,35 @@ def refuse_an_unasked_downgrade(settings: Settings) -> None:
 
 
 def refuse_a_second_release(settings: Settings) -> None:
-    """Stop when the namespace already holds mlrun-ce under another release name.
+    """Stop when the cluster already holds mlrun-ce other than the release being upgraded.
 
     The README installs as `my-mlrun`, the old run.sh as `mlrun`, this installer as
-    `mlrun-ce`. A second release collides with the first on the fixed NodePorts and the
-    cluster-scoped resources, and helm only finds out halfway through.
+    `mlrun-ce`. A second release, in this namespace or another, collides with the first on
+    the fixed NodePorts and the cluster-scoped resources, and helm only finds out halfway
+    through. A user who may not list other namespaces is still checked in this one.
     """
-    releases = _mlrun_ce_releases(settings)
+    releases, error = _list_mlrun_ce_releases(settings, all_namespaces=True)
+    if releases is None:
+        log_warn(error)
+        log_warn(
+            f"  Checking only '{settings.namespace}'; MLRun CE in another namespace would "
+            "make this install fail halfway."
+        )
+        releases = _mlrun_ce_releases(settings)
+
+    others = []
     for release in releases:
-        if release.get("name") == settings.release_name:
+        name, namespace = release.get("name"), release.get("namespace") or settings.namespace
+        if name == settings.release_name and namespace == settings.namespace:
             settings.installed_chart_version = str(release.get("chart", ""))[len("mlrun-ce-") :]
-    others = [
-        f"{release.get('name')} ({release.get('chart')})"
-        for release in releases
-        if release.get("name") != settings.release_name
-    ]
+        else:
+            others.append(f"{name} in '{namespace}' ({release.get('chart')})")
     if others:
         raise die(
-            f"Namespace '{settings.namespace}' already has MLRun CE installed as "
-            f"{', '.join(others)}. Set RELEASE_NAME to that name to upgrade it, or uninstall "
-            "it first."
+            f"MLRun CE is already installed in this cluster: {', '.join(others)}. A second "
+            "release collides with it on the NodePorts and cluster-wide objects. To upgrade "
+            "it, set NAMESPACE and RELEASE_NAME to its namespace and name; otherwise "
+            "uninstall it first."
         )
 
 

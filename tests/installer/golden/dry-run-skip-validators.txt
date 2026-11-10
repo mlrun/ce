@@ -3,7 +3,7 @@ exit: 0
 ["helm", "version", "--short"]
 ["kubectl", "cluster-info"]
 ["docker", "info"]
-["helm", "list", "--namespace", "mlrun", "--deployed", "--failed", "--pending", "--superseded", "--uninstalling", "-o", "json"]
+["helm", "list", "--all-namespaces", "--deployed", "--failed", "--pending", "--superseded", "--uninstalling", "-o", "json"]
 ["helm", "repo", "add", "--force-update", "mlrun-ce", "https://mlrun.github.io/ce"]
 ["helm", "repo", "update"]
 ["helm", "search", "repo", "mlrun-ce/mlrun-ce", "-o", "json"]

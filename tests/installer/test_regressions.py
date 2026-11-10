@@ -1572,10 +1572,39 @@ def test_an_mlrun_ce_release_under_another_name_is_refused(monkeypatch, settings
     assert "my-mlrun" in str(excinfo.value)
 
 
+def test_an_mlrun_ce_release_in_another_namespace_is_refused(monkeypatch, settings, recorder):
+    # The chart's PriorityClass and NodePorts are cluster-wide: helm fails halfway otherwise.
+    release = {"name": "mlrun-ce", "namespace": "team-a", "chart": "mlrun-ce-0.12.0"}
+    rec = recorder(answers={"list": Result(0, json.dumps([release]))})
+    monkeypatch.setattr(helm_ops, "helm", rec)
+
+    with pytest.raises(InstallerError) as excinfo:
+        helm_ops.refuse_a_second_release(settings)
+
+    assert "--all-namespaces" in rec.calls[0]
+    assert "mlrun-ce in 'team-a'" in excinfo.value.message
+    assert "NAMESPACE" in excinfo.value.message
+
+
+def test_without_cluster_wide_access_this_namespace_is_still_checked(
+    monkeypatch, settings, recorder, capture_logs
+):
+    forbidden = Result(1, "", "secrets is forbidden: cannot list resource at the cluster scope")
+    rec = recorder(answers={"--all-namespaces": forbidden, "list": Result(0, "[]")})
+    monkeypatch.setattr(helm_ops, "helm", rec)
+    logs = capture_logs(helm_ops)
+
+    helm_ops.refuse_a_second_release(settings)
+
+    assert ["--namespace", settings.namespace] == rec.calls[1][1:3]
+    assert any("Checking only" in line for line in logs)
+
+
 @pytest.mark.parametrize(
     "releases",
     [
         [{"name": "mlrun-ce", "chart": "mlrun-ce-0.12.0"}],
+        [{"name": "mlrun-ce", "namespace": "mlrun", "chart": "mlrun-ce-0.12.0"}],
         [{"name": "other", "chart": "mlrun-ce-extras-1.0.0"}],
         [{"name": "redis", "chart": "redis-18.0.0"}],
         [],
