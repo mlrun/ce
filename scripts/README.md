@@ -589,14 +589,6 @@ monitoring stack out of a first install's dry run for this reason. If the error 
 another kind (the OpenTelemetry operator's, with `--enable-otel`), dry-run without that
 component, or after the first install.
 
-### "Chart mlrun-ce X is not published"
-
-The installer installs its own chart version by default, and an installer from a branch, or
-from a tag whose chart has not reached the Helm repo yet, names a version the repo lacks.
-The run stops before changing anything. Install the chart from a clone with
-`--chart-path ./charts/mlrun-ce`, or pass `--ce-version` with the newest published version,
-which the message names.
-
 ### "No such option" (exit 2)
 
 A flag is misspelled. This is an error, not a warning: a misspelled `--dry-run` would
@@ -680,7 +672,7 @@ else, `false` and `0` included, leaves it off.
 | `-f`, `--values FILE` | | Base values file; see [From a values file](#from-a-values-file) |
 | `--chart-path DIR` | `CHART_PATH` | Install a local chart directory instead of the published chart |
 | `--skip-dependency-update` | `SKIP_DEPENDENCY_UPDATE` | With `--chart-path`: do not fetch chart dependencies |
-| `--ce-version VERSION` | `CE_VERSION` | Install this published chart version (default: the installer's own) |
+| `--ce-version VERSION` | `CE_VERSION` | Install this published chart version (default: the newest stable one) |
 | `--skip-secret` | `SKIP_REGISTRY_SECRET` | Use an existing pull secret instead of creating one |
 | `--skip-validators` | `SKIP_VALIDATORS` | Skip the [pre-install checks](#pre-install-checks) |
 | `--local-registry` | `LOCAL_REGISTRY` | Run a registry in the cluster |

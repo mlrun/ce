@@ -120,30 +120,6 @@ def installer_version() -> str:
     return BUILT_IN_CHART_VERSION or UNKNOWN_VERSION
 
 
-def pin_chart_version(settings: Settings) -> None:
-    """Install the chart this installer ships with unless told otherwise.
-
-    With no --version, helm picks the newest stable chart in the repo — not this
-    installer's, and never an rc — so the flags composed here could meet a chart that has
-    since renamed or dropped the keys they set.
-    """
-    if settings.chart_path:
-        return
-    if settings.ce_version:
-        log_info(f"Installing chart version {settings.ce_version} (--ce-version).")
-        return
-    version = installer_version()
-    if version == UNKNOWN_VERSION:
-        log_warn(
-            "This installer's own chart version is unknown; installing the newest stable "
-            "chart. Pass --ce-version to pin one."
-        )
-        return
-    settings.ce_version = version
-    settings.ce_version_is_installers = True
-    log_info(f"Installing chart version {version} (this installer's own).")
-
-
 def print_version() -> None:
     out.print(f"mlrun-ce installer {installer_version()}")
 
@@ -327,7 +303,6 @@ def execute(settings: Settings) -> None:
     # credentials, and outside load_config, so an env-var-only --non-interactive run is
     # checked too.
     check_required_non_interactive(settings)
-    pin_chart_version(settings)
 
     # The run is split at confirm_target: everything above it only reads and asks, so a
     # mistake caught there — a mistyped -f, an unpublished chart, a prompt answered with
@@ -540,8 +515,7 @@ def install(
         None,
         "--ce-version",
         metavar="VERSION",
-        help="Install this published mlrun-ce chart version (default: the chart version "
-        "this installer ships with, which must be published)",
+        help="Install this published mlrun-ce chart version (default: the newest stable one)",
     ),
     chart_path: Optional[str] = typer.Option(
         None,

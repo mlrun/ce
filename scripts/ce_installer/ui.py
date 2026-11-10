@@ -105,7 +105,9 @@ def confirm_target(settings: Settings) -> None:
     if settings.chart_path:
         chart = f"{settings.chart_path} (local chart)"
     else:
-        chart = f"{settings.chart_ref or 'mlrun-ce/mlrun-ce'} {settings.ce_version or '(newest)'}"
+        chart = f"{settings.chart_ref or 'mlrun-ce/mlrun-ce'} {settings.ce_version}".rstrip()
+        if settings.ce_version_is_newest or not settings.ce_version:
+            chart += " (newest stable)"
     if settings.values_file and not settings.config_file and not settings.local_registry:
         registry = f"from {settings.values_file}"
     else:

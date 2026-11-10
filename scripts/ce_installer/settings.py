@@ -160,8 +160,8 @@ class Settings:
     otel_set_by_cli: bool = False
     local_registry: bool = False
     ce_version: str = ""
-    # True when ce_version is the installer's own chart version rather than --ce-version.
-    ce_version_is_installers: bool = False
+    # True when ce_version is the newest stable chart rather than --ce-version.
+    ce_version_is_newest: bool = False
     chart_path: str = ""
     skip_dependency_update: bool = False
     dry_run: bool = False

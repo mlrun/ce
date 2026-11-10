@@ -287,10 +287,15 @@ def register_dependency_repos(settings: Settings, chart_dir: Path) -> None:
         helm(settings, "repo", "add", "--force-update", f"mlrun-ce-dep-{index}", url, check=True)
 
 
-def _published_versions(settings: Settings, version: str = "") -> Optional[List[str]]:
+def _published_versions(
+    settings: Settings, version: str = "", devel: bool = True
+) -> Optional[List[str]]:
     """Versions of mlrun-ce/mlrun-ce `helm search` reports, or None if it could not say.
-    Without `version`, helm reports only the newest (prereleases included)."""
-    args = ["search", "repo", "mlrun-ce/mlrun-ce", "--devel", "-o", "json"]
+    Without `version`, helm reports only the newest; prereleases count only with `devel`."""
+    args = ["search", "repo", "mlrun-ce/mlrun-ce"]
+    if devel:
+        args.append("--devel")
+    args += ["-o", "json"]
     if version:
         args += ["--version", version]
     found = helm(settings, *args)
@@ -308,13 +313,25 @@ def _published_versions(settings: Settings, version: str = "") -> Optional[List[
     ]
 
 
-def verify_chart_version_published(settings: Settings) -> None:
-    """Stop before anything is created when the pinned chart version is not in the repo.
+def pin_newest_chart_version(settings: Settings) -> None:
+    """Pin the newest stable chart, so the summary names the version helm will install.
 
-    By default the installer pins its own chart version, and an installer taken from a
-    branch or a fresh tag is newer than anything published: helm would then fail at the
-    very end, after the namespace, registry and secret exist. A search that itself fails
-    proves nothing, so that only warns.
+    If the search cannot say, the run stays unpinned and helm picks the same chart itself.
+    """
+    newest = _published_versions(settings, devel=False)
+    if not newest:
+        log_warn("Could not find the newest chart version; helm installs the newest stable one.")
+        return
+    settings.ce_version = newest[0]
+    settings.ce_version_is_newest = True
+    log_info(f"Installing chart version {settings.ce_version}, the newest stable one.")
+
+
+def verify_chart_version_published(settings: Settings) -> None:
+    """Stop before anything is created when the --ce-version chart is not in the repo.
+
+    helm would otherwise fail at the very end, after the namespace, registry and secret
+    exist. A search that itself fails proves nothing, so that only warns.
     """
     wanted = settings.ce_version
     if not wanted:
@@ -326,18 +343,9 @@ def verify_chart_version_published(settings: Settings) -> None:
     if wanted.lstrip("v") in matches:
         return
 
-    newest = _published_versions(settings) or []
-    newest_hint = f" The newest there is {newest[0]}." if newest else ""
+    newest = _published_versions(settings, devel=False) or []
+    newest_hint = f" The newest stable one there is {newest[0]}." if newest else ""
     log_error(f"Chart mlrun-ce {wanted} is not published at {settings.helm_repo_url}.{newest_hint}")
-    if settings.ce_version_is_installers:
-        log_error(
-            "  That is this installer's own chart version, so it comes from a branch or a tag "
-            "whose chart is not released yet."
-        )
-        log_error(
-            "  From a clone of github.com/mlrun/ce, install that chart with "
-            "--chart-path ./charts/mlrun-ce."
-        )
     if newest:
         log_error(f"  To install the published chart, pass --ce-version {newest[0]}.")
     raise InstallerError(code=1)
@@ -362,7 +370,11 @@ def resolve_chart_source(settings: Settings) -> None:
         )
         helm(settings, "repo", "update")
         settings.chart_ref = "mlrun-ce/mlrun-ce"
-        verify_chart_version_published(settings)
+        if settings.ce_version:
+            log_info(f"Installing chart version {settings.ce_version} (--ce-version).")
+            verify_chart_version_published(settings)
+        else:
+            pin_newest_chart_version(settings)
         return
 
     validate_chart_path(settings)

@@ -927,7 +927,6 @@ def test_a_blocking_validator_failure_leaves_the_cluster_untouched(monkeypatch, 
     monkeypatch.setattr(cli, "resolve_external_host", lambda s: None)
     monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
     monkeypatch.setattr(cli, "refuse_a_second_release", lambda s: None)
-    monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
 
     def fail(s):
         mutated.append("validated")
@@ -1411,37 +1410,45 @@ def test_a_missing_pull_secret_is_created_with_the_label(monkeypatch, settings, 
     }
 
 
+# With no --ce-version the summary could not say which chart helm would install
 # ------------------------------------------------------------------------------------------
-# With no --ce-version, helm installed the newest stable chart rather than the installer's
-# ------------------------------------------------------------------------------------------
 
 
-def test_the_installer_pins_its_own_chart_version_by_default(monkeypatch, settings):
-    monkeypatch.setattr(cli, "installer_version", lambda: "0.99.0-rc.1")
+def test_without_ce_version_the_newest_stable_chart_is_pinned(monkeypatch, settings, recorder):
+    rec = _search(monkeypatch, recorder, pinned=[], newest="0.12.0")
 
-    cli.pin_chart_version(settings)
+    cluster.pin_newest_chart_version(settings)
 
-    assert settings.ce_version == "0.99.0-rc.1"
+    assert settings.ce_version == "0.12.0" and settings.ce_version_is_newest
+    [search] = [c for c in rec.calls if c[:1] == ["search"]]
+    assert "--devel" not in search, "an rc is not the newest stable chart"
     cmd = helm_ops.build_helm_install_command(settings)
-    assert cmd[cmd.index("--version") + 1] == "0.99.0-rc.1"
+    assert cmd[cmd.index("--version") + 1] == "0.12.0"
+
+
+def test_a_failed_search_leaves_the_choice_to_helm(monkeypatch, settings, recorder, capture_logs):
+    monkeypatch.setattr(cluster, "helm", recorder(answers={"search": Result(1, "", "boom")}))
+    logs = capture_logs(cluster)
+
+    cluster.pin_newest_chart_version(settings)
+
+    assert settings.ce_version == ""
+    assert "--version" not in helm_ops.build_helm_install_command(settings)
+    assert any("newest stable" in line for line in logs)
 
 
 @pytest.mark.parametrize("field, value", [("ce_version", "0.11.0"), ("chart_path", "/c")])
-def test_an_explicit_chart_choice_is_not_overridden(monkeypatch, settings, field, value):
-    monkeypatch.setattr(cli, "installer_version", lambda: "0.99.0")
+def test_an_explicit_chart_choice_is_not_overridden(monkeypatch, settings, recorder, field, value):
+    monkeypatch.setattr(cluster, "isolate_helm_repo_config", lambda: None)
+    monkeypatch.setattr(cluster, "validate_chart_path", lambda s: None)
+    monkeypatch.setattr(cluster, "chart_deps_satisfied", lambda d: True)
+    _search(monkeypatch, recorder, pinned=[{"name": "mlrun-ce/mlrun-ce", "version": "0.11.0"}])
     setattr(settings, field, value)
 
-    cli.pin_chart_version(settings)
+    cluster.resolve_chart_source(settings)
 
     assert settings.ce_version == ("0.11.0" if field == "ce_version" else "")
-
-
-def test_an_unknown_installer_version_falls_back_to_the_newest_stable(monkeypatch, settings):
-    monkeypatch.setattr(cli, "installer_version", lambda: cli.UNKNOWN_VERSION)
-
-    cli.pin_chart_version(settings)
-
-    assert settings.ce_version == ""
+    assert not settings.ce_version_is_newest
 
 
 # ------------------------------------------------------------------------------------------
@@ -1545,7 +1552,6 @@ def test_the_release_check_survives_skip_validators(monkeypatch, settings):
     checked = []
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
-    monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
 
     def refuse(s):
         checked.append(True)
@@ -1605,7 +1611,6 @@ def test_a_values_file_that_is_the_generated_file_is_refused_up_front(
     touched = []
     monkeypatch.setattr(cli, "check_requirements", lambda s: None)
     monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
-    monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
     monkeypatch.setattr(cli, "refuse_a_second_release", lambda s: touched.append("cluster"))
 
     with pytest.raises(InstallerError) as excinfo:
@@ -1644,20 +1649,18 @@ def _search(monkeypatch, recorder, pinned, newest="0.12.0"):
     return rec
 
 
-def test_an_unpublished_installer_chart_version_names_both_ways_out(
+def test_an_unpublished_chart_version_names_the_newest_stable_one(
     monkeypatch, settings, recorder, capture_logs
 ):
     _search(monkeypatch, recorder, pinned=[])
     logs = capture_logs(cluster)
     settings.ce_version = "0.12.1-rc.8"
-    settings.ce_version_is_installers = True
 
     with pytest.raises(InstallerError):
         cluster.verify_chart_version_published(settings)
 
     text = "\n".join(logs)
     assert "0.12.1-rc.8 is not published" in text
-    assert "--chart-path ./charts/mlrun-ce" in text
     assert "--ce-version 0.12.0" in text
 
 
@@ -1702,7 +1705,6 @@ def _record_execute_steps(monkeypatch, steps):
                  "apply_registry_secret", "helm_install"):  # fmt: skip
         monkeypatch.setattr(cli, name, lambda s, name=name: steps.append(name) or True)
     monkeypatch.setattr(cli, "check_required_non_interactive", lambda s: None)
-    monkeypatch.setattr(cli, "pin_chart_version", lambda s: None)
 
 
 WRITES = {"ensure_namespace", "deploy_local_registry", "apply_registry_secret", "helm_install"}
