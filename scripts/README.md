@@ -465,7 +465,8 @@ The address you reach the cluster's NodePorts at, and the base of the ingress ho
 installer suggests one from the targeted context (`KUBE_CONTEXT`, or the current context):
 
 1. A minikube context: `minikube ip -p <context>`.
-2. `docker-desktop`: `host.docker.internal`, which pods resolve but the Mac may not
+2. `docker-desktop`: `host.docker.internal`, which pods resolve but the Mac may not. When
+   it doesn't, the installer prints the `/etc/hosts` line to add
    ([Local install on Docker Desktop](#local-install-on-docker-desktop)).
 3. Any other context named by `KUBE_CONTEXT`: the first node's internal IP.
 4. Anything else (kind, k3d, …): `localhost`.

@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import tempfile
@@ -297,6 +298,18 @@ def report_ingress_hosts(settings: Settings) -> None:
     log_warn(f"  {ip}  {' '.join(hosts)}")
 
 
+def report_unresolved_host(settings: Settings) -> None:
+    """Docker Desktop's pods resolve host.docker.internal; the machine running the browser
+    may not, and then every address in the access table is dead."""
+    if settings.external_host_address != "host.docker.internal":
+        return
+    try:
+        socket.gethostbyname(settings.external_host_address)
+    except OSError:
+        log_warn("This machine cannot resolve host.docker.internal, so the access URLs won't open.")
+        log_warn('  Add it: echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts')
+
+
 def report_dry_run_files(settings: Settings) -> None:
     """Where the dry run left what it produced, to review without the terminal scrollback."""
     generated = str(Path(settings.generated_values_file).resolve())
@@ -478,6 +491,7 @@ def helm_install(settings: Settings) -> None:
             raise InstallerError(code=helm_exit)
 
     report_ingress_hosts(settings)
+    report_unresolved_host(settings)
     if settings.dry_run:
         log_info("Dry-run complete (no resources deployed).")
         report_dry_run_files(settings)

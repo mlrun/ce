@@ -2663,3 +2663,34 @@ def test_the_strimzi_entry_sends_the_rerun_through_the_interactive_confirmation(
     assert "interactively" in entry and "type the namespace" in entry
     refuses = next(h for h in _readme_headings() if h.startswith("### `--hard-clean` refused"))
     assert f"]({_anchor(refuses)})" in entry, "the link must land on the refused entry"
+
+
+# ------------------------------------------------------------------------------------------
+# host.docker.internal resolves in Docker Desktop's pods, not always on the Mac itself
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("resolves", "hinted"), [(False, True), (True, False)])
+def test_an_unresolvable_host_docker_internal_gets_the_hosts_line(
+    monkeypatch, settings, capture_logs, resolves, hinted
+):
+    def lookup(name):
+        if not resolves:
+            raise OSError("nodename nor servname provided")
+        return "127.0.0.1"
+
+    monkeypatch.setattr(helm_ops.socket, "gethostbyname", lookup)
+    logs = capture_logs(helm_ops)
+    settings.external_host_address = "host.docker.internal"
+
+    helm_ops.report_unresolved_host(settings)
+
+    hint = 'echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts'
+    assert any(hint in line for line in logs) is hinted
+
+
+def test_other_addresses_are_not_looked_up(monkeypatch, settings):
+    monkeypatch.setattr(helm_ops.socket, "gethostbyname", lambda n: pytest.fail("looked up"))
+    settings.external_host_address = "203.0.113.10"
+
+    helm_ops.report_unresolved_host(settings)
