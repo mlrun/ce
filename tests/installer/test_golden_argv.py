@@ -69,9 +69,11 @@ CASES = [
     # Ingress, with and without an explicit class
     "--dry-run --enable-ingress",
     "--dry-run --enable-ingress traefik",
-    # Local registry, which changes the registry URL and the secret's contents
+    # Local registry, which changes the registry URL and the secret's contents. Behind the
+    # ingress on the default localhost it is refused: registry.localhost is each pod itself.
     "--dry-run --local-registry",
     "--dry-run --local-registry --enable-ingress",
+    "EXTERNAL_HOST_ADDRESS=host.docker.internal --dry-run --local-registry --enable-ingress",
     # Secret and validator skips
     "--dry-run --skip-secret",
     "--dry-run --skip-validators",
@@ -120,12 +122,23 @@ def slugify(args):
     # Fixture paths would otherwise turn into unreadable filenames carrying a directory and
     # an extension; the basename identifies the case perfectly well.
     slug = args.replace("tests/installer/fixtures/", "").replace(".yaml", "")
-    slug = slug.replace("--", "").replace(" ", "-").replace("/", "_")
-    return re.sub(r"-{2,}", "-", slug).strip("-")
+    slug = slug.replace("--", "").replace(" ", "-").replace("/", "_").replace("=", "-")
+    return re.sub(r"-{2,}", "-", slug).strip("-").lower()
+
+
+def split_case(args):
+    """(env, argv): leading KEY=VALUE tokens are the case's environment, the rest argv."""
+    tokens = args.split()
+    env = {}
+    while tokens and re.fullmatch(r"[A-Z_]+=\S*", tokens[0]):
+        key, _, value = tokens.pop(0).partition("=")
+        env[key] = value
+    return env, tokens
 
 
 def run_case(args, tmp_path):
     """Run the installer with stubs on PATH; return (exit code, recorded calls)."""
+    case_env, argv = split_case(args)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     STUB.chmod(0o755)
@@ -193,12 +206,13 @@ def run_case(args, tmp_path):
             "EXTERNAL_HOST_ADDRESS",
         ):
             env.pop(supplied_by_config, None)
+    env.update(case_env)
 
     # Invoked through the current interpreter rather than the shebang: pytest already has
     # the dependencies, so install.py's uv bootstrap is a no-op and the subprocess stays
     # cheap and offline.
     completed = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "install.py"), *args.split()],
+        [sys.executable, str(REPO_ROOT / "scripts" / "install.py"), *argv],
         capture_output=True,
         text=True,
         env=env,

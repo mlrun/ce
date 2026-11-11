@@ -59,8 +59,9 @@ inside a pod you don't need Docker.
    [Without a clone](#without-a-clone). With a registry account, export
    `EXTERNAL_HOST_ADDRESS=localhost` (or answer `localhost` at the address prompt): the
    suggested `host.docker.internal` resolves inside the cluster but may not on your machine.
-   With `--local-registry --enable-ingress`, keep `host.docker.internal`: `localhost` makes
-   the registry `registry.localhost`, which a pod may resolve to itself.
+   With `--local-registry --enable-ingress`, keep `host.docker.internal`: the installer
+   refuses `localhost` and `127.0.0.1` there, since the registry would be
+   `registry.localhost`, which each pod resolves to itself.
 6. If the access table's addresses don't open (Docker Desktop's kind-based cluster does not
    publish NodePorts to the host), forward each service you use to its NodePort number,
    then open `http://localhost:<port>`:

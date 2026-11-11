@@ -320,16 +320,33 @@ def prepare_local_registry(settings: Settings) -> None:
     """The read-only half of the local registry, run before anything is created: its URL,
     which the pull secret and the --set flags need, and the check for objects in the way."""
     settings.local_registry_url = resolve_local_registry_url(settings)
-    if settings.enable_ingress and settings.external_host_address in ("localhost", "127.0.0.1"):
-        log_warn(
-            f"The registry would be {settings.local_registry_url}, which a pod may resolve to "
-            "itself rather than to the ingress controller, so builds could fail to push."
-        )
-        log_warn(
-            "  The tested setup is EXTERNAL_HOST_ADDRESS=host.docker.internal "
-            "(Docker Desktop) or the address of a node."
-        )
+    _refuse_a_loopback_registry_host(settings)
     _refuse_foreign_registry_objects(settings)
+
+
+def _refuse_a_loopback_registry_host(settings: Settings) -> None:
+    """Behind the ingress the registry is registry.<address>, and a loopback name there is
+    whichever pod or node looks it up: the builder pushes to itself, the node pulls from
+    itself."""
+    address = settings.external_host_address
+    if not settings.enable_ingress or address not in ("localhost", "127.0.0.1"):
+        return
+    headline = (
+        f"--local-registry with --enable-ingress makes the registry "
+        f"{settings.local_registry_url}, which each pod and node resolves to itself, so "
+        "function builds cannot push to it nor nodes pull from it"
+    )
+    log_error(f"{headline}; change one:")
+    log_error(
+        f"  the address: set EXTERNAL_HOST_ADDRESS (or installer.externalHostAddress) to "
+        f"host.docker.internal on Docker Desktop, or a node's address elsewhere, "
+        f"instead of {address}"
+    )
+    log_error(
+        "  the registry: drop --local-registry and push to a registry account "
+        "(REGISTRY_URL, REGISTRY_USERNAME)"
+    )
+    raise InstallerError(headline, code=1)
 
 
 def deploy_local_registry(settings: Settings) -> None:

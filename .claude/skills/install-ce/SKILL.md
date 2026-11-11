@@ -124,7 +124,8 @@ Ask which registry MLRun pushes function images to ([Choosing a registry](../../
   `sslip.io` address, which public DNS resolves);
 - an `/etc/hosts` line for it on the user's machine, which Docker Desktop's nodes pull through;
 - the host in Docker's `insecure-registries`, because the registry serves plain HTTP;
-- on Docker Desktop, `EXTERNAL_HOST_ADDRESS=host.docker.internal`, not `localhost`.
+- on Docker Desktop, `EXTERNAL_HOST_ADDRESS=host.docker.internal`; the installer refuses
+  `localhost` and `127.0.0.1` with `--local-registry --enable-ingress`.
 
 The installer prints each entry and edits none of them. CoreDNS is shared by the whole
 cluster and `/etc/hosts` needs sudo: show the user the command and ask before running either.

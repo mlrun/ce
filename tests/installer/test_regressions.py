@@ -320,23 +320,44 @@ def test_local_registry_dry_run_still_resolves_the_url_for_the_rendered_flags(
     assert settings.local_registry_url
 
 
-@pytest.mark.parametrize(
-    ("address", "warned"),
-    [("localhost", True), ("127.0.0.1", True), ("host.docker.internal", False)],
-)
-def test_a_loopback_address_with_an_ingress_registry_is_warned_about(
-    monkeypatch, settings, capture_logs, address, warned
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize("address", ["localhost", "127.0.0.1"])
+def test_a_loopback_address_with_an_ingress_registry_is_refused(
+    monkeypatch, settings, capture_logs, address, dry_run
 ):
-    # registry.localhost may resolve to the builder pod itself, not to the ingress.
+    # registry.localhost resolves to the builder pod itself, not to the ingress; it was a
+    # warning, and the install went ahead to fail at the first function build.
     logs = capture_logs(registry)
     settings.local_registry = True
     settings.enable_ingress = True
+    settings.dry_run = dry_run
+    settings.external_host_address = address
+    rec = Recorder()
+    monkeypatch.setattr(registry, "kubectl", rec)
+
+    with pytest.raises(InstallerError):
+        registry.prepare_local_registry(settings)
+
+    headline, fix_address, fix_registry = logs
+    assert headline.endswith("; change one:") and f"registry.{address}" in headline
+    assert "host.docker.internal" in fix_address and fix_address.endswith(f"instead of {address}")
+    assert "drop --local-registry" in fix_registry
+    assert rec.calls == [], "refused before looking at the cluster"
+
+
+@pytest.mark.parametrize(
+    ("address", "ingress"),
+    [("host.docker.internal", True), ("203.0.113.10", True), ("localhost", False)],
+)
+def test_a_local_registry_is_allowed_where_its_host_resolves(
+    monkeypatch, settings, address, ingress
+):
+    settings.local_registry = True
+    settings.enable_ingress = ingress
     settings.external_host_address = address
     monkeypatch.setattr(registry, "kubectl", Recorder())
 
     registry.prepare_local_registry(settings)
-
-    assert any("host.docker.internal" in line for line in logs) is warned
 
 
 def test_local_registry_real_run_still_applies(monkeypatch, settings):
@@ -385,7 +406,7 @@ def test_the_installers_own_registry_objects_are_updated_on_a_rerun(monkeypatch,
 def test_the_registry_ingress_is_checked_only_when_one_would_be_applied(
     monkeypatch, settings, with_ingress
 ):
-    settings.external_host_address = "localhost"
+    settings.external_host_address = "host.docker.internal"
     settings.enable_ingress = with_ingress
     rec = Recorder()
     monkeypatch.setattr(registry, "kubectl", rec)
