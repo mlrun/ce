@@ -966,11 +966,40 @@ def release_leftovers(settings: Settings) -> Tuple[List[str], List[str]]:
     return leftovers, kept
 
 
+_UNLABELLED_FIELDS = (
+    r"{range .items[*]}{.kind}/{.metadata.name}|{.metadata.deletionTimestamp}"
+    r'|{.metadata.ownerReferences[0].kind}{"\n"}{end}'
+)
+
+
+def unlabelled_ce_leftovers(settings: Settings) -> List[str]:
+    """What CE leaves at run time with no label of the release: Nuclio's image build Jobs
+    and the Spark operator's webhook certificate. A Job's pods go with it, so owned objects
+    are skipped, as are ones already being deleted."""
+    result = kubectl(
+        settings,
+        "get",
+        "jobs,pods,secrets",
+        "--namespace",
+        settings.namespace,
+        "-o",
+        f"jsonpath={_UNLABELLED_FIELDS}",
+    )
+    leftovers: List[str] = []
+    for line in result.out.splitlines() if result.ok else []:
+        name, deleting, owner = (field.strip() for field in [*line.split("|"), "", ""][:3])
+        kind, _, rest = name.partition("/")
+        if rest.startswith(CE_UNLABELLED_NAMES) and not deleting and not owner:
+            leftovers.append(f"{kind.lower()}/{rest}")
+    return leftovers
+
+
 def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
     """Name what is still in the namespace. Reports only; exit 0 all the same, since the
     release is gone and what remains is either kept on purpose or needs a human decision."""
     others, kept = ([], []) if settings.dry_run else release_leftovers(settings)
     kafka = [] if settings.dry_run else _strimzi_resources(settings)[0]
+    unlabelled = [] if settings.dry_run else unlabelled_ce_leftovers(settings)
     namespace = settings.namespace
     kubectl_prefix = " ".join(kubectl_cmd(settings))
     if kept:
@@ -978,11 +1007,13 @@ def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
             f"Kept on purpose (helm.sh/resource-policy: keep, reused by a reinstall): "
             f"{', '.join(kept)}"
         )
-    if settings.hard_clean and not pvcs and not kafka and not others:
+    if settings.hard_clean and not pvcs and not kafka and not others and not unlabelled:
         log_result("Hard clean complete.")
         return
     if settings.hard_clean:
-        log_warn(f"Hard clean finished with leftovers: {', '.join(pvcs + kafka + others)}")
+        log_warn(
+            f"Hard clean finished with leftovers: {', '.join(pvcs + kafka + others + unlabelled)}"
+        )
     else:
         if others:
             log_warn(f"Still in '{namespace}' with the release's label: {', '.join(others)}")
@@ -990,6 +1021,10 @@ def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
             log_warn(
                 f"Still in '{namespace}', created by the chart's helm hooks, which helm "
                 f"uninstall leaves: {', '.join(kafka)}"
+            )
+        if unlabelled:
+            log_warn(
+                f"Still in '{namespace}', created by MLRun CE at run time: {', '.join(unlabelled)}"
             )
     if pvcs:
         log_warn(
@@ -1007,6 +1042,12 @@ def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
         log_warn(
             "  helm no longer tracks these (typically left by a failed upgrade). "
             f"Delete them with: {kubectl_prefix} delete -n {namespace} {' '.join(others)}"
+        )
+    if unlabelled:
+        log_warn(
+            "  MLRun CE creates these at run time with no label of the release (Nuclio's "
+            "image builds, the Spark operator's webhook certificate). "
+            f"Delete them with: {kubectl_prefix} delete -n {namespace} {' '.join(unlabelled)}"
         )
 
 

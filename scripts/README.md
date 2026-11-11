@@ -656,7 +656,9 @@ created yourself stays. It uses `HELM_TIMEOUT` (default `960s`).
 **Kept:** the namespace, the chart's CRDs and every PVC (the registry's included), so a
 reinstall finds its data. SeaweedFS's `seaweedfs-admin-secret`, `seaweedfs-s3-secret` and
 `seaweedfs-sftp-secret` are kept on purpose so a reinstall reuses the keys, and the Spark
-operator's `spark-operator-webhook-certs` has no release label.
+operator's `spark-operator-webhook-certs` has no release label. The run ends by naming
+it and any leftover Nuclio image build Jobs (`nuclio-buildjob-*`), with the command that
+deletes them.
 
 **`--hard-clean`** also deletes every PVC in the namespace and the PVs bound to them. This
 is irreversible. It first deletes the namespace's Nuclio functions and API gateways, while

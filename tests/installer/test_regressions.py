@@ -2992,6 +2992,61 @@ def test_a_dry_run_uninstall_reports_no_leftovers(monkeypatch, settings, recorde
     assert not kube_rec.ran("app.kubernetes.io/instance=")
 
 
+# From a lab: after a non-interactive hard clean the namespace still held three Nuclio
+# build Jobs and the Spark webhook certificate, and the report named none of them. Same
+# line format as above, without the resource policy.
+UNLABELLED_OBJECTS = """\
+Job/nuclio-buildjob-processor-demo-fn-latest-2mqxf||
+Pod/nuclio-buildjob-processor-demo-fn-latest-2mqxjx9v9||Job
+Secret/spark-operator-webhook-certs||
+Job/nuclio-buildjob-processor-gone||2026-11-04T12:00:00Z
+Secret/artifactory-registry-secret||
+"""
+
+
+def test_a_plain_uninstall_names_what_ce_left_without_a_label(monkeypatch, settings, recorder):
+    kube_rec, logs = _uninstall_with_release(monkeypatch, settings, recorder, labelled="")
+    kube_rec.answers["get jobs,pods,secrets"] = Result(0, UNLABELLED_OBJECTS)
+
+    helm_ops.do_uninstall(settings)
+
+    ours = "job/nuclio-buildjob-processor-demo-fn-latest-2mqxf secret/spark-operator-webhook-certs"
+    warning = " ".join(logs["warn"])
+    assert "created by MLRun CE at run time: " + ours.replace(" ", ", ") in warning
+    assert "kubectl delete -n mlrun " + ours in warning
+    # A Job's pod goes with it, one being deleted is on its way, the user's own is theirs.
+    assert "2mqxjx9v9" not in warning and "processor-gone" not in warning
+    assert "artifactory-registry-secret" not in warning
+    assert not kube_rec.ran("delete job/"), "report only"
+
+
+def test_a_hard_clean_with_only_unlabelled_leftovers_is_not_complete(
+    monkeypatch, settings, recorder
+):
+    kube_rec, logs = _uninstall_with_release(monkeypatch, settings, recorder, labelled="")
+    kube_rec.answers["get jobs,pods,secrets"] = Result(0, "Secret/spark-operator-webhook-certs||\n")
+    settings.hard_clean = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert any(
+        line.endswith("finished with leftovers: secret/spark-operator-webhook-certs")
+        for line in logs["warn"]
+    )
+    assert "Hard clean complete." not in logs["info"]
+
+
+def test_a_dry_run_uninstall_does_not_look_for_unlabelled_leftovers(
+    monkeypatch, settings, recorder
+):
+    kube_rec, _ = _uninstall_with_release(monkeypatch, settings, recorder)
+    settings.dry_run = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert not kube_rec.ran("get jobs,pods,secrets")
+
+
 # ------------------------------------------------------------------------------------------
 # --hard-clean left Nuclio functions and MLRun run pods running, and said nothing
 # ------------------------------------------------------------------------------------------
