@@ -663,8 +663,11 @@ is irreversible. It first deletes the namespace's Nuclio functions and API gatew
 Nuclio still runs to remove their Deployments and Services, and after the uninstall the
 pods of MLRun runs and image builds (labelled `mlrun/class` or `mlrun/function`). When
 there are any it lists them and asks first; `--non-interactive` deletes them. A plain
-`uninstall` leaves both running. With no release in the namespace it asks you to type the
-namespace name, and refuses under `--non-interactive`.
+`uninstall` leaves both running. It also deletes the chart's Strimzi `Kafka` and
+`KafkaNodePool`, which the chart creates as helm hooks and `helm uninstall` never deletes,
+and waits for their broker pod to go; a plain `uninstall` leaves them and says so. With no
+release in the namespace it asks you to type the namespace name, and refuses under
+`--non-interactive`.
 
 The namespace itself is kept, since it may be yours. At the end, a hard clean lists what is
 still in it, naming in full anything MLRun CE did not create, and asks whether to delete it
@@ -765,7 +768,8 @@ use that registry through `REGISTRY_URL` instead of `--local-registry`.
 
 The run ends with "Hard clean finished with leftovers" and names a Kafka PVC as
 `Terminating`. Strimzi's Kafka resources are created by helm hooks, which `helm uninstall`
-does not delete, so the broker pod outlives the operator and keeps its PVC. Delete them:
+does not delete, so the broker pod outlives the operator and keeps its PVC. A hard clean
+deletes them, but an older installer or a plain `uninstall` left them. Delete them:
 
 ```bash
 kubectl delete strimzipodset --all -n mlrun
@@ -817,7 +821,7 @@ else, `false` and `0` included, leaves it off.
 | `-h`, `--help` | | Show help |
 | `-v`, `--version` | | Print the installer version (the chart version it ships with) |
 | `--uninstall` | `UNINSTALL` | Same as the `uninstall` command |
-| `--hard-clean` | `HARD_CLEAN` | With `uninstall`: also delete the namespace's PVCs and PVs, Nuclio functions and MLRun run pods |
+| `--hard-clean` | `HARD_CLEAN` | With `uninstall`: also delete the namespace's PVCs and PVs, Nuclio functions, MLRun run pods and the chart's Kafka |
 | `--delete-namespace` | `DELETE_NAMESPACE` | With `--hard-clean`: also delete the namespace, without asking |
 | `--dry-run` | `DRY_RUN` | Change nothing: render the chart with `--dry-run=server`, or list what `uninstall` would remove |
 | `--non-interactive` | `NON_INTERACTIVE`, `CI` | Never prompt; exit 1 on a missing required value |

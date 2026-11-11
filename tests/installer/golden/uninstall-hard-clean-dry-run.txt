@@ -7,6 +7,8 @@ exit: 0
 ["helm", "list", "--namespace", "mlrun", "--deployed", "--failed", "--pending", "--superseded", "--uninstalling", "-o", "json"]
 ["kubectl", "get", "nucliofunctions.nuclio.io", "--namespace", "mlrun", "-o", "name"]
 ["kubectl", "get", "nuclioapigateways.nuclio.io", "--namespace", "mlrun", "-o", "name"]
+["kubectl", "get", "kafka.kafka.strimzi.io", "--namespace", "mlrun", "-o", "jsonpath={range .items[*]}{.metadata.name}|{.metadata.labels.helm\\.sh/chart}|{.metadata.labels.strimzi\\.io/cluster}{\"\\n\"}{end}"]
+["kubectl", "get", "kafkanodepool.kafka.strimzi.io", "--namespace", "mlrun", "-o", "jsonpath={range .items[*]}{.metadata.name}|{.metadata.labels.helm\\.sh/chart}|{.metadata.labels.strimzi\\.io/cluster}{\"\\n\"}{end}"]
 ["kubectl", "get", "deployment,service,ingress,secret", "--namespace", "mlrun", "-l", "app.kubernetes.io/managed-by=mlrun-ce-installer", "--no-headers", "-o", "name"]
 ["kubectl", "get", "cronjobs,jobs,deployments,pods,services,horizontalpodautoscalers,ingresses,configmaps,secrets", "-l", "nuclio.io/function-name", "--namespace", "mlrun", "-o", "name"]
 ["kubectl", "get", "cronjobs,jobs,deployments,pods,services,horizontalpodautoscalers,ingresses,configmaps,secrets", "-l", "mlrun/class", "--namespace", "mlrun", "-o", "name"]

@@ -677,6 +677,94 @@ def delete_nuclio_resources(settings: Settings) -> None:
     )
 
 
+# The chart creates its Kafka and KafkaNodePool as post-install hooks, so that they wait for
+# Strimzi's CRDs, and helm uninstall never deletes a hook. Left behind, the node pool's
+# StrimziPodSet keeps the broker pod running and its PVC on pvc-protection. The CRs carry no
+# release label; the chart label tells CE's from another Kafka in the namespace.
+STRIMZI_CRS = ("kafka.kafka.strimzi.io", "kafkanodepool.kafka.strimzi.io")
+STRIMZI_WORKLOADS = "strimzipodsets.core.strimzi.io,pods"
+_STRIMZI_FIELDS = (
+    r"{range .items[*]}{.metadata.name}|{.metadata.labels.helm\.sh/chart}"
+    r'|{.metadata.labels.strimzi\.io/cluster}{"\n"}{end}'
+)
+
+
+def _strimzi_resources(settings: Settings) -> Tuple[List[str], List[str]]:
+    """(CRs, Kafka cluster names) of the chart's Strimzi CRs; empty without the CRDs."""
+    found: List[str] = []
+    clusters: List[str] = []
+    for crd in STRIMZI_CRS:
+        result = kubectl(
+            settings,
+            "get",
+            crd,
+            "--namespace",
+            settings.namespace,
+            "-o",
+            f"jsonpath={_STRIMZI_FIELDS}",
+        )
+        for line in result.out.splitlines() if result.ok else []:
+            name, chart, cluster = (field.strip() for field in [*line.split("|"), "", ""][:3])
+            if not name or not re.match(r"mlrun-ce-\d", chart):
+                continue
+            found.append(f"{crd}/{name}")
+            if (cluster or name) not in clusters:
+                clusters.append(cluster or name)
+    return found, clusters
+
+
+def delete_strimzi_resources(settings: Settings) -> None:
+    """Delete the chart's Kafka CRs and wait for the broker pods they own to go."""
+    found, clusters = _strimzi_resources(settings)
+    if not found:
+        return
+    if settings.dry_run:
+        for name in found:
+            log_info(f"  Dry-run: would delete {name}")
+        return
+    namespace = settings.namespace
+    log_info(f"Deleting the Kafka resources the chart's hooks created: {', '.join(found)}")
+    kubectl(
+        settings,
+        "delete",
+        *found,
+        "--namespace",
+        namespace,
+        "--ignore-not-found",
+        "--timeout",
+        "60s",
+    )
+    # The owner references do not block deletion, so the CRs go at once; the wait is on the
+    # pod sets and pods the garbage collector removes after them.
+    selector = f"strimzi.io/cluster in ({','.join(clusters)})"
+    waited = kubectl(
+        settings,
+        "wait",
+        "--for=delete",
+        STRIMZI_WORKLOADS,
+        "-l",
+        selector,
+        "--namespace",
+        namespace,
+        "--timeout",
+        "120s",
+    )
+    left = [] if waited.ok else _names(settings, STRIMZI_WORKLOADS, "-l", selector)
+    if not left:
+        return
+    log_warn(f"  Still there after 120s, forcing: {', '.join(left)}")
+    kubectl(
+        settings,
+        "delete",
+        *left,
+        "--namespace",
+        namespace,
+        "--force",
+        "--grace-period=0",
+        "--wait=false",
+    )
+
+
 # What Nuclio and MLRun create at run time, which helm never sees: what is left of a
 # function, and the pods of runs and image builds. The chart renders none of these labels;
 # its own Nuclio pods are nuclio.io/class=service.
@@ -882,27 +970,40 @@ def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
     """Name what is still in the namespace. Reports only; exit 0 all the same, since the
     release is gone and what remains is either kept on purpose or needs a human decision."""
     others, kept = ([], []) if settings.dry_run else release_leftovers(settings)
+    kafka = [] if settings.dry_run else _strimzi_resources(settings)[0]
     namespace = settings.namespace
+    kubectl_prefix = " ".join(kubectl_cmd(settings))
     if kept:
         log_info(
             f"Kept on purpose (helm.sh/resource-policy: keep, reused by a reinstall): "
             f"{', '.join(kept)}"
         )
-    if settings.hard_clean and not pvcs and not others:
+    if settings.hard_clean and not pvcs and not kafka and not others:
         log_result("Hard clean complete.")
         return
     if settings.hard_clean:
-        log_warn(f"Hard clean finished with leftovers: {', '.join(pvcs + others)}")
-    elif others:
-        log_warn(f"Still in '{namespace}' with the release's label: {', '.join(others)}")
+        log_warn(f"Hard clean finished with leftovers: {', '.join(pvcs + kafka + others)}")
+    else:
+        if others:
+            log_warn(f"Still in '{namespace}' with the release's label: {', '.join(others)}")
+        if kafka:
+            log_warn(
+                f"Still in '{namespace}', created by the chart's helm hooks, which helm "
+                f"uninstall leaves: {', '.join(kafka)}"
+            )
     if pvcs:
         log_warn(
             "  A pod still mounting a PVC keeps it Terminating (pvc-protection); orphaned "
             "Strimzi Kafka resources are the usual cause. "
             f"See {README_URL}{STRIMZI_LEFTOVERS_ANCHOR}"
         )
+    if kafka:
+        how = "Delete them with" if settings.hard_clean else "--hard-clean deletes them, as does"
+        log_warn(
+            f"  Their Kafka broker keeps running and holds its PVC. {how}: "
+            f"{kubectl_prefix} delete -n {namespace} {' '.join(kafka)}"
+        )
     if others:
-        kubectl_prefix = " ".join(kubectl_cmd(settings))
         log_warn(
             "  helm no longer tracks these (typically left by a failed upgrade). "
             f"Delete them with: {kubectl_prefix} delete -n {namespace} {' '.join(others)}"
@@ -1157,6 +1258,9 @@ def do_uninstall(settings: Settings) -> None:
         if settings.hard_clean and not settings.dry_run:
             confirm_hard_clean_without_release(settings)
             ask_about_runtime_objects(settings)
+        if settings.hard_clean:
+            # Left by an earlier uninstall, their broker pod still holds its PVC.
+            delete_strimzi_resources(settings)
     elif settings.dry_run:
         # --dry-run used to be read only on the install path, so
         # `--uninstall --hard-clean --dry-run` really removed the release and really
@@ -1168,10 +1272,12 @@ def do_uninstall(settings: Settings) -> None:
         )
         if settings.hard_clean:
             delete_nuclio_resources(settings)
+            delete_strimzi_resources(settings)
     else:
         if settings.hard_clean:
             ask_about_runtime_objects(settings)
             delete_nuclio_resources(settings)
+            delete_strimzi_resources(settings)
         log_info(
             f"Uninstalling MLRun CE release '{settings.release_name}' "
             f"from namespace '{settings.namespace}'..."

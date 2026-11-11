@@ -3102,6 +3102,156 @@ def test_no_nuclio_crd_means_no_delete_and_no_wait(monkeypatch, settings, record
     assert not rec.ran("delete") and not rec.ran("wait")
 
 
+# ------------------------------------------------------------------------------------------
+# --hard-clean left the chart's Kafka running: its CRs are helm hooks, which uninstall skips
+# ------------------------------------------------------------------------------------------
+
+# name|helm.sh/chart|strimzi.io/cluster, as _STRIMZI_FIELDS prints them.
+KAFKA_CRS = {
+    "get kafka.kafka.strimzi.io": Result(0, "kafka-stream|mlrun-ce-0.11.0|\n"),
+    "get kafkanodepool.kafka.strimzi.io": Result(
+        0, "kafka-stream-pool|mlrun-ce-0.11.0|kafka-stream\n"
+    ),
+}
+KAFKA_NAMES = "kafka.kafka.strimzi.io/kafka-stream kafkanodepool.kafka.strimzi.io/kafka-stream-pool"
+KAFKA_DELETE = f"delete {KAFKA_NAMES} --namespace mlrun --ignore-not-found --timeout 60s"
+KAFKA_WAIT = (
+    "wait --for=delete strimzipodsets.core.strimzi.io,pods -l strimzi.io/cluster in "
+    "(kafka-stream) --namespace mlrun --timeout 120s"
+)
+
+
+def test_the_charts_kafka_is_deleted_before_helm_uninstall_removes_strimzi(
+    monkeypatch, settings, recorder
+):
+    # From a lab: the KafkaNodePool's StrimziPodSet kept the broker pod running after the
+    # uninstall, and the pod kept its PVC Terminating for good.
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder, answers=KAFKA_CRS)
+
+    helm_ops.do_uninstall(settings)
+
+    joined = rec.joined
+    delete = joined.index(KAFKA_DELETE)
+    wait = joined.index(KAFKA_WAIT)
+    uninstall = next(i for i, c in enumerate(joined) if c.startswith("uninstall mlrun-ce"))
+    assert delete < wait < uninstall
+
+
+def test_the_kafka_crs_are_hooks_carrying_the_chart_label_the_selection_reads():
+    helpers = (CHART / "templates" / "_helpers.tpl").read_text()
+    common = helpers[helpers.index('define "mlrun-ce.common.labels"') :].split("{{- end")[0]
+    assert 'helm.sh/chart: {{ include "mlrun-ce.chart" . }}' in common
+    for template in ("kafka-cluster.yaml", "kafka-nodepool.yaml"):
+        text = (CHART / "templates" / "kafka" / template).read_text()
+        assert 'include "mlrun-ce.common.labels"' in text
+        assert "helm.sh/hook: post-install,post-upgrade" in text, "else helm deletes them itself"
+
+
+def test_a_kafka_another_chart_created_is_left_alone(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(
+        monkeypatch,
+        settings,
+        recorder,
+        answers={
+            "get kafka.kafka.strimzi.io": Result(
+                0, "kafka-stream|mlrun-ce-0.11.0|\nteam-kafka|other-chart-1.0.0|\nbare||\n"
+            ),
+            "get kafkanodepool.kafka.strimzi.io": Result(
+                0, "kafka-stream-pool|mlrun-ce-0.11.0|kafka-stream\nteam-pool||team-kafka\n"
+            ),
+        },
+    )
+
+    helm_ops.delete_strimzi_resources(settings)
+
+    deletes = [c for c in rec.joined if c.startswith("delete")]
+    assert deletes == [KAFKA_DELETE]
+    assert rec.ran(KAFKA_WAIT)
+
+
+def test_no_strimzi_crd_means_no_kafka_delete_and_no_wait(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(
+        monkeypatch,
+        settings,
+        recorder,
+        answers={"get kafka": Result(1, 'the server doesn\'t have a resource type "kafka"')},
+    )
+
+    helm_ops.do_uninstall(settings)
+
+    assert not rec.ran("delete kafka") and not rec.ran("strimzipodsets")
+    assert rec.ran("uninstall mlrun-ce")
+
+
+def test_a_dry_run_hard_clean_lists_the_kafka_without_deleting_it(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder, answers=KAFKA_CRS)
+    logs = capture_by_level(monkeypatch, helm_ops)
+    settings.dry_run = True
+
+    helm_ops.do_uninstall(settings)
+
+    assert not rec.ran("delete") and not rec.ran("wait") and not rec.ran("uninstall mlrun-ce")
+    for name in KAFKA_NAMES.split():
+        assert f"  Dry-run: would delete {name}" in logs["info"]
+
+
+def test_a_plain_uninstall_leaves_the_kafka_and_says_so(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(monkeypatch, settings, recorder, answers=KAFKA_CRS)
+    logs = capture_by_level(monkeypatch, helm_ops)
+    settings.hard_clean = False
+
+    helm_ops.do_uninstall(settings)
+
+    assert not rec.ran("delete kafka") and not rec.ran("strimzipodsets")
+    warning = " ".join(logs["warn"])
+    assert ", ".join(KAFKA_NAMES.split()) in warning and "helm hooks" in warning
+    assert "--hard-clean deletes them" in warning
+    assert f"kubectl delete -n mlrun {KAFKA_NAMES}" in warning
+
+
+def test_a_hard_clean_without_a_release_deletes_the_kafka_an_earlier_uninstall_left(
+    monkeypatch, settings, recorder
+):
+    rec = _hard_clean_with_functions(
+        monkeypatch,
+        settings,
+        recorder,
+        answers={"status mlrun-ce": Result(1, "not found"), **KAFKA_CRS},
+    )
+    settings.non_interactive = False
+    # The namespace typed back, yes to the run-time objects, and keep the namespace.
+    _answer(monkeypatch, "mlrun", "y", "")
+
+    helm_ops.do_uninstall(settings)
+
+    joined = rec.joined
+    delete = joined.index(KAFKA_DELETE)
+    wait = joined.index(KAFKA_WAIT)
+    pvcs = next(i for i, c in enumerate(joined) if c.startswith("get pvc"))
+    assert delete < wait < pvcs
+    assert not rec.ran("uninstall mlrun-ce")
+
+
+def test_a_broker_pod_that_outlasts_the_wait_is_forced(monkeypatch, settings, recorder):
+    rec = _hard_clean_with_functions(
+        monkeypatch,
+        settings,
+        recorder,
+        answers={
+            **KAFKA_CRS,
+            "wait --for=delete strimzipodsets": Result(1, "timed out waiting for the condition"),
+            "get strimzipodsets": Result(0, "pod/kafka-stream-kafka-stream-pool-0\n"),
+        },
+    )
+
+    helm_ops.delete_strimzi_resources(settings)
+
+    assert rec.ran(
+        "delete pod/kafka-stream-kafka-stream-pool-0 --namespace mlrun --force "
+        "--grace-period=0 --wait=false"
+    )
+
+
 def _answer(monkeypatch, *answers):
     replies = iter(answers)
     monkeypatch.setattr("builtins.input", lambda: next(replies))

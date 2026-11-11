@@ -175,6 +175,9 @@ def run_case(args, tmp_path):
                 "STUB_PVS": "pv-released mlrun Released\npv-live mlrun Bound\n",
                 "STUB_NUCLIO_FUNCTIONS": "nucliofunction.nuclio.io/demo-fn\n",
                 "STUB_RUNTIME_WORKLOADS": "pod/demo-job-x7k2p\n",
+                # name|helm.sh/chart|strimzi.io/cluster, as _STRIMZI_FIELDS prints them
+                "STUB_KAFKAS": "kafka-stream|mlrun-ce-0.11.0|\n",
+                "STUB_KAFKA_NODE_POOLS": "kafka-stream-pool|mlrun-ce-0.11.0|kafka-stream\n",
             }
         )
 
