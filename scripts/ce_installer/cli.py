@@ -625,6 +625,8 @@ def install(
         settings.kube_context = kube_context or env_str("KUBE_CONTEXT")
         settings.ce_version = ce_version or env_str("CE_VERSION")
         settings.chart_path = chart_path or env_str("CHART_PATH")
+        settings.ce_version_from_env = not ce_version and bool(settings.ce_version)
+        settings.chart_path_from_env = not chart_path and bool(settings.chart_path)
         settings.config_file = config or env_str("CONFIG_FILE")
 
         settings.ingress_class = env_str("INGRESS_CLASS", DEFAULT_INGRESS_CLASS)

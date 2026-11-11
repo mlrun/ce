@@ -35,7 +35,7 @@ import pytest
 import typer
 import yaml
 
-from ce_installer import cli, config, console
+from ce_installer import cli, config
 from ce_installer.console import InstallerError
 
 
@@ -344,32 +344,40 @@ def run_to_the_chart_check(monkeypatch, argv):
     return cli.main(argv), seen.get("settings")
 
 
+def given(flag, env_var, value, source, monkeypatch):
+    """Pass `value` by flag or env var; returns (argv, how it reads, how to take it back)."""
+    if source == "env":
+        monkeypatch.setenv(env_var, value)
+        return [], f"{env_var}={value}", f"unset {env_var}"
+    return [flag, value], f"{flag} {value}", f"drop {flag}"
+
+
 @pytest.mark.parametrize(
-    "argv, env",
-    [
-        (["--ce-version", "0.11.0", "--chart-path", "./charts/mlrun-ce"], {}),
-        (["--ce-version", "0.11.0"], {"CHART_PATH": "./charts/mlrun-ce"}),
-        (["--chart-path", "./charts/mlrun-ce"], {"CE_VERSION": "0.11.0"}),
-        ([], {"CE_VERSION": "0.11.0", "CHART_PATH": "./charts/mlrun-ce"}),
-    ],
+    "version_source, path_source",
+    [("flag", "flag"), ("flag", "env"), ("env", "flag"), ("env", "env")],
     ids=["both flags", "flag and CHART_PATH", "CE_VERSION and flag", "both env vars"],
 )
 def test_ce_version_with_chart_path_on_the_command_line_stops_before_any_command(
-    monkeypatch, recorder, capture_logs, argv, env
+    monkeypatch, tmp_path, recorder, capture_logs, version_source, path_source
 ):
-    for name, value in env.items():
-        monkeypatch.setenv(name, value)
+    chart = make_chart(tmp_path)
+    version_argv, version_given, drop_version = given(
+        "--ce-version", "CE_VERSION", "0.11.0", version_source, monkeypatch
+    )
+    path_argv, path_given, drop_path = given(
+        "--chart-path", "CHART_PATH", chart, path_source, monkeypatch
+    )
     rec = record_commands(monkeypatch, recorder)
-    logs = capture_logs(console)
+    logs = capture_logs(config)
 
     # Installing the local chart and dropping the version left someone believing they had
     # pinned a release; the warning saying so came only after the cluster was queried.
-    assert cli.main(["--non-interactive", *argv]) == 1
-    assert any(
-        "--ce-version (or CE_VERSION) and --chart-path (or CHART_PATH) conflict" in line
-        and "Pass one or the other" in line
-        for line in logs
-    )
+    assert cli.main(["--non-interactive", *version_argv, *path_argv]) == 1
+    assert logs == [
+        f"{version_given} and {path_given} name two different charts; keep one:",
+        "  the published chart version 0.11.0 from https://mlrun.github.io/ce: " + drop_path,
+        f"  the local chart at {chart} (version 0.12.0-rc.3): {drop_version}",
+    ]
     assert not rec.calls
 
 
@@ -377,15 +385,20 @@ def test_chart_version_and_chart_path_both_in_the_config_file_stop_the_install(
     monkeypatch, tmp_path, recorder, capture_logs
 ):
     rec = record_commands(monkeypatch, recorder)
-    logs = capture_logs(console)
-    path = write_config(tmp_path, BOTH_IN_FILE)
+    logs = capture_logs(config)
+    chart = make_chart(tmp_path)
+    path = write_config(
+        tmp_path, f"installer:\n  chartSource:\n    chartVersion: 0.11.0\n    chartPath: {chart}\n"
+    )
 
     assert cli.main(["--non-interactive", "--config", path]) == 1
-    assert any(
-        f"{path} sets both installer.chartSource.chartVersion and installer.chartSource."
-        "chartPath" in line
-        for line in logs
-    )
+    assert logs == [
+        f"{path} sets both installer.chartSource.chartVersion (0.11.0) and "
+        f"installer.chartSource.chartPath ({chart}); keep one:",
+        "  the published chart version 0.11.0 from https://mlrun.github.io/ce: "
+        f"remove chartPath from {path}",
+        f"  the local chart at {chart} (version 0.12.0-rc.3): remove chartVersion from {path}",
+    ]
     assert not rec.calls
 
 

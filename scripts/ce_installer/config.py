@@ -360,12 +360,32 @@ def _apply_chart_and_components(data: Dict, settings: Settings) -> None:
                 setattr(settings, attr, True)
 
 
-def _local_chart_version(chart_path: str) -> str:
+def _local_chart(chart_path: str) -> str:
+    """The path, with its Chart.yaml version when that can be read."""
     try:
         chart = yaml.safe_load((Path(chart_path) / "Chart.yaml").read_text())
     except (OSError, yaml.YAMLError):
-        return ""
-    return str(chart.get("version", "")) if isinstance(chart, dict) else ""
+        chart = None
+    version = str(chart.get("version", "")) if isinstance(chart, dict) else ""
+    return f"{chart_path} (version {version})" if version else chart_path
+
+
+def _given(flag: str, env_var: str, value: str, from_env: bool) -> Tuple[str, str]:
+    """How a command-line value was given, and how to take it back."""
+    if from_env:
+        return f"{env_var}={value}", f"unset {env_var}"
+    return f"{flag} {value}", f"drop {flag}"
+
+
+def _refuse_two_charts(
+    settings: Settings, headline: str, version: str, path: str, keep_version: str, keep_path: str
+) -> InstallerError:
+    log_error(f"{headline}; keep one:")
+    log_error(
+        f"  the published chart version {version} from {settings.helm_repo_url}: {keep_version}"
+    )
+    log_error(f"  the local chart at {_local_chart(path)}: {keep_path}")
+    return InstallerError(headline, code=1)
 
 
 def check_chart_source(settings: Settings) -> None:
@@ -378,22 +398,35 @@ def check_chart_source(settings: Settings) -> None:
         return
     file_version, file_path = settings.config_chart_version, settings.config_chart_path
     if file_version and file_path:
-        raise die(
-            f"{settings.config_file} sets both installer.chartSource.chartVersion and "
-            "installer.chartSource.chartPath, which conflict: one installs a published chart "
-            "version, the other a local chart. Set one or the other."
+        where = settings.config_file
+        raise _refuse_two_charts(
+            settings,
+            f"{where} sets both installer.chartSource.chartVersion ({file_version}) and "
+            f"installer.chartSource.chartPath ({file_path})",
+            file_version,
+            file_path,
+            keep_version=f"remove chartPath from {where}",
+            keep_path=f"remove chartVersion from {where}",
         )
     if settings.ce_version and settings.chart_path:
-        raise die(
-            "--ce-version (or CE_VERSION) and --chart-path (or CHART_PATH) conflict: one "
-            "installs a published chart version, the other a local chart. Pass one or the other."
+        version_given, drop_version = _given(
+            "--ce-version", "CE_VERSION", settings.ce_version, settings.ce_version_from_env
+        )
+        path_given, drop_path = _given(
+            "--chart-path", "CHART_PATH", settings.chart_path, settings.chart_path_from_env
+        )
+        raise _refuse_two_charts(
+            settings,
+            f"{version_given} and {path_given} name two different charts",
+            settings.ce_version,
+            settings.chart_path,
+            keep_version=drop_path,
+            keep_path=drop_version,
         )
     if settings.chart_path and file_version:
-        version = _local_chart_version(settings.chart_path)
-        shown = f" (version {version})" if version else ""
         log_info(
-            f"Using local chart {settings.chart_path}{shown}; the config file's chartVersion "
-            f"{file_version} is ignored."
+            f"Using local chart {_local_chart(settings.chart_path)}; the config file's "
+            f"chartVersion {file_version} is ignored."
         )
     elif settings.ce_version and file_path:
         log_info(

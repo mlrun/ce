@@ -173,6 +173,10 @@ class Settings:
     # The chart version of the release being upgraded; "" on a first install.
     installed_chart_version: str = ""
     chart_path: str = ""
+    # Set when CE_VERSION or CHART_PATH supplied the value rather than the flag, so a
+    # conflict names what to unset instead of what to drop.
+    ce_version_from_env: bool = False
+    chart_path_from_env: bool = False
     update_dependencies: bool = False
     devel: bool = False
     dry_run: bool = False
