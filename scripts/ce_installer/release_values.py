@@ -113,12 +113,22 @@ def load_previous_values(settings: Settings) -> None:
             settings.node_ports[key] = port
 
 
+def _redacted(value: object) -> object:
+    """`value` with every sensitive key inside it redacted. flatten_values stops at lists,
+    so a list of objects (Grafana's additionalDataSources) arrives here whole."""
+    if isinstance(value, dict):
+        return {k: REDACTED if _sensitive(str(k)) else _redacted(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redacted(item) for item in value]
+    return value
+
+
 def _shown(key: str, value: object) -> object:
     if value is UNSET:
         return UNSET
     if _sensitive(key.rsplit(".", 1)[-1]):
         return REDACTED
-    return value
+    return _redacted(value)
 
 
 def _inline(value: object) -> str:

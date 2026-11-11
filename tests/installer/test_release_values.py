@@ -147,6 +147,40 @@ def test_credentials_set_as_environment_variables_are_redacted(
     assert "hunter2" not in release_values.value_changes_file(settings).read_text()
 
 
+def test_a_password_inside_a_list_is_redacted(upgrade, settings, capture_logs):
+    # flatten_values stops at lists, so the whole datasource list was shown under the key
+    # `additionalDataSources`, password included.
+    def sources(password):
+        return {
+            "kube-prometheus-stack": {
+                "grafana": {
+                    "additionalDataSources": [
+                        {"name": "iguazio", "user": "root", "password": password,
+                         "jsonData": {"options": [{"apiKey": "hunter2-nested"}]}},
+                    ]
+                }
+            }
+        }  # fmt: skip
+
+    upgrade(sources("hunter2-old"))
+    values = settings.generated_values_file + ".user.yaml"
+    with open(values, "w") as handle:
+        yaml.safe_dump(sources("hunter2-new"), handle)
+    settings.values_file = values
+    logs = capture_logs(release_values)
+
+    release_values.load_previous_values(settings)
+    release_values.report_value_changes(settings)
+
+    text = "\n".join(logs)
+    written = release_values.value_changes_file(settings).read_text()
+    assert "kube-prometheus-stack.grafana.additionalDataSources:" in text
+    assert '"password": "<redacted>"' in text and '"user": "root"' in text
+    for secret in ("hunter2-old", "hunter2-new", "hunter2-nested"):
+        assert secret not in text
+        assert secret not in written
+
+
 def test_a_reference_to_a_secret_is_still_shown(upgrade, settings, capture_logs):
     upgrade({"global": {"registry": {"secret_name": "registry-credentials"}}})
     logs = capture_logs(release_values)
