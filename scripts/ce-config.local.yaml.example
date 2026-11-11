@@ -61,13 +61,15 @@ installer:
     mlrun: ""
     nuclio: ""
 
-  # false turns a component off, as its --disable-* flag does. A laptop with little memory
-  # is better off without monitoring and modelMonitoring.
-  components:
-    monitoring: true       # --disable-system-monitoring: Grafana and Prometheus
-    spark: true            # --disable-spark
-    mpi: true              # --disable-mpi
-    modelMonitoring: true  # --disable-model-monitoring: Kafka and TimescaleDB
+  # Left out, a component is as the chart (or your -f file) has it: on by default. false
+  # turns it off, as its --disable-* flag does; true turns it on over a -f file or an
+  # earlier run's --disable-*. A laptop with little memory is better off without
+  # monitoring and modelMonitoring.
+  # components:
+  #   monitoring: false       # --disable-system-monitoring: Grafana and Prometheus
+  #   spark: false            # --disable-spark
+  #   mpi: false              # --disable-mpi
+  #   modelMonitoring: false  # --disable-model-monitoring: Kafka and TimescaleDB
 
   # --enable-ingress [CLASS]: Ingresses for the UI, API, Jupyter and Nuclio. Needs an
   # ingress controller already in the cluster.

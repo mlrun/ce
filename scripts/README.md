@@ -401,9 +401,8 @@ If that file is already there and this run would change it, the installer lists 
 differs and asks: **merge** keeps the keys only the old file sets (a value you added by
 hand, say) and takes this run's value for the rest; **override** (the default) drops them;
 **cancel** stops with nothing changed. Merged keys can be stale, an old local registry's
-insecure flags for example, so check the list before merging. A merge never keeps a
-component off that the config sets to `true` under `components:`. Either way the old file
-is kept as `mlrun-ce-values.yaml.bak`, and `--non-interactive` overrides.
+insecure flags for example, so check the list before merging. Either way the old file is
+kept as `mlrun-ce-values.yaml.bak`, and `--non-interactive` overrides.
 
 ### The config file
 
@@ -438,7 +437,8 @@ flag or variable it stands for.
   `--ce-version` or `--chart-path` (or its variable) overrides both keys, and the run says
   which key it ignored.
 - **`components.*`** set to `false` disables a component, like the matching `--disable-*`
-  flag. The file cannot re-enable one disabled by a flag.
+  flag. Set to `true`, it turns the component on over a `-f` file and over an earlier run's
+  `--disable-*` kept by a merge, but not over a flag. Left out, the chart decides.
 - **`otel.*`** set to `true` enables a piece, like the matching `--enable-otel-*` flag. Any
   `--enable-otel*` flag on the command line makes the file's `otel` block ignored.
 

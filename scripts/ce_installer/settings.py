@@ -154,8 +154,8 @@ class Settings:
     disable_spark: bool = False
     disable_mpi: bool = False
     disable_model_monitoring: bool = False
-    # The disable_* attributes the config file's components.* set to true. Only a merge
-    # reads them: there they override a disable kept from an earlier values file.
+    # The disable_* attributes the config file's components.* set to true: written as on,
+    # over a -f file's or an earlier values file's off.
     enabled_by_config: List[str] = field(default_factory=list)
     enable_ingress: bool = False
     ingress_class: str = DEFAULT_INGRESS_CLASS

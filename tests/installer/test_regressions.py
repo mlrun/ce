@@ -3686,11 +3686,11 @@ def test_a_merge_keeps_an_earlier_disable_unless_the_config_turns_it_on(
     helm_ops.write_installer_values(settings)
 
     written = yaml.safe_load(path.read_text())
-    assert ("spark-operator" in written) is not enabled_by_config
+    assert written["spark-operator"]["enabled"] is enabled_by_config
     assert written["nuclio"]["dashboard"]["replicas"] == 2, "the other kept key stays"
 
 
-def test_the_prompt_says_a_merge_drops_the_disable_the_config_turns_on(
+def test_the_prompt_shows_the_config_turning_a_component_back_on(
     monkeypatch, settings, tmp_path, capture_logs
 ):
     _values_written_with_spark_disabled(settings, tmp_path)
@@ -3701,10 +3701,40 @@ def test_the_prompt_says_a_merge_drops_the_disable_the_config_turns_on(
     with pytest.raises(Cancelled):
         helm_ops.settle_existing_installer_values(settings)
 
-    assert (
-        "  spark-operator.enabled: False (only in the old file; the config turns this "
-        "component on, so a merge drops it)"
-    ) in logs
+    assert "  spark-operator.enabled: False -> True" in logs
+
+
+def test_a_component_the_config_turns_on_beats_the_values_files_off(settings, tmp_path, recorder):
+    # The other half of the same bug: -f goes before the installer's values, so a true
+    # there wins over the -f file's false; without one, the -f file decides.
+    values = tmp_path / "admin.yaml"
+    values.write_text("mpi-operator:\n  deployment:\n    create: false\nkafka:\n  enabled: false\n")
+    settings.values_file = str(values)
+    settings.registry_url = "index.docker.io/me"
+    settings.enabled_by_config = ["disable_mpi"]
+
+    ours = helm_ops.installer_values(settings)
+    cmd = helm_ops.build_helm_install_command(settings, "installer.yaml")
+
+    assert ours["mpi-operator"] == {
+        "deployment": {"create": True},
+        "crd": {"create": True},
+        "rbac": {"clusterResources": {"create": True}, "namespaced": {"create": True}},
+    }
+    assert "kafka" not in ours, "not in the config: the -f file's false stands"
+    assert cmd.index(str(values)) < cmd.index("installer.yaml")
+
+
+def test_a_flag_disable_beats_the_configs_true(settings, tmp_path):
+    path = tmp_path / "ce-config.yaml"
+    path.write_text("installer:\n  components:\n    spark: true\n")
+    settings.config_file = str(path)
+    settings.disable_spark = True
+
+    config.load_config(settings)
+
+    assert "spark-operator.enabled=false" in helm_ops.build_set_flags(settings)
+    assert "spark-operator.enabled=true" not in helm_ops.build_set_flags(settings)
 
 
 def test_with_only_a_turned_on_disable_left_a_merge_is_not_offered(monkeypatch, settings, tmp_path):

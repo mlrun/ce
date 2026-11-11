@@ -712,8 +712,11 @@ def test_each_example_is_valid_and_lists_every_key(settings, example):
     data = yaml.safe_load((SCRIPTS / example).read_text())
 
     assert config.validate_structure(data) == []
-    # password is in the schema only so a file holding one gets the warning.
-    assert _leaf_paths(data) == _leaf_paths(config.SCHEMA) - {"installer.registry.secret.password"}
+    # password is in the schema only so a file holding one gets the warning. components.*
+    # is commented out: true and false both override, so a copied example must not decide.
+    expected = _leaf_paths(config.SCHEMA) - {"installer.registry.secret.password"}
+    assert _leaf_paths(data) == {p for p in expected if not p.startswith("installer.components.")}
+    assert "  #   spark: false" in (SCRIPTS / example).read_text()
 
 
 @pytest.mark.parametrize("example", config.EXAMPLES)
