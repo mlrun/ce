@@ -23,7 +23,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import yaml
 
@@ -62,6 +62,28 @@ DRY_RUN_CRDS_ANCHOR = "#--dry-run-fails-with-no-matches-for-kind"
 STRIMZI_LEFTOVERS_ANCHOR = "#a-hard-clean-left-a-kafka-pod-and-its-pvc"
 
 
+# The values keys each --disable-* flag sets to false, in the order they are written.
+COMPONENT_KEYS: Dict[str, Tuple[str, ...]] = {
+    "disable_system_monitoring": ("kube-prometheus-stack.enabled",),
+    "disable_spark": ("spark-operator.enabled",),
+    # The subchart splits RBAC in two and has no `rbac.create` at all, so the single key
+    # bash used was silently doing nothing and --disable-mpi still created the operator's
+    # ServiceAccount and RoleBinding. namespaced.create is the one that defaults on;
+    # clusterResources.create is set for completeness.
+    "disable_mpi": (
+        "mpi-operator.deployment.create",
+        "mpi-operator.crd.create",
+        "mpi-operator.rbac.clusterResources.create",
+        "mpi-operator.rbac.namespaced.create",
+    ),
+    "disable_model_monitoring": (
+        "strimzi-kafka-operator.enabled",
+        "kafka.enabled",
+        "timescaledb.enabled",
+    ),
+}
+
+
 def build_set_flags(settings: Settings) -> List[str]:
     """Compose the --set flags. Order is part of the contract the differential tests pin."""
     flags: List[str] = []
@@ -90,23 +112,10 @@ def build_set_flags(settings: Settings) -> List[str]:
         flags += ["--set", f"nuclio.controller.image.tag={settings.nuclio_version}"]
         flags += ["--set", f"nuclio.dashboard.image.tag={settings.nuclio_version}"]
 
-    if settings.disable_system_monitoring:
-        flags += ["--set", "kube-prometheus-stack.enabled=false"]
-    if settings.disable_spark:
-        flags += ["--set", "spark-operator.enabled=false"]
-    if settings.disable_mpi:
-        flags += ["--set", "mpi-operator.deployment.create=false"]
-        flags += ["--set", "mpi-operator.crd.create=false"]
-        # The subchart splits RBAC in two and has no `rbac.create` at all, so the single
-        # key bash used was silently doing nothing and --disable-mpi still created the
-        # operator's ServiceAccount and RoleBinding. namespaced.create is the one that
-        # defaults on; clusterResources.create is set for completeness.
-        flags += ["--set", "mpi-operator.rbac.clusterResources.create=false"]
-        flags += ["--set", "mpi-operator.rbac.namespaced.create=false"]
-    if settings.disable_model_monitoring:
-        flags += ["--set", "strimzi-kafka-operator.enabled=false"]
-        flags += ["--set", "kafka.enabled=false"]
-        flags += ["--set", "timescaledb.enabled=false"]
+    for attr, keys in COMPONENT_KEYS.items():
+        if getattr(settings, attr):
+            for key in keys:
+                flags += ["--set", f"{key}=false"]
 
     if settings.enable_ingress:
         flags += ingress_set_flags(settings)
@@ -353,13 +362,15 @@ def settle_existing_installer_values(settings: Settings) -> None:
     before, now = flatten_values(old or {}), flatten_values(installer_values(settings))
     only_old = sorted(key for key in set(before) - set(now) if before[key] != {})
     differ = sorted(key for key in set(before) & set(now) if before[key] != now[key])
+    turned_on = {key for attr in settings.enabled_by_config for key in COMPONENT_KEYS[attr]}
     log_warn(f"{path} exists from an earlier run and differs from this run's values:")
     for key in differ:
         log_warn(f"  {key}: {before[key]} -> {now[key]}")
     for key in only_old:
-        log_warn(f"  {key}: {before[key]} (only in the old file)")
+        why = "; the config turns this component on, so a merge drops it"
+        log_warn(f"  {key}: {before[key]} (only in the old file{why if key in turned_on else ''})")
 
-    if old is None or not only_old:
+    if old is None or not set(only_old) - turned_on:
         if old is None:
             log_warn("  It is not a YAML block of values, so it cannot be merged.")
         overrides = confirm(settings, "Override it with this run's values?")
@@ -376,8 +387,21 @@ def settle_existing_installer_values(settings: Settings) -> None:
             "GENERATED_VALUES_FILE to another path."
         )
     if choice == "merge":
-        settings.kept_installer_values = old or {}
+        settings.kept_installer_values = _without(old or {}, turned_on)
     _back_up(path, "is merged" if choice == "merge" else "is overridden")
+
+
+def _without(values: dict, keys: Set[str]) -> dict:
+    """`values` less the dotted `keys`, and less any block that leaves empty."""
+    kept = {}
+    for key, value in values.items():
+        if key in keys:
+            continue
+        inner = {dotted[len(key) + 1 :] for dotted in keys if dotted.startswith(f"{key}.")}
+        rest = _without(value, inner) if inner and isinstance(value, dict) else value
+        if rest != {} or value == {}:
+            kept[key] = rest
+    return kept
 
 
 def _back_up(path: Path, what: str) -> None:

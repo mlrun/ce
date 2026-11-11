@@ -499,6 +499,8 @@ def test_components_false_disables_the_same_as_the_disable_flags(settings, tmp_p
     assert settings.disable_spark is False
     assert settings.disable_mpi is True
     assert settings.disable_model_monitoring is False
+    # The trues are kept so a merge drops an earlier run's disable of them.
+    assert settings.enabled_by_config == ["disable_spark", "disable_model_monitoring"]
 
 
 def test_config_file_cannot_re_enable_a_component_disabled_by_flag(settings, tmp_path):
@@ -510,6 +512,7 @@ def test_config_file_cannot_re_enable_a_component_disabled_by_flag(settings, tmp
     # `spark: true` is the file's default value, not a request — there is no flag to
     # explicitly re-enable a component, so the file can only ever add a disable.
     assert settings.disable_spark is True
+    assert settings.enabled_by_config == []
 
 
 def test_otel_keys_are_independent_opt_ins(settings, tmp_path):

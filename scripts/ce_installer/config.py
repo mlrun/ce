@@ -328,14 +328,20 @@ def _apply_chart_and_components(data: Dict, settings: Settings) -> None:
     # components.* mirrors the --disable-* flags exactly: "false" disables, same as passing
     # the flag. A flag/env-set disable is never un-set by the file — there is no "explicitly
     # re-enable" flag to begin with, so config can only ever add a disable, never remove one.
+    # A "true" is recorded so a merge does not keep an earlier run's disable over it.
     for attr, key in (
         ("disable_system_monitoring", "monitoring"),
         ("disable_spark", "spark"),
         ("disable_mpi", "mpi"),
         ("disable_model_monitoring", "modelMonitoring"),
     ):
-        if not getattr(settings, attr) and cfg(data, "installer", "components", key) == "false":
+        if getattr(settings, attr):
+            continue
+        value = cfg(data, "installer", "components", key)
+        if value == "false":
             setattr(settings, attr, True)
+        elif value == "true":
+            settings.enabled_by_config.append(attr)
 
     # otel is its own block, not under components.*: the chart ships all four of these
     # opentelemetry-operator/opentelemetry.* values disabled by default (unlike components.*,

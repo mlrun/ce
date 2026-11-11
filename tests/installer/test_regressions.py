@@ -3663,6 +3663,65 @@ def test_a_merge_keeps_the_old_only_keys_and_this_runs_values_win(
     assert (tmp_path / "mlrun-ce-values.yaml.bak").read_text() == OLD_VALUES
 
 
+def _values_written_with_spark_disabled(settings, tmp_path):
+    settings.registry_url = "index.docker.io/me"
+    settings.disable_spark = True
+    old = yaml.safe_load(helm_ops.installer_values_text(settings))
+    old["nuclio"] = {"dashboard": {"replicas": 2}}
+    settings.disable_spark = False
+    return _existing_values(settings, tmp_path, yaml.safe_dump(old))
+
+
+@pytest.mark.parametrize("enabled_by_config", [True, False])
+def test_a_merge_keeps_an_earlier_disable_unless_the_config_turns_it_on(
+    monkeypatch, settings, tmp_path, enabled_by_config
+):
+    # Found in review: installed with --disable-spark, upgraded with components.spark: true
+    # in the config and answered merge, and Spark stayed off.
+    path = _values_written_with_spark_disabled(settings, tmp_path)
+    settings.enabled_by_config = ["disable_spark"] if enabled_by_config else []
+    monkeypatch.setattr("builtins.input", lambda: "merge")
+
+    helm_ops.settle_existing_installer_values(settings)
+    helm_ops.write_installer_values(settings)
+
+    written = yaml.safe_load(path.read_text())
+    assert ("spark-operator" in written) is not enabled_by_config
+    assert written["nuclio"]["dashboard"]["replicas"] == 2, "the other kept key stays"
+
+
+def test_the_prompt_says_a_merge_drops_the_disable_the_config_turns_on(
+    monkeypatch, settings, tmp_path, capture_logs
+):
+    _values_written_with_spark_disabled(settings, tmp_path)
+    settings.enabled_by_config = ["disable_spark"]
+    logs = capture_logs(helm_ops)
+    monkeypatch.setattr("builtins.input", lambda: "c")
+
+    with pytest.raises(Cancelled):
+        helm_ops.settle_existing_installer_values(settings)
+
+    assert (
+        "  spark-operator.enabled: False (only in the old file; the config turns this "
+        "component on, so a merge drops it)"
+    ) in logs
+
+
+def test_with_only_a_turned_on_disable_left_a_merge_is_not_offered(monkeypatch, settings, tmp_path):
+    settings.registry_url = "index.docker.io/me"
+    settings.disable_spark = True
+    _existing_values(settings, tmp_path, helm_ops.installer_values_text(settings))
+    settings.disable_spark = False
+    settings.enabled_by_config = ["disable_spark"]
+    asked = []
+    monkeypatch.setattr(helm_ops, "confirm", lambda s, q: asked.append(q) or True)
+    monkeypatch.setattr(helm_ops, "choose", lambda *a: pytest.fail("offered a merge"))
+
+    helm_ops.settle_existing_installer_values(settings)
+
+    assert asked == ["Override it with this run's values?"]
+
+
 @pytest.mark.parametrize("answer", ["", "o", "override"])
 def test_an_override_drops_the_old_only_keys(monkeypatch, settings, tmp_path, answer):
     path = _existing_values(settings, tmp_path, OLD_VALUES)

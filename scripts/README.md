@@ -401,8 +401,9 @@ If that file is already there and this run would change it, the installer lists 
 differs and asks: **merge** keeps the keys only the old file sets (a value you added by
 hand, say) and takes this run's value for the rest; **override** (the default) drops them;
 **cancel** stops with nothing changed. Merged keys can be stale, an old local registry's
-insecure flags for example, so check the list before merging. Either way the old file is
-kept as `mlrun-ce-values.yaml.bak`, and `--non-interactive` overrides.
+insecure flags for example, so check the list before merging. A merge never keeps a
+component off that the config sets to `true` under `components:`. Either way the old file
+is kept as `mlrun-ce-values.yaml.bak`, and `--non-interactive` overrides.
 
 ### The config file
 
