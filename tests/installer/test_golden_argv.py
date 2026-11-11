@@ -104,6 +104,7 @@ CASES = [
     "--hard-clean",
     "badverb",
     "--chart-path",
+    "--ce-version 0.11.0 --chart-path ./charts/mlrun-ce",
     "--enable-otel bogus",
     # A typo in a safety flag must not reach the cluster. install.sh warned and installed
     # for real; the recorded calls here are the proof that nothing runs.

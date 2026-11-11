@@ -33,7 +33,7 @@ from .cluster import (
     resolve_external_host,
     validate_chart_path,
 )
-from .config import check_required_non_interactive, load_config
+from .config import check_chart_source, check_required_non_interactive, load_config
 from .console import (
     LOG_LEVELS,
     Cancelled,
@@ -679,6 +679,7 @@ def run(settings: Settings) -> None:
     apply_log_level(settings)
     open_debug_log(settings.install_log_file, debug_log_header())
     apply_version_floors(settings)
+    check_chart_source(settings)
     execute(settings)
 
 

@@ -411,11 +411,6 @@ def resolve_chart_source(settings: Settings) -> None:
 
     validate_chart_path(settings)
     chart_dir = Path(settings.chart_path)
-    if settings.ce_version:
-        log_warn(
-            "--ce-version is ignored in local-path mode (chart version comes from "
-            f"{settings.chart_path}/Chart.yaml)."
-        )
     log_info(f"Using local chart: {settings.chart_path}")
 
     if chart_deps_satisfied(chart_dir):

@@ -207,6 +207,10 @@ class Settings:
     config_registry_server: str = ""
     config_registry_email: str = ""
     config_external_host_address: str = ""
+    # ce-config.yaml's chartSource, kept so the run can refuse both or name the one a flag
+    # or env var overrode.
+    config_chart_version: str = ""
+    config_chart_path: str = ""
 
     # Parsed form of MIN_K8S_VERSION.
     min_k8s_major: Optional[int] = None

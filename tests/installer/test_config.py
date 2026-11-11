@@ -28,13 +28,14 @@ One bash case is deliberately not ported. `load_config exits 1 when yq is not in
 with pyyaml, so there is no yq to be missing and no exit to assert.
 """
 
+import subprocess
 from pathlib import Path
 
 import pytest
 import typer
 import yaml
 
-from ce_installer import cli, config
+from ce_installer import cli, config, console
 from ce_installer.console import InstallerError
 
 
@@ -311,6 +312,153 @@ def test_component_versions_come_from_the_config_file(settings, tmp_path):
     # These pin individual service image tags, independently of the umbrella chart version.
     assert settings.mlrun_version == "1.13.0"
     assert settings.nuclio_version == "1.16.0"
+
+
+# ------------------------------------------------------------------------------------------
+# chartVersion against chartPath: an error within one layer, the flag wins across layers
+# ------------------------------------------------------------------------------------------
+
+BOTH_IN_FILE = (
+    "installer:\n  chartSource:\n    chartVersion: 0.11.0\n    chartPath: ./charts/mlrun-ce\n"
+)
+
+
+def make_chart(tmp_path, version="0.12.0-rc.3"):
+    chart = tmp_path / "mlrun-ce"
+    chart.mkdir()
+    (chart / "Chart.yaml").write_text(f"apiVersion: v1\nname: mlrun-ce\nversion: {version}\n")
+    return str(chart)
+
+
+def record_commands(monkeypatch, recorder):
+    rec = recorder()
+    for name in ("run", "call", "Popen"):
+        monkeypatch.setattr(subprocess, name, rec)
+    return rec
+
+
+def run_to_the_chart_check(monkeypatch, argv):
+    """cli.main up to and including check_chart_source; returns (exit code, settings)."""
+    seen = {}
+    monkeypatch.setattr(cli, "execute", lambda settings: seen.setdefault("settings", settings))
+    return cli.main(argv), seen.get("settings")
+
+
+@pytest.mark.parametrize(
+    "argv, env",
+    [
+        (["--ce-version", "0.11.0", "--chart-path", "./charts/mlrun-ce"], {}),
+        (["--ce-version", "0.11.0"], {"CHART_PATH": "./charts/mlrun-ce"}),
+        (["--chart-path", "./charts/mlrun-ce"], {"CE_VERSION": "0.11.0"}),
+        ([], {"CE_VERSION": "0.11.0", "CHART_PATH": "./charts/mlrun-ce"}),
+    ],
+    ids=["both flags", "flag and CHART_PATH", "CE_VERSION and flag", "both env vars"],
+)
+def test_ce_version_with_chart_path_on_the_command_line_stops_before_any_command(
+    monkeypatch, recorder, capture_logs, argv, env
+):
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    rec = record_commands(monkeypatch, recorder)
+    logs = capture_logs(console)
+
+    # Installing the local chart and dropping the version left someone believing they had
+    # pinned a release; the warning saying so came only after the cluster was queried.
+    assert cli.main(["--non-interactive", *argv]) == 1
+    assert any(
+        "--ce-version (or CE_VERSION) and --chart-path (or CHART_PATH) conflict" in line
+        and "Pass one or the other" in line
+        for line in logs
+    )
+    assert not rec.calls
+
+
+def test_chart_version_and_chart_path_both_in_the_config_file_stop_the_install(
+    monkeypatch, tmp_path, recorder, capture_logs
+):
+    rec = record_commands(monkeypatch, recorder)
+    logs = capture_logs(console)
+    path = write_config(tmp_path, BOTH_IN_FILE)
+
+    assert cli.main(["--non-interactive", "--config", path]) == 1
+    assert any(
+        f"{path} sets both installer.chartSource.chartVersion and installer.chartSource."
+        "chartPath" in line
+        for line in logs
+    )
+    assert not rec.calls
+
+
+@pytest.mark.parametrize("source", ["flag", "env"])
+def test_a_chart_path_flag_or_env_wins_over_the_files_chart_version(
+    monkeypatch, tmp_path, capture_logs, source
+):
+    logs = capture_logs(config)
+    chart = make_chart(tmp_path)
+    path = write_config(tmp_path, "installer:\n  chartSource:\n    chartVersion: 0.11.0\n")
+    argv = ["--config", path]
+    if source == "flag":
+        argv += ["--chart-path", chart]
+    else:
+        monkeypatch.setenv("CHART_PATH", chart)
+
+    code, settings = run_to_the_chart_check(monkeypatch, argv)
+
+    assert code == 0
+    assert (settings.chart_path, settings.ce_version) == (chart, "")
+    assert logs == [
+        f"Using local chart {chart} (version 0.12.0-rc.3); the config file's chartVersion "
+        "0.11.0 is ignored."
+    ]
+
+
+@pytest.mark.parametrize("source", ["flag", "env"])
+def test_a_ce_version_flag_or_env_wins_over_the_files_chart_path(
+    monkeypatch, tmp_path, capture_logs, source
+):
+    logs = capture_logs(config)
+    path = write_config(tmp_path, "installer:\n  chartSource:\n    chartPath: ./charts/mlrun-ce\n")
+    argv = ["--config", path]
+    if source == "flag":
+        argv += ["--ce-version", "0.11.0"]
+    else:
+        monkeypatch.setenv("CE_VERSION", "0.11.0")
+
+    code, settings = run_to_the_chart_check(monkeypatch, argv)
+
+    # The file's chartPath used to win and install the local chart over the flag's version.
+    assert code == 0
+    assert (settings.ce_version, settings.chart_path) == ("0.11.0", "")
+    assert logs == [
+        "Installing chart version 0.11.0 (--ce-version or CE_VERSION); the config file's "
+        "chartPath ./charts/mlrun-ce is ignored."
+    ]
+
+
+def test_an_unreadable_local_chart_leaves_its_version_out(settings, capture_logs):
+    logs = capture_logs(config)
+    settings.chart_path = "/no/such/chart"
+    settings.config_chart_version = "0.11.0"
+
+    config.check_chart_source(settings)
+
+    assert logs == [
+        "Using local chart /no/such/chart; the config file's chartVersion 0.11.0 is ignored."
+    ]
+
+
+def test_uninstall_ignores_conflicting_chart_options(monkeypatch, tmp_path):
+    uninstalled = []
+    monkeypatch.setattr(cli, "check_requirements", lambda s: None)
+    monkeypatch.setattr(cli, "do_uninstall", uninstalled.append)
+    path = write_config(tmp_path, BOTH_IN_FILE)
+
+    code = cli.main(
+        ["uninstall", "--ce-version", "0.11.0", "--chart-path", "./c", "--config", path]
+    )
+
+    assert code == 0
+    assert uninstalled
 
 
 # ------------------------------------------------------------------------------------------

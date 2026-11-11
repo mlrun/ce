@@ -218,22 +218,6 @@ def test_published_repo_mode_registers_the_repo_before_using_it(monkeypatch, set
     assert rec.ran("repo update")
 
 
-def test_ce_version_in_local_path_mode_warns_that_it_is_ignored(
-    monkeypatch, settings, tmp_path, recorder, capture_logs
-):
-    chart_dir = make_chart(tmp_path, deps=LOCK_DEPS, vendored=VENDORED_TARBALLS)
-    monkeypatch.setattr(cluster, "helm", recorder())
-    logs = capture_logs(cluster)
-    settings.chart_path = str(chart_dir)
-    settings.ce_version = "0.11.0"
-
-    cluster.resolve_chart_source(settings)
-
-    # Both flags together are contradictory, and the loser is --ce-version. Silently
-    # dropping it would let someone believe they had pinned a version they had not.
-    assert any("--ce-version is ignored" in message for message in logs)
-
-
 def test_ce_version_does_not_reach_helm_in_local_path_mode(settings, tmp_path):
     settings.chart_path = str(make_chart(tmp_path))
     settings.chart_ref = settings.chart_path

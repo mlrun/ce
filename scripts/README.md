@@ -303,7 +303,8 @@ To test a branch or a PR, check it out and point the installer at the chart:
 ./scripts/install.py --chart-path ./charts/mlrun-ce
 ```
 
-The chart version is the one in `charts/mlrun-ce/Chart.yaml`; `--ce-version` is ignored.
+The chart version is the one in `charts/mlrun-ce/Chart.yaml`; passing `--ce-version` too
+is an error.
 The chart's dependencies must already be in `charts/` (`make helm-update-dependencies`),
 or the run stops before changing anything. `--update-dependencies` fetches the missing ones
 with `helm dependency build`, which follows `requirements.lock`; once they are there, an
@@ -431,7 +432,9 @@ flag or variable it stands for.
   warning. Use `REGISTRY_PASSWORD`, `REGISTRY_PASSWORD_FILE` (`registry.passwordFile`) or
   the prompt.
 - **`chartSource.chartPath`**, when set, installs that chart directory instead of the
-  published chart, like `--chart-path`.
+  published chart, like `--chart-path`. Setting `chartVersion` as well is an error. A
+  `--ce-version` or `--chart-path` (or its variable) overrides both keys, and the run says
+  which key it ignored.
 - **`components.*`** set to `false` disables a component, like the matching `--disable-*`
   flag. The file cannot re-enable one disabled by a flag.
 - **`otel.*`** set to `true` enables a piece, like the matching `--enable-otel-*` flag. Any
@@ -820,9 +823,9 @@ else, `false` and `0` included, leaves it off.
 | `--non-interactive` | `NON_INTERACTIVE`, `CI` | Never prompt; exit 1 on a missing required value |
 | `--config FILE` | `CONFIG_FILE` | Read defaults from a `ce-config.yaml` |
 | `-f`, `--values FILE` | | Base values file; see [From a values file](#from-a-values-file) |
-| `--chart-path DIR` | `CHART_PATH` | Install a local chart directory instead of the published chart |
+| `--chart-path DIR` | `CHART_PATH` | Install a local chart directory instead of the published chart; not with `--ce-version` |
 | `--update-dependencies` | `UPDATE_DEPENDENCIES` | With `--chart-path`: fetch the chart dependencies `charts/` lacks |
-| `--ce-version VERSION` | `CE_VERSION` | Install this published chart version (default: the newest stable one) |
+| `--ce-version VERSION` | `CE_VERSION` | Install this published chart version (default: the newest stable one); not with `--chart-path` |
 | `--devel` | `DEVEL` | Without `--ce-version`: the newest chart, prereleases (rc) included |
 | `--skip-secret` | `SKIP_REGISTRY_SECRET` | Use an existing pull secret instead of creating one |
 | `--skip-validators` | `SKIP_VALIDATORS` | Skip the [pre-install checks](#pre-install-checks) |

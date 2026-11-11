@@ -24,7 +24,7 @@ from typing import Dict, List, Optional, Tuple
 
 import yaml
 
-from .console import InstallerError, die, log_error, log_warn
+from .console import InstallerError, die, log_error, log_info, log_warn
 from .settings import Settings, env_str
 
 EXAMPLES = ("ce-config.local.yaml.example", "ce-config.remote.yaml.example")
@@ -310,12 +310,13 @@ def _apply_flag_and_env_settings(data: Dict, settings: Settings) -> None:
 
 
 def _apply_chart_and_components(data: Dict, settings: Settings) -> None:
-    cfg_chart_version = cfg(data, "installer", "chartSource", "chartVersion")
-    cfg_chart_path = cfg(data, "installer", "chartSource", "chartPath")
-    if not settings.ce_version and cfg_chart_version:
-        settings.ce_version = cfg_chart_version
-    if not settings.chart_path and cfg_chart_path:
-        settings.chart_path = cfg_chart_path
+    settings.config_chart_version = cfg(data, "installer", "chartSource", "chartVersion")
+    settings.config_chart_path = cfg(data, "installer", "chartSource", "chartPath")
+    # Each of the two names the whole chart, so a flag or env var for either one overrides
+    # the file's other one as well.
+    if not settings.ce_version and not settings.chart_path:
+        settings.ce_version = settings.config_chart_version
+        settings.chart_path = settings.config_chart_path
 
     cfg_mlrun = cfg(data, "installer", "versions", "mlrun")
     cfg_nuclio = cfg(data, "installer", "versions", "nuclio")
@@ -357,6 +358,48 @@ def _apply_chart_and_components(data: Dict, settings: Settings) -> None:
         ):
             if not getattr(settings, attr) and cfg(data, "installer", "otel", key) == "true":
                 setattr(settings, attr, True)
+
+
+def _local_chart_version(chart_path: str) -> str:
+    try:
+        chart = yaml.safe_load((Path(chart_path) / "Chart.yaml").read_text())
+    except (OSError, yaml.YAMLError):
+        return ""
+    return str(chart.get("version", "")) if isinstance(chart, dict) else ""
+
+
+def check_chart_source(settings: Settings) -> None:
+    """Refuse a published chart version and a local chart named at the same layer.
+
+    Across layers load_config has already let the flag or env var win; this only says which
+    of the file's keys that dropped. Uninstall reads neither, so it is never refused.
+    """
+    if settings.uninstall:
+        return
+    file_version, file_path = settings.config_chart_version, settings.config_chart_path
+    if file_version and file_path:
+        raise die(
+            f"{settings.config_file} sets both installer.chartSource.chartVersion and "
+            "installer.chartSource.chartPath, which conflict: one installs a published chart "
+            "version, the other a local chart. Set one or the other."
+        )
+    if settings.ce_version and settings.chart_path:
+        raise die(
+            "--ce-version (or CE_VERSION) and --chart-path (or CHART_PATH) conflict: one "
+            "installs a published chart version, the other a local chart. Pass one or the other."
+        )
+    if settings.chart_path and file_version:
+        version = _local_chart_version(settings.chart_path)
+        shown = f" (version {version})" if version else ""
+        log_info(
+            f"Using local chart {settings.chart_path}{shown}; the config file's chartVersion "
+            f"{file_version} is ignored."
+        )
+    elif settings.ce_version and file_path:
+        log_info(
+            f"Installing chart version {settings.ce_version} (--ce-version or CE_VERSION); "
+            f"the config file's chartPath {file_path} is ignored."
+        )
 
 
 def check_required_non_interactive(settings: Settings) -> None:
