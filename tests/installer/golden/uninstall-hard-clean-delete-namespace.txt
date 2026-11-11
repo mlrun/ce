@@ -19,6 +19,7 @@ exit: 0
 ["kubectl", "get", "cronjobs,jobs,deployments,pods,services,horizontalpodautoscalers,ingresses,configmaps,secrets", "-l", "mlrun/class", "--namespace", "mlrun", "-o", "name"]
 ["kubectl", "get", "cronjobs,jobs,deployments,pods,services,horizontalpodautoscalers,ingresses,configmaps,secrets", "-l", "mlrun/function", "--namespace", "mlrun", "-o", "name"]
 ["kubectl", "delete", "pod/demo-job-x7k2p", "--namespace", "mlrun", "--ignore-not-found", "--timeout", "60s"]
+["kubectl", "get", "jobs,pods,secrets", "--namespace", "mlrun", "-o", "jsonpath={range .items[*]}{.kind}/{.metadata.name}|{.metadata.deletionTimestamp}|{.metadata.ownerReferences[0].kind}{\"\\n\"}{end}"]
 ["kubectl", "get", "pvc", "--namespace", "mlrun", "--no-headers", "-o", "custom-columns=:metadata.name"]
 ["kubectl", "delete", "pvc", "data-mlrun-db-0", "--namespace", "mlrun", "--timeout", "60s"]
 ["kubectl", "wait", "--for=delete", "pvc", "--all", "--namespace", "mlrun", "--timeout", "60s"]

@@ -826,6 +826,7 @@ def do_hard_clean(settings: Settings) -> List[str]:
         log_warn(f"Dry-run: listing what a hard clean would delete in '{settings.namespace}'.")
     # Before the PVCs: a run's pod still mounting one would hold it on pvc-protection.
     delete_runtime_leftovers(settings)
+    delete_unlabelled_ce_leftovers(settings)
     log_warn(f"Hard clean: deleting all PVCs in namespace '{settings.namespace}'...")
     result = kubectl(
         settings,
@@ -994,6 +995,29 @@ def unlabelled_ce_leftovers(settings: Settings) -> List[str]:
     return leftovers
 
 
+def delete_unlabelled_ce_leftovers(settings: Settings) -> None:
+    """Delete what unlabelled_ce_leftovers finds, without asking: finished image builds and
+    a certificate, none of it the user's work."""
+    found = unlabelled_ce_leftovers(settings)
+    if not found:
+        return
+    if settings.dry_run:
+        for name in found:
+            log_info(f"  Dry-run: would delete {name}")
+        return
+    log_info(f"Deleting what MLRun CE created at run time: {', '.join(found)}")
+    kubectl(
+        settings,
+        "delete",
+        *found,
+        "--namespace",
+        settings.namespace,
+        "--ignore-not-found",
+        "--timeout",
+        "60s",
+    )
+
+
 def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
     """Name what is still in the namespace. Reports only; exit 0 all the same, since the
     release is gone and what remains is either kept on purpose or needs a human decision."""
@@ -1044,10 +1068,11 @@ def report_uninstall_leftovers(settings: Settings, pvcs: List[str]) -> None:
             f"Delete them with: {kubectl_prefix} delete -n {namespace} {' '.join(others)}"
         )
     if unlabelled:
+        how = "Delete them with" if settings.hard_clean else "--hard-clean deletes them, as does"
         log_warn(
             "  MLRun CE creates these at run time with no label of the release (Nuclio's "
-            "image builds, the Spark operator's webhook certificate). "
-            f"Delete them with: {kubectl_prefix} delete -n {namespace} {' '.join(unlabelled)}"
+            f"image builds, the Spark operator's webhook certificate). {how}: "
+            f"{kubectl_prefix} delete -n {namespace} {' '.join(unlabelled)}"
         )
 
 

@@ -3020,9 +3020,31 @@ def test_a_plain_uninstall_names_what_ce_left_without_a_label(monkeypatch, setti
     assert not kube_rec.ran("delete job/"), "report only"
 
 
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_a_hard_clean_deletes_what_ce_left_without_a_label_without_asking(
+    monkeypatch, settings, recorder, dry_run
+):
+    kube_rec, logs = _uninstall_with_release(monkeypatch, settings, recorder, labelled="")
+    kube_rec.answers["get jobs,pods,secrets"] = Result(0, UNLABELLED_OBJECTS)
+    settings.hard_clean = True
+    settings.dry_run = dry_run
+    settings.non_interactive = False
+    asked = []
+    monkeypatch.setattr(helm_ops, "confirm", lambda _settings, prompt, **_: asked.append(prompt))
+
+    helm_ops.do_uninstall(settings)
+
+    ours = "job/nuclio-buildjob-processor-demo-fn-latest-2mqxf secret/spark-operator-webhook-certs"
+    assert kube_rec.ran("delete " + ours) is not dry_run
+    assert not any("functions" in prompt for prompt in asked), "no functions or runs to ask about"
+    if dry_run:
+        assert "  Dry-run: would delete secret/spark-operator-webhook-certs" in logs["info"]
+
+
 def test_a_hard_clean_with_only_unlabelled_leftovers_is_not_complete(
     monkeypatch, settings, recorder
 ):
+    # One the delete did not remove, since the listing answers the same both times.
     kube_rec, logs = _uninstall_with_release(monkeypatch, settings, recorder, labelled="")
     kube_rec.answers["get jobs,pods,secrets"] = Result(0, "Secret/spark-operator-webhook-certs||\n")
     settings.hard_clean = True

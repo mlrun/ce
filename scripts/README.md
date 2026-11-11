@@ -667,7 +667,8 @@ pods of MLRun runs and image builds (labelled `mlrun/class` or `mlrun/function`)
 there are any it lists them and asks first; `--non-interactive` deletes them. A plain
 `uninstall` leaves both running. It also deletes the chart's Strimzi `Kafka` and
 `KafkaNodePool`, which the chart creates as helm hooks and `helm uninstall` never deletes,
-and waits for their broker pod to go; a plain `uninstall` leaves them and says so. With no
+and waits for their broker pod to go; a plain `uninstall` leaves them and says so. The
+certificate and build Jobs above go too, without a question. With no
 release in the namespace it asks you to type the namespace name, and refuses under
 `--non-interactive`.
 

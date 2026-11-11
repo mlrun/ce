@@ -13,5 +13,6 @@ exit: 0
 ["kubectl", "get", "cronjobs,jobs,deployments,pods,services,horizontalpodautoscalers,ingresses,configmaps,secrets", "-l", "nuclio.io/function-name", "--namespace", "mlrun", "-o", "name"]
 ["kubectl", "get", "cronjobs,jobs,deployments,pods,services,horizontalpodautoscalers,ingresses,configmaps,secrets", "-l", "mlrun/class", "--namespace", "mlrun", "-o", "name"]
 ["kubectl", "get", "cronjobs,jobs,deployments,pods,services,horizontalpodautoscalers,ingresses,configmaps,secrets", "-l", "mlrun/function", "--namespace", "mlrun", "-o", "name"]
+["kubectl", "get", "jobs,pods,secrets", "--namespace", "mlrun", "-o", "jsonpath={range .items[*]}{.kind}/{.metadata.name}|{.metadata.deletionTimestamp}|{.metadata.ownerReferences[0].kind}{\"\\n\"}{end}"]
 ["kubectl", "get", "pvc", "--namespace", "mlrun", "--no-headers", "-o", "custom-columns=:metadata.name"]
 ["kubectl", "get", "pv", "--no-headers", "-o", "custom-columns=:metadata.name,:spec.claimRef.namespace,:status.phase"]
