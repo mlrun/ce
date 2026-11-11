@@ -43,12 +43,18 @@ from .shell import helm
 
 UNSET = "(unset)"
 REDACTED = "<redacted>"
-# Leaf keys whose values stay out of the console and the changes file. Names like
+# Leaf keys whose values stay out of the console and the changes file, matched with `_`
+# and `-` removed so environment names like AWS_SECRET_ACCESS_KEY count. Names like
 # `secretName` are references, not secrets, and are shown.
 _SENSITIVE = re.compile(
-    r"(?i)(password|passwd|secretkey|accesskey|accountkey|clientsecret|connectionstring"
+    r"(?i)(password|passwd|secretkey|accesskey|accesskeyid|accountkey|clientsecret|connectionstring"
     r"|token|apikey|credentials?)$"
 )
+
+
+def _sensitive(key: str) -> bool:
+    return bool(_SENSITIVE.search(re.sub(r"[_-]", "", key)))
+
 
 PREVIOUS_VALUES_HEADER = """\
 # Written by the MLRun CE installer before upgrading: the values release '{release}' was
@@ -110,7 +116,7 @@ def load_previous_values(settings: Settings) -> None:
 def _shown(key: str, value: object) -> object:
     if value is UNSET:
         return UNSET
-    if _SENSITIVE.search(key.rsplit(".", 1)[-1]):
+    if _sensitive(key.rsplit(".", 1)[-1]):
         return REDACTED
     return value
 

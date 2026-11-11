@@ -128,6 +128,35 @@ def test_azure_credentials_are_redacted_too(upgrade, settings, capture_logs, key
     assert "hunter2" not in release_values.value_changes_file(settings).read_text()
 
 
+@pytest.mark.parametrize(
+    "name", ["AWS_SECRET_ACCESS_KEY", "AWS_ACCESS_KEY_ID", "AWS_SESSION_TOKEN", "DB-PASSWORD"]
+)
+def test_credentials_set_as_environment_variables_are_redacted(
+    upgrade, settings, capture_logs, name
+):
+    # Only the camelCase names matched: AWS_SECRET_ACCESS_KEY ends in ACCESS_KEY.
+    upgrade({"jupyterNotebook": {"extraEnvKeyValue": {name: "hunter2"}}})
+    logs = capture_logs(release_values)
+
+    release_values.load_previous_values(settings)
+    release_values.report_value_changes(settings)
+
+    text = "\n".join(logs)
+    assert f"jupyterNotebook.extraEnvKeyValue.{name}: <redacted> -> (unset)" in text
+    assert "hunter2" not in text
+    assert "hunter2" not in release_values.value_changes_file(settings).read_text()
+
+
+def test_a_reference_to_a_secret_is_still_shown(upgrade, settings, capture_logs):
+    upgrade({"global": {"registry": {"secret_name": "registry-credentials"}}})
+    logs = capture_logs(release_values)
+
+    release_values.load_previous_values(settings)
+    release_values.report_value_changes(settings)
+
+    assert "global.registry.secret_name: registry-credentials -> (unset)" in "\n".join(logs)
+
+
 def test_a_registry_change_warns_that_existing_functions_keep_the_old_one(
     upgrade, settings, capture_logs
 ):
