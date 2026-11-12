@@ -161,8 +161,22 @@ def test_password_from_a_file_is_not_exported_to_child_processes(
     # This used to be assigned into os.environ to reach prompt_or_env, which handed it to
     # every helm, kubectl and docker subprocess the run starts afterwards. A file-supplied
     # password exists precisely so it is not in an environment anyone can read.
-    assert os.environ.get("REGISTRY_PASSWORD") == ""
+    assert "REGISTRY_PASSWORD" not in os.environ
     assert settings.registry_password_value == "fromfile"
+
+
+def test_password_from_the_env_var_is_taken_out_of_the_environment(monkeypatch, settings, recorder):
+    # From a security review: read but left in os.environ, it reached every helm, kubectl
+    # and docker process the run started.
+    prepare(monkeypatch, settings)
+    monkeypatch.setenv("REGISTRY_PASSWORD", "fromenv")
+    monkeypatch.setattr(registry, "kubectl", recorder())
+
+    create_secret(settings)
+
+    assert "REGISTRY_PASSWORD" not in os.environ
+    assert settings.registry_password_value == "fromenv"
+    assert registry._credentials_supplied(settings), "still known once it has left the env"
 
 
 def test_the_secret_is_piped_as_a_manifest_kubectl_would_have_produced(

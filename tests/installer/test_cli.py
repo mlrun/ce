@@ -28,7 +28,7 @@ import hatch_build
 import pytest
 import typer
 
-from ce_installer import cli, console, helm_ops, registry
+from ce_installer import cli, console, helm_ops, registry, shell
 from ce_installer.console import InstallerError
 from ce_installer.settings import UNKNOWN_VERSION, Settings, env_str, prompt_or_env
 
@@ -52,6 +52,18 @@ def ran(monkeypatch):
         return code, captured.get("settings")
 
     return run
+
+
+def test_no_child_process_sees_the_registry_password_from_the_environment(monkeypatch, ran):
+    # --skip-secret never reads the password, so only taking it out at startup covers it.
+    monkeypatch.setenv("REGISTRY_PASSWORD", "fromenv")
+
+    code, settings = ran("--skip-secret", "--dry-run")
+
+    assert code == 0
+    child = shell.run(["sh", "-c", "echo ${REGISTRY_PASSWORD:-absent}"])
+    assert child.out.strip() == "absent"
+    assert settings.registry_password_env == "fromenv"
 
 
 def test_install_verb_is_consumed_and_its_flags_still_parse(ran):

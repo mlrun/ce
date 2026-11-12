@@ -72,6 +72,7 @@ from .settings import (
     apply_version_floors,
     env_str,
     env_true,
+    registry_password_from_env,
 )
 from .shell import check_requirements, redact
 from .ui import confirm_target
@@ -595,6 +596,8 @@ def install(
 
     try:
         settings = Settings()
+        # Before the first helm or kubectl call, whichever path the run takes.
+        registry_password_from_env(settings)
 
         # Flag > env for every boolean toggle; bash seeded each from the env var and then
         # let the flag set it to true, which is the same OR.

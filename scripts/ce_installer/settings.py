@@ -193,6 +193,8 @@ class Settings:
     chart_ref: str = ""
     registry_username_value: str = ""
     registry_password_value: str = ""
+    # REGISTRY_PASSWORD as it was, once registry_password_from_env took it out of os.environ.
+    registry_password_env: str = ""
     registry_server_value: str = ""
     registry_email_value: str = ""
     # Non-interactive credentials not supplied, which only the installer's own secret excuses.
@@ -274,6 +276,14 @@ def prompt_or_env(
     if not secret:
         log_debug(f"Prompted for {env_var}: {value!r}")
     return value
+
+
+def registry_password_from_env(settings: Settings) -> str:
+    """REGISTRY_PASSWORD, moved out of os.environ on first read: every helm, kubectl and
+    docker process the installer starts inherits its environment."""
+    if "REGISTRY_PASSWORD" in os.environ:
+        settings.registry_password_env = os.environ.pop("REGISTRY_PASSWORD")
+    return settings.registry_password_env
 
 
 def confirm(settings: Settings, question: str, default_yes: bool = True) -> bool:

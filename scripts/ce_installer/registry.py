@@ -23,7 +23,14 @@ from typing import List
 from .cluster import resolve_local_registry_url
 from .config import report_missing_configuration
 from .console import InstallerError, add_secret, die, log_error, log_info, log_warn
-from .settings import DEFAULT_DOCKER_SERVER, Settings, confirm, env_str, prompt_or_env
+from .settings import (
+    DEFAULT_DOCKER_SERVER,
+    Settings,
+    confirm,
+    env_str,
+    prompt_or_env,
+    registry_password_from_env,
+)
 from .shell import kubectl
 
 # Everything the installer creates outside the chart carries this label, so --uninstall can
@@ -438,7 +445,7 @@ def registry_secret_owner(settings: Settings) -> str:
 
 
 def _credentials_supplied(settings: Settings) -> bool:
-    return bool(env_str("REGISTRY_PASSWORD") or settings.registry_password_file)
+    return bool(registry_password_from_env(settings) or settings.registry_password_file)
 
 
 def prepare_registry_secret(settings: Settings) -> bool:
@@ -598,7 +605,7 @@ def collect_registry_credentials(settings: Settings) -> None:
 
     # REGISTRY_PASSWORD (env) > REGISTRY_PASSWORD_FILE > interactive masked prompt. The
     # config file may name the password file, never the password.
-    password = env_str("REGISTRY_PASSWORD")
+    password = registry_password_from_env(settings)
     if not password and settings.registry_password_file:
         password_path = Path(settings.registry_password_file)
         if not password_path.is_file():
@@ -606,9 +613,8 @@ def collect_registry_credentials(settings: Settings) -> None:
                 "REGISTRY_PASSWORD_FILE is set but the file does not exist: "
                 f"{settings.registry_password_file}"
             )
-        # Kept in a local rather than exported into os.environ: everything the installer
-        # runs afterwards — helm, kubectl, docker — inherits this process's environment,
-        # and a file-supplied password exists precisely so it is not sitting in one.
+        # Kept in a local rather than exported into os.environ, which every helm, kubectl
+        # and docker process the installer starts inherits.
         #
         # Strip the trailing newline a file almost always carries at EOF; leaving it in
         # produces a secret that fails auth in a way that is painful to trace back here.

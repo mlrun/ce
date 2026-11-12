@@ -224,9 +224,9 @@ export EXTERNAL_HOST_ADDRESS=localhost
 ./scripts/install.py
 ```
 
-Prefer `REGISTRY_PASSWORD_FILE` in CI: the password is read into memory only and never
-reaches the environment of the helm and kubectl processes. The pull secret is passed to
-`kubectl apply` on stdin, so the password is never a command-line argument either way.
+Either way, the password stays out of the environment of the helm, kubectl and docker
+processes the installer starts, and reaches `kubectl apply` and `docker login` on stdin,
+never as a command-line argument.
 
 ### From a config file
 

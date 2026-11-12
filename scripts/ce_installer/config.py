@@ -25,7 +25,7 @@ from typing import Dict, List, Optional, Tuple
 import yaml
 
 from .console import InstallerError, die, log_error, log_info, log_warn
-from .settings import Settings, env_str
+from .settings import Settings, env_str, registry_password_from_env
 
 EXAMPLES = ("ce-config.local.yaml.example", "ce-config.remote.yaml.example")
 EXAMPLES_URL = "https://github.com/mlrun/ce/blob/development/scripts/"
@@ -475,7 +475,7 @@ def check_required_non_interactive(settings: Settings) -> None:
         if not env_str("REGISTRY_USERNAME") and not settings.config_registry_username:
             credentials.append("installer.registry.secret.username (or REGISTRY_USERNAME)")
         password_file = settings.registry_password_file
-        if not env_str("REGISTRY_PASSWORD") and not (
+        if not registry_password_from_env(settings) and not (
             password_file and Path(password_file).is_file()
         ):
             credentials.append(
