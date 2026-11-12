@@ -18,7 +18,8 @@ The Open source MLRun ce chart includes the following stack:
 
 ## Prerequisites
 
-- Helm >=3.6 installed from [here](https://helm.sh/docs/intro/install/)
+- Kubernetes >=1.34
+- Helm >=4.1 installed from [here](https://helm.sh/docs/intro/install/)
 - Preprovisioned Kubernetes StorageClass
 
 > In case your Kubernetes flavor is not shipped with a default StorageClass, you may use [local-path by Rancher](https://github.com/rancher/local-path-provisioner)
@@ -27,6 +28,13 @@ The Open source MLRun ce chart includes the following stack:
 > 2. Set as default by executing `kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'`
 
 ## Installing the Chart
+
+> **Scripted alternative:** [`scripts/install.py`](https://github.com/mlrun/ce/blob/development/scripts/README.md) wraps everything
+> below — namespace creation, the registry secret, pre-install validation and the `helm
+> install` itself — behind one command, and can read its settings from a `ce-config.yaml`
+> for repeatable installs. It installs the published chart by default, and needs only
+> [uv](https://docs.astral.sh/uv/), helm and kubectl. The manual steps below remain fully
+> supported.
 
 Create a namespace for the deployed components:
 

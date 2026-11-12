@@ -65,7 +65,8 @@ mlrun-api.{{ .Values.global.externalHostAddress }}
 
 {{- if .Values.seaweedfs.enabled }}
 {{- if ne .Values.global.infrastructure.kind "aws" }}
-{{- if and .Values.seaweedfs.s3 .Values.seaweedfs.s3.enabled .Values.seaweedfs.s3Service }}
+{{- $allInOneS3 := and (dig "allInOne" "enabled" false .Values.seaweedfs) (dig "allInOne" "s3" "enabled" false .Values.seaweedfs) }}
+{{- if and (or (dig "s3" "enabled" false .Values.seaweedfs) $allInOneS3) .Values.seaweedfs.s3Service }}
 {{- if eq (.Values.seaweedfs.s3Service.type | default "NodePort") "NodePort" }}
 {{- "\n" }}
 SeaweedFS S3 API is available at:

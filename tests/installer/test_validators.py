@@ -1,0 +1,649 @@
+# Copyright 2025 Iguazio
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""The pre-install validators, ported from tests/install_tests.bats' Phase 4 group.
+
+The distinction these tests exist to pin down is blocking vs. advisory. Only the Helm
+version and the default StorageClass may refuse an install; everything else reports and
+returns True, and `run_validators` collects the refusals so a user fixes them in one pass.
+A validator that quietly starts blocking turns a working cluster away, and a blocking one
+that starts warning lets an install proceed to a failure helm reports far less clearly —
+so every test here asserts the return value *and* the message, never just one.
+
+Test names end in the symptom a user would report, matching test_regressions.py.
+"""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from ce_installer import cli, cluster, validators
+from ce_installer.console import InstallerError
+from ce_installer.settings import apply_version_floors
+from ce_installer.shell import Result
+
+from .conftest import Recorder
+
+# The annotation keys reach kubectl with their dots backslash-escaped, because jsonpath
+# would otherwise read them as field separators. Canned answers have to key off the
+# escaped form the code actually sends: matching the unescaped spelling makes every lookup
+# miss, the validator look permanently broken, and the beta-fallback test pass for the
+# wrong reason. (The bash stub had the mirror image of this bug.)
+DEFAULT_CLASS_ANNOTATION = r"storageclass\.kubernetes\.io/is-default-class"
+BETA_CLASS_ANNOTATION = r"storageclass\.beta\.kubernetes\.io/is-default-class"
+
+# The cluster version comes from the API server, not from an arbitrary node's kubelet —
+# kubelets are allowed to trail the control plane by a couple of minor versions.
+SERVER_VERSION_QUERY = "version -o json"
+MEMORY_QUERY = "allocatable.memory"
+EPHEMERAL_STORAGE_QUERY = "allocatable.ephemeral-storage"
+
+
+def server_version(raw):
+    """What `kubectl version -o json` returns for a cluster running `raw`."""
+    return Result(0, json.dumps({"serverVersion": {"gitVersion": raw}}))
+
+
+def log_text(logs):
+    return "\n".join(logs)
+
+
+def install_kubectl(monkeypatch, answers=None, default=None):
+    """Patch the kubectl wrapper *on validators* and hand back the recorder.
+
+    Patching `shell.kubectl` instead would record nothing and assert nothing: validators.py
+    does `from .shell import kubectl`, so it holds its own reference and never looks the
+    name up on `shell` again.
+    """
+    recorder = Recorder(answers=answers, default=default)
+    monkeypatch.setattr(validators, "kubectl", recorder)
+    return recorder
+
+
+# ------------------------------------------------------------------------------------------
+# Kubernetes version — advisory on every path
+# ------------------------------------------------------------------------------------------
+
+
+def test_k8s_below_the_documented_version_warns_but_never_blocks(
+    monkeypatch, settings, capture_logs
+):
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.2")})
+
+    # The chart declares no kubeVersion, so a refusal would turn away clusters it renders
+    # on; the MLRun CE docs' 1.34 is a recommendation the user should hear about.
+    assert validators.validate_k8s_version(settings) is True
+    assert "Kubernetes version: 1.30" in log_text(logs)
+    assert "The MLRun CE docs require Kubernetes >= 1.34" in log_text(logs)
+
+
+def test_k8s_version_reports_the_detected_version_with_no_floor_mentioned(
+    monkeypatch, settings, capture_logs
+):
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.34.0")})
+
+    assert validators.validate_k8s_version(settings) is True
+    assert "Kubernetes version: 1.34" in log_text(logs)
+    # "required" would advertise a floor that does not exist.
+    assert "required" not in log_text(logs)
+    # Exactly the documented version: an off-by-one would nag every supported cluster.
+    assert "MLRun CE docs" not in log_text(logs)
+
+
+def test_k8s_version_warns_instead_of_failing_when_undetectable(
+    monkeypatch, settings, capture_logs
+):
+    logs = capture_logs(validators)
+    # An unreachable or RBAC-restricted `get nodes` is not a reason to refuse an install.
+    install_kubectl(monkeypatch, default=Result(1, ""))
+
+    assert validators.validate_k8s_version(settings) is True
+    assert "Could not determine Kubernetes version" in log_text(logs)
+
+
+def test_min_k8s_version_only_warns_when_the_cluster_is_below_it(
+    monkeypatch, settings, capture_logs
+):
+    settings.min_k8s_version = "1.36"
+    apply_version_floors(settings)
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.35.2")})
+
+    # MIN_K8S_VERSION exists to tighten an environment, not to hand the installer a veto.
+    assert validators.validate_k8s_version(settings) is True
+    assert "below the requested minimum (1.36)" in log_text(logs)
+    assert "MLRun CE docs" not in log_text(logs)
+
+
+# ------------------------------------------------------------------------------------------
+# Helm version — the one version floor that blocks
+# ------------------------------------------------------------------------------------------
+
+
+def test_helm_version_below_the_floor_blocks_the_install(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v3.19.0+g12345")))
+
+    assert validators.validate_helm_version(settings) is False
+    assert "below the minimum supported version" in log_text(logs)
+
+
+def test_helm_version_at_the_floor_is_accepted(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    # Exactly 4.1: an off-by-one here would refuse the version the MLRun CE docs require.
+    monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v4.1.0+g12345")))
+
+    assert validators.validate_helm_version(settings) is True
+    assert "Helm version: 4.1" in log_text(logs)
+
+
+# ------------------------------------------------------------------------------------------
+# Version floors — parsed once, up front
+# ------------------------------------------------------------------------------------------
+
+
+def test_malformed_min_k8s_version_is_rejected_before_the_install_starts(settings):
+    settings.min_k8s_version = "1"
+
+    # Parsed up front rather than inside the validator, so a typo fails immediately instead
+    # of after the namespace and registry secret already exist.
+    with pytest.raises(InstallerError) as excinfo:
+        apply_version_floors(settings)
+    assert "MIN_K8S_VERSION must be in MAJOR.MINOR form" in str(excinfo.value)
+    assert excinfo.value.code == 1
+
+
+def test_empty_min_k8s_version_leaves_no_kubernetes_floor(settings):
+    apply_version_floors(settings)
+
+    # Empty is the default and must stay valid: a floor of "" is "no floor", not an error.
+    assert settings.min_k8s_major is None
+    assert settings.min_k8s_minor is None
+
+
+# ------------------------------------------------------------------------------------------
+# Default StorageClass — blocking, the chart's PVCs have nowhere to land without one
+# ------------------------------------------------------------------------------------------
+
+
+def test_missing_default_storage_class_blocks_the_install(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {"get storageclass": Result(0, "standard=false=")})
+
+    assert validators.validate_storage_class(settings) is False
+    assert "No default StorageClass found" in log_text(logs)
+
+
+def test_default_storage_class_is_found_and_named(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {"get storageclass": Result(0, "standard=false=\nfast=true=\n")})
+
+    assert validators.validate_storage_class(settings) is True
+    assert "Default StorageClass: fast" in log_text(logs)
+
+
+def test_beta_default_class_annotation_still_counts_as_a_default(
+    monkeypatch, settings, capture_logs
+):
+    logs = capture_logs(validators)
+    # Keyed on the beta annotation actually appearing in the jsonpath, so dropping it from
+    # the query makes this answer unreachable and the test fail. A fixed row would pass
+    # either way. Kubernetes still honours the deprecated key, and clusters provisioned
+    # years ago carry only that one.
+    recorder = install_kubectl(
+        monkeypatch, {BETA_CLASS_ANNOTATION: Result(0, "standard==\nlegacy==true\n")}
+    )
+
+    assert validators.validate_storage_class(settings) is True
+    assert "Default StorageClass: legacy" in log_text(logs)
+    assert recorder.ran(DEFAULT_CLASS_ANNOTATION), "the stable annotation must still be read"
+
+
+# ------------------------------------------------------------------------------------------
+# Ingress controller — advisory, --enable-ingress is bring-your-own-controller
+# ------------------------------------------------------------------------------------------
+
+
+def test_ingress_check_does_not_touch_the_cluster_without_enable_ingress(monkeypatch, settings):
+    settings.enable_ingress = False
+    recorder = install_kubectl(monkeypatch, default=Result(1, ""))
+
+    assert validators.validate_ingress_controller(settings) is True
+    assert recorder.calls == [], "the cluster was queried for an ingress nobody asked for"
+
+
+def test_missing_ingress_class_warns_but_never_blocks(monkeypatch, settings, capture_logs):
+    settings.enable_ingress = True
+    settings.ingress_class = "nginx"
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, default=Result(1, ""))
+
+    # The installer stopped installing ingress-nginx itself, so a missing controller is the
+    # user's to resolve — blocking here would refuse an otherwise fine cluster.
+    assert validators.validate_ingress_controller(settings) is True
+    assert "no IngressClass named 'nginx' found" in log_text(logs)
+    assert "does not install a controller" in log_text(logs)
+
+
+def test_present_ingress_class_is_reported_as_found(monkeypatch, settings, capture_logs):
+    settings.enable_ingress = True
+    settings.ingress_class = "nginx"
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, default=Result(0, ""))
+
+    assert validators.validate_ingress_controller(settings) is True
+    assert "IngressClass 'nginx' found" in log_text(logs)
+
+
+# ------------------------------------------------------------------------------------------
+# Registry auth — best-effort docker login, never blocking
+# ------------------------------------------------------------------------------------------
+
+
+def forbid_docker_probe(monkeypatch):
+    """Make any docker probe an outright failure, for the paths that must not reach one."""
+
+    def explode():
+        raise AssertionError("docker was probed on a path that is supposed to skip the check")
+
+    # validators.docker_available, not shell's: shell's is lru_cached, so a patch there
+    # would be bypassed by a cached answer another test already populated.
+    monkeypatch.setattr(validators, "docker_available", explode)
+
+
+def test_registry_auth_skipped_for_a_local_registry(monkeypatch, settings, capture_logs):
+    settings.local_registry = True
+    settings.registry_username_value = "alice"
+    settings.registry_password_value = "secret"
+    logs = capture_logs(validators)
+    forbid_docker_probe(monkeypatch)
+    recorder = Recorder()
+    monkeypatch.setattr(validators, "run", recorder)
+
+    assert validators.validate_registry_auth(settings) is True
+    assert "skipped (--local-registry in use" in log_text(logs)
+    assert recorder.calls == [], "logged in to an external registry that is not in use"
+
+
+def test_registry_auth_skipped_when_no_credentials_were_resolved(
+    monkeypatch, settings, capture_logs
+):
+    settings.local_registry = False
+    settings.values_file = "values.yaml"
+    logs = capture_logs(validators)
+    forbid_docker_probe(monkeypatch)
+    recorder = Recorder()
+    monkeypatch.setattr(validators, "run", recorder)
+
+    # -f-only mode never resolves credentials; there is nothing to check, not a failure.
+    assert validators.validate_registry_auth(settings) is True
+    assert "skipped (-f-only mode" in log_text(logs)
+    assert recorder.calls == []
+
+
+def test_failed_docker_login_warns_but_never_blocks(monkeypatch, settings, capture_logs):
+    settings.local_registry = False
+    settings.registry_username_value = "alice"
+    settings.registry_password_value = "secret"
+    settings.registry_server_value = "https://index.docker.io/v1/"
+    logs = capture_logs(validators)
+    monkeypatch.setattr(validators, "docker_available", lambda: True)
+    monkeypatch.setattr(validators, "run", Recorder(default=Result(1, "unauthorized")))
+
+    # The local docker daemon's credentials say nothing about what the cluster can pull —
+    # blocking on this would refuse installs that work.
+    assert validators.validate_registry_auth(settings) is True
+    assert "could not log in" in log_text(logs)
+
+
+def test_successful_docker_login_is_reported(monkeypatch, settings, capture_logs):
+    settings.local_registry = False
+    settings.registry_username_value = "alice"
+    settings.registry_password_value = "secret"
+    settings.registry_server_value = "https://index.docker.io/v1/"
+    logs = capture_logs(validators)
+    monkeypatch.setattr(validators, "docker_available", lambda: True)
+    recorder = Recorder(default=Result(0, ""))
+    monkeypatch.setattr(validators, "run", recorder)
+
+    assert validators.validate_registry_auth(settings) is True
+    assert "login to https://index.docker.io/v1/ succeeded" in log_text(logs)
+    argv = recorder.calls[0]
+    # The password goes over stdin; on argv it would show up in `ps` and in shell history.
+    assert "--password-stdin" in argv
+    assert "secret" not in argv
+    # Without its own --config, a successful login stores the credentials in the user's
+    # ~/.docker/config.json.
+    config_dir = argv[argv.index("--config") + 1]
+    assert argv.index("--config") < argv.index("login")
+    assert not Path(config_dir).exists(), "the throwaway docker config must be cleaned up"
+
+
+# ------------------------------------------------------------------------------------------
+# NodePort conflicts — a busy default moves, a busy port from -f stops the run
+# ------------------------------------------------------------------------------------------
+
+
+def write_values(tmp_path, settings, text):
+    path = tmp_path / "values.yaml"
+    path.write_text(text)
+    settings.values_file = str(path)
+
+
+def test_a_busy_default_nodeport_moves_to_the_next_free_one(monkeypatch, settings, capture_logs):
+    settings.external_host_address = "localhost"
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/notebook/ 30040 30041\n")})
+
+    assert validators.resolve_nodeport_conflicts(settings) is True
+    assert settings.node_ports == {"jupyterNotebook.service.nodePort": 30042}
+    warning = log_text(logs)
+    assert "other-ns/notebook" in warning, "name what holds the port"
+    assert "http://localhost:30042" in warning, "give the URL the user will need"
+
+
+def test_a_moved_port_skips_the_ports_the_chart_uses_itself(monkeypatch, settings):
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/admin/ 30093\n")})
+
+    validators.resolve_nodeport_conflicts(settings)
+
+    # 30094 is the chart's own S3 port, so taking it would just move the conflict.
+    assert settings.node_ports == {"seaweedfs.adminService.nodePort": 30095}
+
+
+def test_a_nodeport_this_release_owns_is_not_a_conflict(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    # A previous revision of this same release holds it, and helm adopts it on upgrade;
+    # moving it would change a URL for nothing.
+    install_kubectl(monkeypatch, {"get svc": Result(0, "mlrun/grafana/mlrun-ce 30010\n")})
+
+    assert validators.resolve_nodeport_conflicts(settings) is True
+    assert settings.node_ports == {}
+    assert "no conflicts detected" in log_text(logs)
+
+
+def test_nodeport_held_by_a_foreign_service_in_our_namespace_is_a_conflict(monkeypatch, settings):
+    # Same namespace, but owned by nothing (a hand-made Service) and by another release.
+    # install.sh skipped the whole namespace and called this clear, and the install then
+    # failed on the port: helm will not adopt a Service it does not own.
+    install_kubectl(
+        monkeypatch,
+        {"get svc": Result(0, "mlrun/handmade/ 30040\nmlrun/nuclio/other-release 30050\n")},
+    )
+
+    validators.resolve_nodeport_conflicts(settings)
+
+    assert set(settings.node_ports) == {
+        "jupyterNotebook.service.nodePort",
+        "global.nuclio.dashboard.nodePort",
+    }
+
+
+def test_a_busy_nodeport_set_in_the_values_file_stops_the_run(
+    monkeypatch, settings, capture_logs, tmp_path
+):
+    write_values(tmp_path, settings, "jupyterNotebook:\n  service:\n    nodePort: 31040\n")
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/notebook/ 31040\n")})
+
+    assert validators.resolve_nodeport_conflicts(settings) is False
+    assert settings.node_ports == {}, "a port the user chose is theirs to change"
+    assert "jupyterNotebook.service.nodePort" in log_text(logs)
+
+
+def test_the_values_file_port_is_the_one_checked_not_the_default(monkeypatch, settings, tmp_path):
+    write_values(tmp_path, settings, "jupyterNotebook:\n  service:\n    nodePort: 31040\n")
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/notebook/ 30040\n")})
+
+    assert validators.resolve_nodeport_conflicts(settings) is True
+    assert settings.node_ports == {}
+
+
+def test_a_carried_over_port_is_the_one_checked(monkeypatch, settings):
+    settings.node_ports = {"mlrun.ui.service.nodePort": 30061}
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/ui/ 30060\n")})
+
+    validators.resolve_nodeport_conflicts(settings)
+
+    assert settings.node_ports == {"mlrun.ui.service.nodePort": 30061}
+
+
+@pytest.mark.parametrize(
+    "setup, port",
+    [
+        (lambda settings, _: setattr(settings, "disable_system_monitoring", True), 30010),
+        (lambda settings, _: setattr(settings, "disable_model_monitoring", True), 30110),
+        (
+            lambda settings, tmp_path: write_values(
+                tmp_path, settings, "jupyterNotebook:\n  service:\n    type: ClusterIP\n"
+            ),
+            30040,
+        ),
+    ],
+    ids=["monitoring-off", "model-monitoring-off", "cluster-ip"],
+)
+def test_a_port_the_install_does_not_open_is_left_alone(
+    monkeypatch, settings, tmp_path, setup, port
+):
+    setup(settings, tmp_path)
+    install_kubectl(monkeypatch, {"get svc": Result(0, f"other-ns/svc/ {port}\n")})
+
+    assert validators.resolve_nodeport_conflicts(settings) is True
+    assert settings.node_ports == {}
+
+
+def test_a_busy_nodeport_stops_run_validators_only_when_the_user_set_it(
+    monkeypatch, settings, tmp_path
+):
+    write_values(tmp_path, settings, "mlrun:\n  ui:\n    service:\n      nodePort: 31060\n")
+    install_kubectl(monkeypatch, {"get svc": Result(0, "other-ns/ui/ 31060\n")})
+    for name in ("validate_k8s_version", "validate_registry_auth", "validate_node_capacity"):
+        monkeypatch.setattr(validators, name, lambda settings: True)
+
+    with pytest.raises(InstallerError):
+        validators.run_validators(settings)
+
+
+# ------------------------------------------------------------------------------------------
+# Node capacity — advisory
+# ------------------------------------------------------------------------------------------
+
+
+def test_node_capacity_below_the_floor_warns_but_never_blocks(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    install_kubectl(
+        monkeypatch,
+        {
+            MEMORY_QUERY: Result(0, "2000000Ki\n"),
+            EPHEMERAL_STORAGE_QUERY: Result(0, "2000000Ki\n"),
+        },
+    )
+
+    # 8Gi is a documented recommendation, not a hard requirement — a small cluster is
+    # allowed to try.
+    assert validators.validate_node_capacity(settings) is True
+    assert "below the documented floor of 8Gi" in log_text(logs)
+
+
+def test_node_capacity_above_the_floor_reports_the_totals(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    install_kubectl(
+        monkeypatch,
+        {
+            MEMORY_QUERY: Result(0, "9000000Ki\n"),
+            EPHEMERAL_STORAGE_QUERY: Result(0, "9000000Ki\n"),
+        },
+    )
+
+    assert validators.validate_node_capacity(settings) is True
+    assert "total allocatable memory ~8Gi" in log_text(logs)
+    assert "total allocatable ephemeral storage ~8Gi" in log_text(logs)
+    assert "below the documented floor" not in log_text(logs)
+
+
+# ------------------------------------------------------------------------------------------
+# Node architecture — advisory
+# ------------------------------------------------------------------------------------------
+
+ARCH_QUERY = "nodeInfo.architecture"
+
+
+def test_arm64_nodes_get_the_amd64_pulls_before_the_install_fails(
+    monkeypatch, settings, capture_logs, tmp_path
+):
+    # MLRun's images have no arm64 build: on Apple Silicon the pods sat in ImagePullBackOff
+    # with no hint, after the install had already started.
+    (tmp_path / "Chart.yaml").write_text("name: mlrun-ce\nappVersion: 1.12.1\n")
+    settings.chart_path = str(tmp_path)
+    install_kubectl(monkeypatch, {ARCH_QUERY: Result(0, "arm64")})
+    logs = capture_logs(validators)
+
+    assert validators.validate_node_architecture(settings) is True
+    text = log_text(logs)
+    for image in validators.MLRUN_AMD64_ONLY_IMAGES:
+        assert f"docker pull --platform linux/amd64 quay.io/mlrun/{image}:1.12.1" in text
+    assert '--custom-platform=linux/amd64"' in text
+    assert validators.ARM64_ANCHOR in text
+
+
+def test_a_published_chart_names_its_mlrun_version_from_the_repo(
+    monkeypatch, settings, capture_logs, recorder
+):
+    settings.ce_version = "0.12.0"
+    entry = {"name": "mlrun-ce/mlrun-ce", "version": "0.12.0", "app_version": "1.12.0"}
+    found = recorder(answers={"search": Result(0, json.dumps([entry]))})
+    monkeypatch.setattr(cluster, "helm", found)
+    install_kubectl(monkeypatch, {ARCH_QUERY: Result(0, "amd64 arm64")})
+    logs = capture_logs(validators)
+
+    validators.validate_node_architecture(settings)
+
+    assert "quay.io/mlrun/mlrun-api:1.12.0" in log_text(logs)
+
+
+def test_mlrun_version_overrides_the_tag_in_the_arm64_pulls(monkeypatch, settings, capture_logs):
+    settings.mlrun_version = "1.11.3"
+    install_kubectl(monkeypatch, {ARCH_QUERY: Result(0, "arm64")})
+    logs = capture_logs(validators)
+
+    validators.validate_node_architecture(settings)
+
+    assert "quay.io/mlrun/mlrun-ui:1.11.3" in log_text(logs)
+
+
+@pytest.mark.parametrize("answer", [Result(0, "amd64 amd64"), Result(1, "", "forbidden")])
+def test_amd64_or_unknown_nodes_say_nothing_about_architecture(
+    monkeypatch, settings, capture_logs, answer
+):
+    install_kubectl(monkeypatch, {ARCH_QUERY: answer})
+    logs = capture_logs(validators)
+
+    assert validators.validate_node_architecture(settings) is True
+    assert "amd64 only" not in log_text(logs)
+
+
+# ------------------------------------------------------------------------------------------
+# run_validators — one exit, after every check has had its say
+# ------------------------------------------------------------------------------------------
+
+
+def test_run_validators_reports_every_blocking_failure_before_exiting_once(
+    monkeypatch, settings, capture_logs
+):
+    logs = capture_logs(validators)
+    # Old helm *and* no default StorageClass: both must be reported, so a user fixes the
+    # cluster in one pass instead of discovering the second problem on the next run.
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.0")})
+    monkeypatch.setattr(validators, "helm", Recorder(default=Result(0, "v3.5.0+g12345")))
+    monkeypatch.setattr(validators, "docker_available", lambda: False)
+
+    with pytest.raises(InstallerError) as excinfo:
+        validators.run_blocking_validators(settings)
+
+    assert excinfo.value.code == 1
+    assert "One or more required pre-install checks failed" in str(excinfo.value)
+    assert "Helm version 3.5 is below" in log_text(logs)
+    assert "No default StorageClass" in log_text(logs)
+
+
+def test_the_warning_validators_never_block(monkeypatch, settings, capture_logs):
+    logs = capture_logs(validators)
+    install_kubectl(monkeypatch, {SERVER_VERSION_QUERY: server_version("v1.30.0")})
+    monkeypatch.setattr(validators, "docker_available", lambda: False)
+
+    validators.run_validators(settings)
+
+    assert "Kubernetes version: 1.30" in log_text(logs)
+
+
+# ------------------------------------------------------------------------------------------
+# --skip-validators
+# ------------------------------------------------------------------------------------------
+
+
+def run_cli(monkeypatch, argv):
+    """Drive cli.main() with every step around the validators stubbed out.
+
+    Returns (exit code, the Settings that reached helm_install, the validator calls, blocking
+    and warning-only alike).
+    """
+    installed = []
+    validator_runs = []
+
+    for name in (
+        "load_config",
+        "check_requirements",
+        "refuse_a_second_release",
+        "ensure_namespace",
+        "gather_install_params",
+        "resolve_chart_source",
+        "load_previous_values",
+        "confirm_target",
+    ):
+        monkeypatch.setattr(cli, name, lambda _settings: None)
+    monkeypatch.setattr(cli, "prepare_registry_secret", lambda _settings: False)
+    monkeypatch.setattr(cli, "run_blocking_validators", lambda s: validator_runs.append("blocking"))
+    monkeypatch.setattr(cli, "run_validators", lambda s: validator_runs.append("warnings"))
+    monkeypatch.setattr(cli, "helm_install", installed.append)
+
+    code = cli.main(argv)
+    return code, installed[0] if installed else None, validator_runs
+
+
+def test_skip_validators_flag_reaches_settings(monkeypatch):
+    code, settings, _ = run_cli(monkeypatch, ["--skip-validators"])
+
+    assert code == 0
+    assert settings is not None, "the install never reached helm"
+    assert settings.skip_validators is True
+
+
+def test_skip_validators_never_runs_the_validators(monkeypatch, capture_logs):
+    logs = capture_logs(cli)
+    code, _, validator_runs = run_cli(monkeypatch, ["--skip-validators"])
+
+    assert code == 0
+    # The escape hatch is only worth having if it actually bypasses the checks — a
+    # validator that still ran would block the install the flag exists to force through.
+    assert validator_runs == []
+    assert "Skipping pre-install validators" in log_text(logs)
+
+
+def test_validators_run_by_default(monkeypatch):
+    _, _, validator_runs = run_cli(monkeypatch, [])
+
+    # The other half of the flag: opt-out, never opt-in.
+    assert validator_runs == ["blocking", "warnings"]
