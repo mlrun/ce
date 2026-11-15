@@ -1,0 +1,51 @@
+exit: 0
+---
+["helm", "version", "--short"]
+["kubectl", "cluster-info"]
+["docker", "info"]
+["helm", "list", "--all-namespaces", "--deployed", "--failed", "--pending", "--superseded", "--uninstalling", "-o", "json"]
+["helm", "version", "--short"]
+["kubectl", "get", "storageclass", "-o", "jsonpath={range .items[*]}{.metadata.name}{\"=\"}{.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class}{\"=\"}{.metadata.annotations.storageclass\\.beta\\.kubernetes\\.io/is-default-class}{\"\\n\"}{end}"]
+["helm", "repo", "add", "--force-update", "mlrun-ce", "https://mlrun.github.io/ce"]
+["helm", "repo", "update"]
+["helm", "search", "repo", "mlrun-ce/mlrun-ce", "-o", "json"]
+["kubectl", "get", "pvc", "local-registry", "--namespace", "mlrun", "-o", "jsonpath=exists:{.metadata.labels.app\\.kubernetes\\.io/managed-by}"]
+["kubectl", "get", "deployment", "local-registry", "--namespace", "mlrun", "-o", "jsonpath=exists:{.metadata.labels.app\\.kubernetes\\.io/managed-by}"]
+["kubectl", "get", "service", "local-registry", "--namespace", "mlrun", "-o", "jsonpath=exists:{.metadata.labels.app\\.kubernetes\\.io/managed-by}"]
+["kubectl", "get", "secret", "registry-credentials", "--namespace", "mlrun", "-o", "jsonpath=exists:{.metadata.labels.app\\.kubernetes\\.io/managed-by}"]
+["helm", "get", "values", "mlrun-ce", "--namespace", "mlrun", "-o", "json"]
+["kubectl", "version", "-o", "json"]
+["kubectl", "get", "svc", "--all-namespaces", "-o", "jsonpath={range .items[*]}{.metadata.namespace}{\"/\"}{.metadata.name}{\"/\"}{.metadata.annotations.meta\\.helm\\.sh/release-name}{\" \"}{range .spec.ports[*]}{.nodePort}{\" \"}{end}{\"\\n\"}{end}"]
+["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.memory}{\"\\n\"}{end}"]
+["kubectl", "get", "nodes", "-o", "jsonpath={range .items[*]}{.status.allocatable.ephemeral-storage}{\"\\n\"}{end}"]
+["kubectl", "get", "nodes", "-o", "jsonpath={.items[*].status.nodeInfo.architecture}"]
+["kubectl", "config", "current-context"]
+["kubectl", "config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}"]
+["kubectl", "get", "namespace", "mlrun"]
+["helm", "status", "mlrun-ce", "--namespace", "mlrun"]
+["kubectl", "get", "crd", "prometheuses.monitoring.coreos.com"]
+["helm", "upgrade", "--install", "mlrun-ce", "mlrun-ce/mlrun-ce", "--namespace", "mlrun", "--wait", "--timeout", "960s", "--values", "<installer values>", "--version", "0.12.0", "--dry-run=server", "--set", "kube-prometheus-stack.enabled=false"]
+--- installer values ---
+# Written by the MLRun CE installer: every value it resolved for this release, and no
+# secrets (the registry password lives only in the pull Secret). Rewritten on every run,
+# --dry-run included. A plain `helm upgrade` that omits this file drops these values.
+global:
+  registry:
+    url: local-registry.mlrun.svc.cluster.local:5000
+    secretName: registry-credentials
+  externalHostAddress: localhost
+nuclio:
+  dashboard:
+    build:
+      insecurePushRegistry: true
+      insecurePullRegistry: true
+    kaniko:
+      insecurePushRegistry: true
+      insecurePullRegistry: true
+mlrun:
+  api:
+    extraEnvKeyValue:
+      MLRUN_HTTPDB__BUILDER__INSECURE_PULL_REGISTRY_MODE: enabled
+      MLRUN_HTTPDB__BUILDER__INSECURE_PUSH_REGISTRY_MODE: enabled
+mlrunMigrations:
+  enabled: false

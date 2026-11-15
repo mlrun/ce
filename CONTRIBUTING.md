@@ -4,10 +4,22 @@
 
 | Tool | Minimum version | Purpose |
 |---|---|---|
-| helm | 3.6 | Chart rendering, linting, install |
+| helm | 4.1 | Chart rendering, linting, install |
 | kubectl | 1.24 | Cluster interaction |
+| uv | 0.4 | Runs `scripts/install.py`, and `make installer-lint-python` / `installer-format` via `uvx ruff` |
 
 For Kubernetes storage class setup and cluster prerequisites, see [charts/mlrun-ce/README.md](charts/mlrun-ce/README.md#prerequisites).
+
+Helm 4.1 is the version the MLRun CE docs require; `scripts/install.py` refuses an older Helm.
+
+The installer is `scripts/install.py` plus the `scripts/ce_installer/` package, documented
+for users in [scripts/README.md](scripts/README.md). Keep `make installer-test` green: it
+runs the unit suites, then replays the installer against stub binaries to check it still
+makes the recorded helm/kubectl calls. If that second suite fails, read the diff before
+re-recording; every changed line is a change in what the installer does to a cluster. The
+[contributing](.claude/skills/contributing/SKILL.md) and
+[run-tests](.claude/skills/run-tests/SKILL.md) skills cover the installer's conventions and
+tests.
 
 ## First-Time Setup
 
@@ -35,7 +47,7 @@ git remote add upstream https://github.com/mlrun/ce
 3. Branch from `development` — the default branch is `development`, not `main` or `master`.
 4. Branch naming convention: `<scope>/<short-description or ticket-number>`, e.g. `feature/add-redis-support` or `fix/CE-111`.
 5. All PRs target `upstream/development`.
-6. Bump the version in `charts/mlrun-ce/Chart.yaml` before opening a PR (format: `major.minor.patch` or `major.minor.patch-rc.N`, e.g. `0.11.0-rc.1`).
+6. Bump the version in `charts/mlrun-ce/Chart.yaml` before opening a PR (format: `major.minor.patch` or `major.minor.patch-rc.N`, e.g. `0.11.0-rc.1`), and update the pinned `mlrun-ce-<version>` install tags in `README.md`, `scripts/README.md` and `scripts/install.py` to match. The version has to be unreleased when the PR merges: if another PR takes it first, Installer CI fails with "already released", and you merge `development` and bump again.
 7. If you change `requirements.yaml`, run `make helm-update-dependencies` and commit the updated `requirements.lock` alongside it.
 8. Each change should support Local Mac installations and native k8s as explained in [prerequisites documentation](https://docs.mlrun.org/en/stable/install-mlrun-ce/kubernetes-install.html#prerequisites).
 

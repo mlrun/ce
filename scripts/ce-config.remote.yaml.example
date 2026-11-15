@@ -1,0 +1,100 @@
+# MLRun CE on a cluster elsewhere: a cloud or on-premises cluster your kubeconfig reaches.
+# Copy it to ce-config.yaml and run:  uv run scripts/install.py --config ce-config.yaml
+# For Docker Desktop, kind or minikube, start from ce-config.local.yaml.example instead.
+#
+# Every key is optional; blank ("") or omitted means the built-in default. Any key the
+# installer does not know, or one in the wrong block, stops the run before it touches the
+# cluster. Quote versions ("1.30"): unquoted, YAML reads 1.30 as the number 1.3.
+#
+# Precedence (highest wins): CLI flag > env var > this file > -f/--values file > chart
+# defaults. A toggle set by a flag or env var is never turned off by this file.
+#
+# The registry password is never read from this file: set REGISTRY_PASSWORD, point
+# registry.passwordFile at a file holding it, or answer the prompt.
+# See "The config file" in scripts/README.md.
+
+installer:
+  # The kubeconfig context of the remote cluster; name it rather than relying on whichever
+  # context is current (KUBE_CONTEXT).
+  kubeContext: my-remote-cluster
+  namespace: mlrun             # NAMESPACE
+  releaseName: mlrun-ce        # RELEASE_NAME
+  # The address users reach the NodePorts or Ingress hosts on: a node IP, a load balancer
+  # or a DNS name (EXTERNAL_HOST_ADDRESS). auto only knows local clusters.
+  externalHostAddress: 203.0.113.10
+  valuesFile: ""               # -f/--values: your own helm values file, read before this one
+  nonInteractive: true         # --non-interactive: never prompt, fail on a missing value
+  triggerMigrations: false     # --trigger-migrations: run the MLRun DB migrations on this upgrade
+  logLevel: info               # --log-level/LOG_LEVEL: info, or warning for warnings only
+
+  registry:
+    # Where function images are pushed and pulled (global.registry.url). Every node must
+    # be able to pull from it.
+    url: registry.example.com/mlrun
+    secretName: registry-credentials  # REGISTRY_SECRET_NAME
+    skipSecret: false                 # --skip-secret: the pull secret already exists
+    passwordFile: ""                  # REGISTRY_PASSWORD_FILE: a file holding only the password
+    secret:
+      username: ci-bot
+      server: https://registry.example.com
+      email: mlops@example.com
+
+  # --local-registry: a registry:2 inside the cluster. Meant for local clusters; on a
+  # shared one, use a real registry above.
+  localRegistry:
+    enabled: false
+    # namespace/name of the ingress controller Service (INGRESS_CONTROLLER_SERVICE).
+    ingressControllerService: ""
+
+  chartSource:
+    # The published chart, pinned by chartVersion (--ce-version) so a re-run installs the
+    # same thing, unless chartPath names a chart directory (--chart-path);
+    # ./charts/mlrun-ce is this repo's.
+    chartVersion: ""
+    chartPath: ""
+    repoUrl: ""                  # HELM_REPO_URL; blank = https://mlrun.github.io/ce
+    updateDependencies: false    # --update-dependencies: with chartPath, fetch missing ones
+    devel: false                 # --devel: without chartVersion, an rc can be the newest
+
+  # Service image tags on top of the chart's (MLRUN_VERSION, NUCLIO_VERSION).
+  versions:
+    mlrun: ""
+    nuclio: ""
+
+  # Left out, a component is as the chart (or your -f file) has it: on by default. false
+  # turns it off, as its --disable-* flag does; true turns it on over a -f file or an
+  # earlier run's --disable-*.
+  # components:
+  #   monitoring: false       # --disable-system-monitoring: Grafana and Prometheus
+  #   spark: false            # --disable-spark
+  #   mpi: false              # --disable-mpi
+  #   modelMonitoring: false  # --disable-model-monitoring: Kafka and TimescaleDB
+
+  # --enable-ingress [CLASS]: Ingresses for the UI, API, Jupyter and Nuclio on hosts under
+  # externalHostAddress. Needs an ingress controller already in the cluster.
+  ingress:
+    enabled: true
+    className: nginx  # INGRESS_CLASS
+
+  # OpenTelemetry, all off in the chart; true turns one on (--enable-otel-*). Any
+  # --enable-otel* flag on the command line replaces this whole block.
+  otel:
+    operator: false
+    collector: false
+    namespaceLabel: false   # auto-instruments every Python pod in the namespace
+    instrumentation: false
+
+  helm:
+    timeout: 1800s  # HELM_TIMEOUT; pulling every image over a slow link takes a while
+
+  validators:
+    skip: false        # --skip-validators: also skips the NodePort check
+    minK8sVersion: ""  # MIN_K8S_VERSION: warn below this Kubernetes version
+
+  progress:
+    show: false          # --show-progress: a live view of each workload during the install
+    intervalSeconds: 10  # PROGRESS_INTERVAL_SEC
+
+  files:
+    generatedValues: ""  # GENERATED_VALUES_FILE; blank = ./mlrun-ce-values.yaml
+    installLog: ""       # INSTALL_LOG_FILE; blank = ./mlrun-ce-install.log

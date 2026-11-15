@@ -27,8 +27,11 @@ helm dependency update
 cd -
 
 # Install MLRun CE
+# The release name matches the default in scripts/install.py. A different name here would
+# leave this script's cluster-scoped resources (PriorityClass, ClusterRoles, CRDs) owned by
+# a release the installer does not know about, which blocks it from ever installing again.
 echo "Installing MLRun CE"
-helm install mlrun \
+helm install mlrun-ce \
     --create-namespace \
     --namespace mlrun \
     --devel \
