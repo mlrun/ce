@@ -123,7 +123,7 @@ func.spec.build.extra_args = "--custom-platform=linux/amd64"
 Pin a release tag from [the releases page](https://github.com/mlrun/ce/releases):
 
 ```bash
-CE_TAG=mlrun-ce-0.12.1
+CE_TAG=mlrun-ce-0.13.0-rc.1
 uvx --from "git+https://github.com/mlrun/ce@${CE_TAG}#subdirectory=scripts" \
   mlrun-ce-installer install
 ```
@@ -141,7 +141,7 @@ the ranges in `scripts/pyproject.toml`. A clone uses the exact versions pinned i
 ### As a command
 
 ```bash
-uv tool install "git+https://github.com/mlrun/ce@mlrun-ce-0.12.1#subdirectory=scripts"
+uv tool install "git+https://github.com/mlrun/ce@mlrun-ce-0.13.0-rc.1#subdirectory=scripts"
 mlrun-ce-installer version
 ```
 

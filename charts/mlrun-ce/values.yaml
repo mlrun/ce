@@ -1095,7 +1095,8 @@ opentelemetry:
         memory: 64Mi
       limits:
         cpu: 100m
-        memory: 128Mi
+        # 128Mi is OOMKilled on upgrade, when kubectl apply diffs against the existing CRs
+        memory: 256Mi
   # Namespace label job resources (kubectl-only container)
   namespaceLabelJob:
     resources:
